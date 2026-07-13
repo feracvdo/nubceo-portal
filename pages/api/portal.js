@@ -313,7 +313,7 @@ export default async function handler(req, res) {
       const { data: ya } = await db.from("redmine_altas").select("id").eq("cliente_id", cli.id).maybeSingle();
       if (!ya) {
         const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "redmine").maybeSingle();
-        const payloads = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId);
+        const payloads = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId, cli.cuits);
         const result = await sendToRedmine(payloads, await redmineKeyDelCliente(cli));
         await db.from("redmine_altas").insert({ cliente_id: cli.id, estado: result.estado, detalle: result.detalle, payloads });
         const creds = await generarCredenciales(cli);
@@ -893,8 +893,13 @@ export default async function handler(req, res) {
       const cli = await getCliente(cc);
       const { data: rm } = await db.from("redmine_altas").select("*").eq("cliente_id", cli.id).maybeSingle();
       if (!rm) return res.status(404).json({ error: "Todavía no hay alta preparada (se dispara con el primer login del cliente)" });
-      const result = await sendToRedmine(rm.payloads, await redmineKeyDelCliente(cli));
-      await db.from("redmine_altas").update({ estado: result.estado, detalle: result.detalle, actualizado_at: new Date().toISOString() }).eq("id", rm.id);
+      // Se reconstruye el payload con los datos ACTUALES del cliente (nombre, tenant, CUIT) —
+      // así, si algo se completó después del primer login (ej: el CUIT), el reintento ya sale
+      // bien en vez de reenviar para siempre el payload viejo guardado la primera vez.
+      const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "redmine").maybeSingle();
+      const payloads = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId, cli.cuits);
+      const result = await sendToRedmine(payloads, await redmineKeyDelCliente(cli));
+      await db.from("redmine_altas").update({ payloads, estado: result.estado, detalle: result.detalle, actualizado_at: new Date().toISOString() }).eq("id", rm.id);
       await addHistory(cli.id, who || "Equipo", result.estado === "enviado" ? "Reenvió el alta a Redmine: creada la Feature y la US de sandbox" : "Reintentó el envío a Redmine — " + result.detalle);
       return res.json(await assemble(cli));
     }
