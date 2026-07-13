@@ -32,11 +32,11 @@ const T = {
 // inventar números sueltos en cada pantalla.
 const SP = { xs: 6, sm: 10, md: 16, lg: 24, xl: 32, xxl: 44 };
 
-const RESPONSABLES_CALENDARIO_FE = ["Implementaciones", "Eduardo Andre", "Santiago Suarez", "Mariana Macri"];
+const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.9.0";
+const APP_VERSION = "1.10.0";
 const APP_VERSION_FECHA = "2026-07-13";
 
 const FASES = [
@@ -1979,14 +1979,38 @@ function AdminPortal({ session, onLogout }) {
   }, [sc]);
   useEffect(() => { cargarCalStatus(); }, [cargarCalStatus]);
 
-  const conectarCalendario = async (responsable) => {
+  const conectarCalendario = async () => {
     try {
-      const r = await api("calendarAuthUrl", { sessionCode: sc, responsable });
+      const r = await api("calendarAuthUrl", { sessionCode: sc });
       window.location.href = r.url;
     } catch (e) { setCalMsg(e.message); }
   };
-  const desconectarCalendario = async (responsable) => {
-    try { await api("calendarDisconnect", { sessionCode: sc, responsable }); cargarCalStatus(); } catch (e) { setCalMsg(e.message); }
+  const desconectarCalendario = async () => {
+    try { await api("calendarDisconnect", { sessionCode: sc }); cargarCalStatus(); } catch (e) { setCalMsg(e.message); }
+  };
+
+  // Disponibilidad semanal personal
+  const [disponibilidad, setDisponibilidad] = useState([]); // [{dia_semana, hora}]
+  const [nuevoDia, setNuevoDia] = useState(1);
+  const [nuevaHora, setNuevaHora] = useState("10:00");
+  const [dispMsg, setDispMsg] = useState("");
+  const cargarDisponibilidad = useCallback(async () => {
+    if (!session.teamId) return;
+    try { const r = await api("getMyAvailability", { sessionCode: sc }); setDisponibilidad(r.slots || []); } catch (e) { /* opcional */ }
+  }, [sc, session.teamId]);
+  useEffect(() => { cargarDisponibilidad(); }, [cargarDisponibilidad]);
+
+  const agregarSlotDisponibilidad = async () => {
+    const ya = disponibilidad.some((s) => s.dia_semana === nuevoDia && s.hora === nuevaHora);
+    const nueva = ya ? disponibilidad : [...disponibilidad, { dia_semana: nuevoDia, hora: nuevaHora }];
+    setDisponibilidad(nueva);
+    try { await api("setMyAvailability", { sessionCode: sc, slots: nueva }); setDispMsg("Guardado ✓"); } catch (e) { setDispMsg(e.message); }
+    setTimeout(() => setDispMsg(""), 2500);
+  };
+  const quitarSlotDisponibilidad = async (dia, hora) => {
+    const nueva = disponibilidad.filter((s) => !(s.dia_semana === dia && s.hora === hora));
+    setDisponibilidad(nueva);
+    try { await api("setMyAvailability", { sessionCode: sc, slots: nueva }); } catch (e) { setDispMsg(e.message); }
   };
 
   const cargarListado = useCallback(async () => {
@@ -2071,14 +2095,6 @@ function AdminPortal({ session, onLogout }) {
       flash("Tipo de usuario actualizado ✓", 3000);
       cargarListado();
     } catch (e) { flash(e.message, 5000); }
-  };
-
-  const conectarMiCalendario = async () => {
-    if (!miNombre.trim()) return;
-    try {
-      const r = await api("calendarAuthUrl", { sessionCode: sc, responsable: miNombre.trim() });
-      window.location.href = r.url;
-    } catch (e) { setPerfilMsg(e.message); }
   };
 
   const abrirPanelKanban = async (code) => {
@@ -2940,30 +2956,6 @@ function AdminPortal({ session, onLogout }) {
                 </div>
                 {cfgMsg && <div style={{ marginTop: 10, fontSize: 13, color: T.okTx, fontWeight: 600 }}>{cfgMsg}</div>}
               </Card>
-
-              <Card>
-                <SectionHeader
-                  title="Sincronización de calendario"
-                  subtitle="Conectá el Google Calendar de cada responsable: mientras esté conectado, los horarios que el cliente ve reflejan la disponibilidad real (no solo lo agendado desde el portal), y al confirmar una reunión se manda la invitación real de Google Calendar a todos los invitados. Para conectar tu propio calendario personal, hacelo desde Mi perfil."
-                />
-                {calMsg && <Alert tone={calMsg.startsWith("No") || calMsg.startsWith("Esa") || calMsg.startsWith("Google") ? "warning" : "success"} style={{ marginBottom: 14 }}>{calMsg}</Alert>}
-                <div style={{ display: "grid", gap: 8 }}>
-                  {(calStatus?.responsables || RESPONSABLES_CALENDARIO_FE).map((resp) => {
-                    const conn = calStatus?.conexiones?.[resp];
-                    return (
-                      <div key={resp} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderRadius: 10, border: "1px solid " + T.n200 }}>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: T.n800 }}>{resp}</div>
-                          <div style={{ fontSize: 12, color: T.n400 }}>{conn ? "Conectado — " + conn.google_email : "No conectado — se usa la disponibilidad configurada por defecto"}</div>
-                        </div>
-                        {conn
-                          ? <Btn variant="ghost" size="sm" onClick={() => desconectarCalendario(resp)}>Desconectar</Btn>
-                          : <Btn variant="secondary" size="sm" onClick={() => conectarCalendario(resp)}>Conectar con Google Calendar</Btn>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </Card>
             </>
           )}
 
@@ -2995,21 +2987,46 @@ function AdminPortal({ session, onLogout }) {
                 </div>
 
                 <div style={{ marginBottom: 18, paddingBottom: 18, borderBottom: "1px solid " + T.n100 }}>
-                  <SectionHeader title="Configuraciones" subtitle="Vinculá tus cuentas personales." style={{ marginBottom: 12 }} />
+                  <SectionHeader title="Configuraciones" subtitle="Vinculá tus cuentas personales — todo acá es 100% tuyo, nadie más lo ve ni lo puede tocar." style={{ marginBottom: 12 }} />
+                  {calMsg && <Alert tone={calMsg.startsWith("No") || calMsg.startsWith("Esa") || calMsg.startsWith("Google") ? "warning" : "success"} style={{ marginBottom: 10 }}>{calMsg}</Alert>}
                   <div style={{ display: "grid", gap: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderRadius: 10, border: "1px solid " + T.n200 }}>
                       <div>
                         <div style={{ fontSize: 14, fontWeight: 600, color: T.n800 }}>📅 Mi Google Calendar</div>
-                        <div style={{ fontSize: 12, color: T.n400 }}>{calStatus?.conexiones?.[miNombre] ? "Conectado — " + calStatus.conexiones[miNombre].google_email : "No conectado"}</div>
+                        <div style={{ fontSize: 12, color: T.n400 }}>{calStatus?.conectado ? "Conectado — " + calStatus.conectado.google_email : "No conectado"}</div>
                       </div>
-                      {calStatus?.conexiones?.[miNombre]
-                        ? <Btn variant="ghost" size="sm" onClick={() => desconectarCalendario(miNombre)}>Desconectar</Btn>
-                        : <Btn variant="secondary" size="sm" onClick={conectarMiCalendario}>Conectar</Btn>}
+                      {calStatus?.conectado
+                        ? <Btn variant="ghost" size="sm" onClick={desconectarCalendario}>Desconectar</Btn>
+                        : <Btn variant="secondary" size="sm" onClick={conectarCalendario}>Conectar</Btn>}
                     </div>
+
+                    <div style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid " + T.n200 }}>
+                      <Label>🗓 Mi disponibilidad semanal</Label>
+                      <div style={{ fontSize: 11.5, color: T.n400, marginBottom: 8 }}>Estos son los horarios que ven tus clientes al agendar workshop, reunión técnica, capacitación, etc. Si no cargás nada acá, no te van a poder agendar nada.</div>
+                      {disponibilidad.length > 0 && (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                          {disponibilidad.slice().sort((a, b) => a.dia_semana - b.dia_semana || a.hora.localeCompare(b.hora)).map((s) => (
+                            <span key={s.dia_semana + s.hora} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, background: T.primary50, color: T.primary800, border: "1px solid " + T.primary100, borderRadius: 100, padding: "4px 10px" }}>
+                              {DIAS_SEMANA[s.dia_semana]} {s.hora} <span onClick={() => quitarSlotDisponibilidad(s.dia_semana, s.hora)} style={{ cursor: "pointer" }}>✕</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <select value={nuevoDia} onChange={(e) => setNuevoDia(Number(e.target.value))} style={{ height: 36, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 13, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                          {DIAS_SEMANA.map((d, i) => <option key={i} value={i}>{d}</option>)}
+                        </select>
+                        <input type="time" value={nuevaHora} onChange={(e) => setNuevaHora(e.target.value)} step={900} style={{ height: 36, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 13, fontFamily: "inherit", color: T.n800 }} />
+                        <Btn variant="secondary" size="sm" onClick={agregarSlotDisponibilidad}>+ Agregar</Btn>
+                        {dispMsg && <span style={{ fontSize: 12, color: T.okTx, fontWeight: 600 }}>{dispMsg}</span>}
+                      </div>
+                    </div>
+
                     <div style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid " + T.n200 }}>
                       <Label>🎫 Mi API key de Redmine (opcional)</Label>
+                      <div style={{ fontSize: 11.5, color: T.n400, marginBottom: 6 }}>Si la cargás, los tickets de tus clientes se crean con esta key en vez de la genérica del servidor.</div>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <Input type="password" value={miRedmineKey} onChange={(e) => setMiRedmineKey(e.target.value)} placeholder="Se guarda para cuando conectemos la creación de tickets con tu usuario" />
+                        <Input type="password" value={miRedmineKey} onChange={(e) => setMiRedmineKey(e.target.value)} placeholder="Tu API key personal de Redmine" />
                         <Btn variant="secondary" size="sm" onClick={() => guardarMiPerfil({ redmineApiKey: miRedmineKey })}>Guardar</Btn>
                       </div>
                     </div>
