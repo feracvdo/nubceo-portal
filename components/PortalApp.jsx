@@ -1934,6 +1934,7 @@ function AdminPortal({ session, onLogout }) {
   const [editCuits, setEditCuits] = useState([]);
   const [editCuitInput, setEditCuitInput] = useState("");
   const [editLogo, setEditLogo] = useState(null);
+  const [editGoLive, setEditGoLive] = useState("");
   const [editandoFinanzas, setEditandoFinanzas] = useState(false);
   const [finFee, setFinFee] = useState("");
   const [finMoneda, setFinMoneda] = useState("ARS");
@@ -2338,8 +2339,8 @@ function AdminPortal({ session, onLogout }) {
             <div style={{ marginTop: 18 }}><Stepper fase={meta.phase} /></div>
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid " + T.n100 }}>
               {!editandoInfo ? (
-                <span onClick={() => { setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditLogo(meta.logo || null); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
-                  ✎ Editar razón social / CUITs / logo
+                <span onClick={() => { setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
+                  ✎ Editar razón social / CUITs / logo / fecha de go-live
                 </span>
               ) : (
                 <div style={{ display: "grid", gap: 10 }}>
@@ -2364,11 +2365,16 @@ function AdminPortal({ session, onLogout }) {
                       )}
                     </div>
                   </div>
+                  <div style={{ maxWidth: 240 }}>
+                    <Label>Fecha estimada de go-live</Label>
+                    <Input type="date" value={editGoLive} onChange={(e) => setEditGoLive(e.target.value)} />
+                    <div style={{ fontSize: 11.5, color: T.n400, marginTop: 4 }}>Alimenta el semáforo 🎯 del tablero.</div>
+                  </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                     <ImageUpload value={editLogo} onChange={setEditLogo} label="logo" />
                     <div style={{ display: "flex", gap: 8 }}>
                       <Btn variant="ghost" size="sm" onClick={() => setEditandoInfo(false)}>Cancelar</Btn>
-                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, razonSocial: editRazonSocial, cuits: editCuits, logo: editLogo, who: session.who }); setSelMeta(r.meta); setSelData(r.data); setEditandoInfo(false); } catch (e) { flash(e.message); } }}>Guardar</Btn>
+                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, razonSocial: editRazonSocial, cuits: editCuits, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); setEditandoInfo(false); } catch (e) { flash(e.message); } }}>Guardar</Btn>
                     </div>
                   </div>
                 </div>
