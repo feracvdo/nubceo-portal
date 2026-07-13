@@ -36,7 +36,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.10.1";
+const APP_VERSION = "1.10.2";
 const APP_VERSION_FECHA = "2026-07-13";
 
 const FASES = [
@@ -2949,9 +2949,18 @@ function AdminPortal({ session, onLogout }) {
                     ? <Badge tone="green">API key configurada en el servidor ✓</Badge>
                     : <Badge tone="amber">Falta REDMINE_API_KEY en las variables de entorno — los tickets quedan en cola</Badge>}
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr auto", gap: 10, alignItems: "end" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1.8fr 1fr", gap: 10, marginBottom: 10 }}>
                   <div><Label>URL de Redmine</Label><Input value={cfg.url} onChange={(e) => setCfg({ ...cfg, url: e.target.value })} placeholder="https://redmine.nubceo.com" /></div>
-                  <div><Label>ID de proyecto</Label><Input value={cfg.projectId} onChange={(e) => setCfg({ ...cfg, projectId: e.target.value })} placeholder="implementaciones" /></div>
+                  <div><Label>ID de proyecto</Label><Input value={cfg.projectId} onChange={(e) => setCfg({ ...cfg, projectId: e.target.value })} placeholder="nubceo-implementaciones" /></div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "end" }}>
+                  <div>
+                    <Label>Ticket padre por defecto (opcional)</Label>
+                    <Input value={cfg.parentIssueId || ""} onChange={(e) => setCfg({ ...cfg, parentIssueId: e.target.value })} placeholder="Ej: 20450" />
+                    <div style={{ fontSize: 11.5, color: T.n400, marginTop: 4 }}>
+                      Número del ticket que va a quedar como "tarea padre" de la Feature de alta (y por lo tanto de toda la cadena). Cargalo solo si tu Redmine exige tarea padre en el tracker raíz — si no, dejalo vacío.
+                    </div>
+                  </div>
                   <Btn variant="secondary" onClick={guardarConfig}>Guardar</Btn>
                 </div>
                 {cfgMsg && <div style={{ marginTop: 10, fontSize: 13, color: T.okTx, fontWeight: 600 }}>{cfgMsg}</div>}
