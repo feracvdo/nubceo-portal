@@ -6,7 +6,7 @@ import { supabaseAdmin as db } from "../../lib/supabaseAdmin";
 import { buildRedminePayloads, sendToRedmine } from "../../lib/redmine";
 import { buildDiagrama } from "../../lib/diagrama";
 import * as gcal from "../../lib/googleCalendar";
-import { calcularPasos, faseSugerida } from "../../lib/pasos";
+import { calcularPasos, computarPasos, faseSugerida } from "../../lib/pasos";
 import { hitosPara, calcularHitos, NOMBRE_HITO_GENERICO } from "../../lib/hitos";
 import { procesarAvisoPlazo } from "../../lib/avisosPlazos";
 import crypto from "crypto";
@@ -118,26 +118,15 @@ async function assemble(cliente) {
     db.from("notas_internas").select("*").eq("cliente_id", cid).order("creado_at", { ascending: false }),
     db.from("plazos_cliente").select("*").eq("cliente_id", cid),
   ]);
-  // Se calcula acá mismo (en vez de llamar a calcularPasos()) reusando los datos que
-  // assemble() ya trajo — así no se duplican 5 queries en cada acción del portal.
+  // Se reusan los datos que assemble() ya trajo (en vez de llamar a calcularPasos(), que
+  // volvería a consultar todo) pero con el mismo cálculo puro que usa listClients — así
+  // los dos lugares no se desincronizan con el tiempo.
   const archivosArr = arch.data || [];
   const eventosArr = evs.data || [];
-  const respuestasObj = rv.data?.respuestas || {};
-  const ventasFile = archivosArr.find((a) => a.tipo === "ventas");
-  const ventasOkFlag = !!(ventasFile && ventasFile.validacion?.ok !== false);
-  const tieneApiFlag = !!creds.data;
-  const tieneEventoFn = (tipo, realizado) => eventosArr.some((e) => e.tipo === tipo && e.estado !== "cancelado" && (!realizado || e.estado === "realizado"));
-  const pasosCompletos = {
-    // Alcanza con que UNA procesadora esté "conectado" — igual criterio que calcularPasos().
-    procesadoras: (procs.data || []).some((p) => p.estado === "conectado"),
-    introduccion: !!cliente.intro_leida,
-    relevamiento: !!rv.data?.enviado_at,
-    sucursales: archivosArr.some((a) => a.tipo === "sucursales"),
-    conexion: respuestasObj.d1 === "api" ? tieneApiFlag : respuestasObj.d1 === "csv" ? ventasOkFlag : respuestasObj.d1 === "ambos" ? (tieneApiFlag && ventasOkFlag) : false,
-    capacitacion: tieneEventoFn("capacitacion_conciliador") || tieneEventoFn("capacitacion_cash"),
-    sandbox: tieneEventoFn("resultados_sandbox", true),
-    golive: tieneEventoFn("golive", true),
-  };
+  const { pasos: pasosCompletos, respuestas: respuestasObj } = computarPasos(cliente, {
+    relevamientoRow: rv.data, archivos: archivosArr, procesadoras: procs.data || [],
+    eventos: eventosArr, tieneApi: !!creds.data,
+  });
   const hitosCompletos = calcularHitos(cliente, pasosCompletos, { procesadoras: procs.data || [], eventos: eventosArr, pruebas: Object.fromEntries((prue.data || []).map((p) => [p.etapa, p])) });
 
   // Auto-avance de fase: la fase sugerida es cuántos pasos seguidos (desde el principio)
@@ -248,7 +237,16 @@ async function decompose(cliente, data) {
   }
 }
 
-const addHistory = (cid, quien, texto) => db.from("historial").insert({ cliente_id: cid, quien, texto });
+// Inserta en el historial Y mantiene clientes.ultima_actividad al día — así el
+// listado (listClients) no necesita ir a buscar el último registro de historial
+// por cada cliente, solo lee la columna que ya viene en la fila del cliente.
+const addHistory = (cid, quien, texto) => {
+  const ahora = new Date().toISOString();
+  return Promise.all([
+    db.from("historial").insert({ cliente_id: cid, quien, texto, creado_at: ahora }),
+    db.from("clientes").update({ ultima_actividad: ahora }).eq("id", cid),
+  ]);
+};
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
@@ -546,17 +544,43 @@ export default async function handler(req, res) {
         db.from("equipo").select("id, nombre, rol"),
       ]);
       const nombreImpl = Object.fromEntries((equipoRows || []).map((e) => [e.id, e.nombre]));
+      const ids = (clis || []).map((c) => c.id);
+      if (!ids.length) return res.json({ clients: [] });
+
+      // Antes esto era ~8 queries POR CLIENTE, una por una (400+ queries con 50 clientes).
+      // Ahora es un puñado de queries en bloque para TODOS los clientes de una, y después
+      // se agrupa en memoria — el cuello de botella pasa a ser Node, no la red hacia Supabase.
+      const [{ data: relRows }, { data: archRows }, { data: procRows }, { data: evRows }, { data: credRows }, { data: sucRows }, { data: notasRows }] = await Promise.all([
+        db.from("relevamientos").select("cliente_id, respuestas, enviado_at").in("cliente_id", ids),
+        db.from("archivos").select("cliente_id, tipo, validacion").in("cliente_id", ids),
+        db.from("procesadoras_cliente").select("cliente_id, estado").in("cliente_id", ids),
+        db.from("eventos").select("cliente_id, tipo, estado").in("cliente_id", ids),
+        db.from("credenciales_api").select("cliente_id").in("cliente_id", ids),
+        db.from("sucursales").select("cliente_id").in("cliente_id", ids),
+        db.from("notas_internas").select("cliente_id").in("cliente_id", ids),
+      ]);
+      const agrupar = (rows) => { const m = new Map(); for (const r of rows || []) { if (!m.has(r.cliente_id)) m.set(r.cliente_id, []); m.get(r.cliente_id).push(r); } return m; };
+      const relPorCliente = new Map((relRows || []).map((r) => [r.cliente_id, r])); // 1:1 (unique en el schema)
+      const archPorCliente = agrupar(archRows);
+      const procPorCliente = agrupar(procRows);
+      const evPorCliente = agrupar(evRows);
+      const credPorCliente = agrupar(credRows);
+      const sucPorCliente = agrupar(sucRows);
+      const notasPorCliente = agrupar(notasRows);
+
       const out = [];
+      const actualizacionesFase = [];
       for (const cli of clis || []) {
-        const [{ count: sucCountN }, { data: hist }, { count: notasCountN }] = await Promise.all([
-          db.from("sucursales").select("id", { count: "exact", head: true }).eq("cliente_id", cli.id),
-          db.from("historial").select("creado_at").eq("cliente_id", cli.id).order("creado_at", { ascending: false }).limit(1),
-          db.from("notas_internas").select("id", { count: "exact", head: true }).eq("cliente_id", cli.id),
-        ]);
-        const { pasos, respuestas, ventas } = await calcularPasos(db, cli);
+        const { pasos, respuestas, ventas } = computarPasos(cli, {
+          relevamientoRow: relPorCliente.get(cli.id),
+          archivos: archPorCliente.get(cli.id) || [],
+          procesadoras: procPorCliente.get(cli.id) || [],
+          eventos: evPorCliente.get(cli.id) || [],
+          tieneApi: (credPorCliente.get(cli.id) || []).length > 0,
+        });
         const faseSug = faseSugerida(pasos);
         let fase = cli.fase;
-        if (faseSug > fase) { await db.from("clientes").update({ fase: faseSug }).eq("id", cli.id); fase = faseSug; }
+        if (faseSug > fase) { actualizacionesFase.push(db.from("clientes").update({ fase: faseSug }).eq("id", cli.id)); fase = faseSug; }
         out.push({
           code: cli.codigo, name: cli.nombre, tenant: cli.tenant_productivo, phase: fase, createdAt: cli.creado_at,
           logo: cli.logo || null, razonSocial: cli.razon_social || null,
@@ -566,17 +590,19 @@ export default async function handler(req, res) {
           desarrolladorNombre: cli.desarrollador_id ? (nombreImpl[cli.desarrollador_id] || null) : null,
           estadoPago: cli.estado_pago || "al_dia",
           deudaDesde: cli.deuda_desde || null,
+          goLiveEstimado: cli.go_live_estimado || null,
           relevamiento: respuestas, relevamientoEnviado: pasos.relevamiento,
-          sucursalesCount: sucCountN || 0,
-          notasCount: notasCountN || 0,
+          sucursalesCount: (sucPorCliente.get(cli.id) || []).length,
+          notasCount: (notasPorCliente.get(cli.id) || []).length,
           tieneArchivoSucursales: pasos.sucursales,
           omitioSucursales: !!cli.sucursales_omitido && !pasos.sucursales,
           tieneVentas: !!ventas,
           completados: Object.values(pasos).filter(Boolean).length,
           totalPasos: 8,
-          ultimaActividad: hist.data?.[0]?.creado_at || null,
+          ultimaActividad: cli.ultima_actividad || null,
         });
       }
+      if (actualizacionesFase.length) await Promise.all(actualizacionesFase);
       return res.json({ clients: out });
     }
 
