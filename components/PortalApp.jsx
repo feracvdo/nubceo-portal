@@ -36,8 +36,8 @@ const RESPONSABLES_CALENDARIO_FE = ["Implementaciones", "Eduardo Andre", "Santia
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.8.0";
-const APP_VERSION_FECHA = "2026-07-08";
+const APP_VERSION = "1.9.0";
+const APP_VERSION_FECHA = "2026-07-13";
 
 const FASES = [
   "Vinculación",
@@ -81,6 +81,23 @@ const diasDesde = (fechaISO) => {
   if (!fechaISO) return 0;
   const dias = Math.floor((Date.now() - new Date(fechaISO + "T00:00:00").getTime()) / 86400000);
   return Math.max(0, dias);
+};
+
+// Días hasta una fecha (negativos = vencido). Sirve para el semáforo de go-live.
+const diasHasta = (fechaISO) => {
+  if (!fechaISO) return null;
+  return Math.floor((new Date(fechaISO + "T00:00:00").getTime() - Date.now()) / 86400000);
+};
+
+// Semáforo visual para la fecha de go-live comprometida
+const semaforoGoLive = (fechaISO) => {
+  if (!fechaISO) return null;
+  const d = diasHasta(fechaISO);
+  const fLocal = new Date(fechaISO + "T00:00:00").toLocaleDateString("es-AR", { day: "2-digit", month: "short" });
+  if (d < 0) return { txt: "Vencido " + fLocal, tone: "red" };
+  if (d <= 14) return { txt: fLocal + " · en " + d + "d", tone: "red" };
+  if (d <= 30) return { txt: fLocal + " · en " + d + "d", tone: "amber" };
+  return { txt: "Go-live " + fLocal, tone: "blue" };
 };
 
 // ─── Detección de casos borde a partir del relevamiento ───
@@ -1790,6 +1807,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase }) {
                       {cli.implementadorNombre || "Sin implementador/a"}{cli.desarrolladorNombre ? " · " + cli.desarrolladorNombre + " (dev)" : ""}
                     </div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {(() => { const sg = semaforoGoLive(cli.goLiveEstimado); return sg ? <Badge tone={sg.tone}>🎯 {sg.txt}</Badge> : null; })()}
                       {!cli.implementadorId && <Badge tone="amber">Sin asignar</Badge>}
                       {cli.estadoPago === "con_deuda" && <Badge tone="red">💰 Deuda {diasDesde(cli.deudaDesde)}d</Badge>}
                       {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
@@ -1928,6 +1946,7 @@ function AdminPortal({ session, onLogout }) {
   const [filtroDev, setFiltroDev] = useState("");
   const [newContactos, setNewContactos] = useState([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
   const [newComercial, setNewComercial] = useState("");
+  const [newGoLive, setNewGoLive] = useState(""); // formato YYYY-MM-DD
   const [miNombre, setMiNombre] = useState("");
   const [miRedmineKey, setMiRedmineKey] = useState("");
   const [tableroFull, setTableroFull] = useState(false);
@@ -2120,11 +2139,11 @@ function AdminPortal({ session, onLogout }) {
     try {
       await api("createClient", {
         sessionCode: sc, nombre: newName, codigo: newCode, tenant: newTenant, razonSocial: newRazonSocial, cuits: newCuits, logo: newLogo,
-        comercial: newComercial, contactos: newContactos.filter((c) => c.nombre.trim()),
+        comercial: newComercial, goLiveEstimado: newGoLive, contactos: newContactos.filter((c) => c.nombre.trim()),
       });
       flash("Cliente creado. Compartile el código " + newCode.trim().toUpperCase() + ". Al primer login se dispara el alta en Redmine y sus credenciales de API.", 5000);
       setNewName(""); setNewCode(""); setNewTenant(""); setNewRazonSocial(""); setNewCuits([]); setNewCuitInput(""); setNewLogo(null);
-      setNewComercial(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
+      setNewComercial(""); setNewGoLive(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
       cargarListado();
     } catch (e) { flash(e.message); }
   };
@@ -2681,6 +2700,16 @@ function AdminPortal({ session, onLogout }) {
                     )}
                   </div>
                   <div><Label>Comercial de la cuenta</Label><Input value={newComercial} onChange={(e) => setNewComercial(e.target.value)} placeholder="Nombre del ejecutivo" /></div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+                  <div>
+                    <Label>Fecha estimada de go-live (opcional)</Label>
+                    <Input type="date" value={newGoLive} onChange={(e) => setNewGoLive(e.target.value)} />
+                    <div style={{ fontSize: 11.5, color: T.n400, marginTop: 4, lineHeight: 1.4 }}>
+                      Es la que se acuerda con el cliente en la reunión de vinculación (típicamente ~2 meses después del alta). Con ella el tablero muestra un semáforo y prioriza los clientes por proximidad.
+                    </div>
+                  </div>
                 </div>
 
                 <Label>Contactos (sponsor, key user, desarrollador del cliente, etc.)</Label>
