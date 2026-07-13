@@ -170,6 +170,7 @@ async function assemble(cliente) {
       desarrolladorId: desarrollador?.id || null, desarrolladorNombre: desarrollador?.nombre || null, desarrolladorEmail: desarrollador?.email || null,
       name: cliente.nombre, razonSocial: cliente.razon_social || null, cuits: cliente.cuits || [], logo: cliente.logo || null,
       comercial: cliente.comercial || null,
+      goLiveEstimado: cliente.go_live_estimado || null,
       tenant: cliente.tenant_productivo, phase: faseActual, createdAt: cliente.creado_at, introLeida: cliente.intro_leida, sucursalesOmitido: cliente.sucursales_omitido,
       apiDesarrolloCompleto: !!cliente.api_desarrollo_completo,
       finanzas: {
@@ -634,6 +635,7 @@ export default async function handler(req, res) {
         codigo: nuevo, nombre: req.body.nombre.trim(), tenant_productivo: (req.body.tenant || "").trim() || null,
         razon_social: (req.body.razonSocial || "").trim() || null, cuits, logo: req.body.logo || null,
         comercial: (req.body.comercial || "").trim() || null,
+        go_live_estimado: req.body.goLiveEstimado || null,
       }).select().single();
       if (errIns) return res.status(500).json({ error: "No se pudo crear el cliente: " + errIns.message });
       const contactos = Array.isArray(req.body.contactos) ? req.body.contactos.filter((c) => (c.nombre || "").trim()) : [];
@@ -653,8 +655,9 @@ export default async function handler(req, res) {
       if (req.body.razonSocial !== undefined) upd.razon_social = (req.body.razonSocial || "").trim() || null;
       if (req.body.cuits !== undefined) upd.cuits = Array.isArray(req.body.cuits) ? req.body.cuits.map((c) => String(c).trim()).filter(Boolean) : [];
       if (req.body.logo !== undefined) upd.logo = req.body.logo || null;
+      if (req.body.goLiveEstimado !== undefined) upd.go_live_estimado = req.body.goLiveEstimado || null;
       if (Object.keys(upd).length) await db.from("clientes").update(upd).eq("id", cli.id);
-      await addHistory(cli.id, who || "Equipo", "Actualizó los datos del cliente (razón social / CUITs / logo)");
+      await addHistory(cli.id, who || "Equipo", "Actualizó los datos del cliente (razón social / CUITs / logo / go-live estimado)");
       return res.json(await assemble(cli));
     }
 
