@@ -14,8 +14,8 @@ import crypto from "crypto";
 const ADMIN_CODE = process.env.ADMIN_CODE || "NUBCEO-EQUIPO";
 const rnd = (len) => crypto.randomBytes(Math.ceil(len / 2)).toString("hex").slice(0, len);
 
-// Responsables cuyo calendario se puede sincronizar (mismas claves que config.disponibilidad)
-const RESPONSABLES_CALENDARIO = ["Implementaciones", "Eduardo Andre", "Santiago Suarez", "Mariana Macri"];
+// La sincronización de calendario es 100% personal — cada persona conecta solo la suya
+// (ver calendarAuthUrl/calendarStatus/calendarDisconnect y getCalendarConnection más abajo).
 const NOMBRES_EVENTO_SRV = {
   workshop: "Workshop de relevamiento", reunion_tecnica: "Reunión técnica de API",
   capacitacion_conciliador: "Capacitación Conciliador", capacitacion_cash: "Capacitación Nubceo Cash",
@@ -68,6 +68,25 @@ async function isTeam(code) {
   if (code === ADMIN_CODE) return true;
   const { data } = await db.from("equipo").select("id").eq("codigo", code).maybeSingle();
   return !!data;
+}
+
+// Si el cliente tiene implementador/a asignado y esa persona cargó su propia API key de
+// Redmine (Mi perfil), se usa esa — así el ticket queda creado "como" esa persona en vez de
+// con la key genérica del servidor. Si no hay nada personal, sendToRedmine cae sola a
+// REDMINE_API_KEY (variable de entorno).
+async function redmineKeyDelCliente(cliente) {
+  if (!cliente?.implementador_id) return null;
+  const { data } = await db.from("equipo").select("redmine_api_key").eq("id", cliente.implementador_id).maybeSingle();
+  return data?.redmine_api_key || null;
+}
+
+// Nombre real de la persona detrás de un código — null si es el código maestro (no tiene
+// perfil propio) o si el código no corresponde a nadie del equipo. Se usa para todo lo que
+// tiene que ser estrictamente personal (calendario propio, filtro de "mis clientes", etc.).
+async function nombreDeSesion(code) {
+  if (!code || code === ADMIN_CODE) return null;
+  const { data } = await db.from("equipo").select("nombre").eq("codigo", code).maybeSingle();
+  return data?.nombre || null;
 }
 
 // El código maestro (ADMIN_CODE) siempre es superadmin (acceso de emergencia); además,
@@ -295,7 +314,7 @@ export default async function handler(req, res) {
       if (!ya) {
         const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "redmine").maybeSingle();
         const payloads = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId);
-        const result = await sendToRedmine(payloads);
+        const result = await sendToRedmine(payloads, await redmineKeyDelCliente(cli));
         await db.from("redmine_altas").insert({ cliente_id: cli.id, estado: result.estado, detalle: result.detalle, payloads });
         const creds = await generarCredenciales(cli);
         await db.from("credenciales_api").upsert(
@@ -343,19 +362,23 @@ export default async function handler(req, res) {
     if (action === "getSlots") {
       const cli = await getCliente(cc);
       const tipo = req.body.tipo;
-      const PERSONAS = {
-        workshop: ["Implementaciones"],
-        reunion_tecnica: ["Eduardo Andre", "Santiago Suarez"],
-        capacitacion_conciliador: ["Mariana Macri"],
-        capacitacion_cash: ["Mariana Macri"],
-        resultados_sandbox: ["Implementaciones"],
-        golive: ["Implementaciones"],
-        workshop_cierre: ["Implementaciones"],
-      };
-      const personas = PERSONAS[tipo];
-      if (!personas) return res.status(400).json({ error: "Tipo de evento desconocido" });
-      const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "disponibilidad").maybeSingle();
-      const disp = cfgRow?.valor || {};
+      const TIPOS_VALIDOS = ["workshop", "reunion_tecnica", "capacitacion_conciliador", "capacitacion_cash", "resultados_sandbox", "golive", "workshop_cierre"];
+      if (!TIPOS_VALIDOS.includes(tipo)) return res.status(400).json({ error: "Tipo de evento desconocido" });
+
+      // La reunión se agenda con la persona REAL asignada a este cliente — no con un rol
+      // compartido. La reunión técnica va a quien tenga el cliente como desarrollador/a (o a
+      // su implementador/a si todavía no tiene desarrollador/a asignado); el resto va siempre
+      // al implementador/a del cliente.
+      const equipoIdDestino = tipo === "reunion_tecnica" ? (cli.desarrollador_id || cli.implementador_id) : cli.implementador_id;
+      if (!equipoIdDestino) {
+        return res.status(400).json({ error: "Este cliente todavía no tiene " + (tipo === "reunion_tecnica" ? "desarrollador/a ni implementador/a" : "implementador/a") + " asignado — asignalo desde el módulo Clientes antes de agendar." });
+      }
+      const { data: persona } = await db.from("equipo").select("id, nombre").eq("id", equipoIdDestino).maybeSingle();
+      if (!persona) return res.status(400).json({ error: "La persona asignada a este cliente ya no está en el equipo — reasignalo desde el módulo Clientes." });
+
+      const { data: dispRows } = await db.from("disponibilidad_equipo").select("dia_semana, hora").eq("equipo_id", persona.id);
+      if (!dispRows || !dispRows.length) return res.status(400).json({ error: persona.nombre + " todavía no cargó su disponibilidad semanal — puede hacerlo desde Mi perfil." });
+
       // Mínimo: mañana; para el workshop, al menos 3 días después de enviado el relevamiento
       let minDate = new Date(Date.now() + 24 * 3600 * 1000);
       if (tipo === "workshop") {
@@ -364,26 +387,20 @@ export default async function handler(req, res) {
         const tresDias = new Date(new Date(rv.enviado_at).getTime() + 3 * 24 * 3600 * 1000);
         if (tresDias > minDate) minDate = tresDias;
       }
-      const { data: ocupados } = await db.from("eventos").select("fecha, responsable").eq("estado", "agendado");
-      const ocupadosSet = new Set((ocupados || []).map((e) => e.responsable + "|" + new Date(e.fecha).toISOString()));
+      const { data: ocupados } = await db.from("eventos").select("fecha").eq("responsable", persona.nombre).eq("estado", "agendado");
+      const ocupadosSet = new Set((ocupados || []).map((e) => new Date(e.fecha).toISOString()));
 
-      // Si el responsable sincronizó su Google Calendar, la disponibilidad se filtra
-      // también contra sus horarios ocupados reales (no solo lo agendado desde el portal).
+      // Si la persona sincronizó su Google Calendar, la disponibilidad se filtra también
+      // contra sus horarios ocupados reales (no solo lo agendado desde el portal).
       const ventanaMin = minDate.toISOString();
       const ventanaMax = new Date(minDate.getTime() + 21 * 24 * 3600 * 1000).toISOString();
-      const busyPorPersona = {};
-      for (const persona of personas) {
-        const conn = await getCalendarConnection(persona);
-        if (!conn) continue;
-        try {
-          busyPorPersona[persona] = await gcal.freeBusy(conn.access_token, conn.calendarId, ventanaMin, ventanaMax);
-        } catch (e) {
-          busyPorPersona[persona] = []; // si falla la consulta, no bloqueamos el agendador — se filtra igual por lo interno
-        }
+      let busy = [];
+      const conn = await getCalendarConnection(persona.nombre);
+      if (conn) {
+        try { busy = await gcal.freeBusy(conn.access_token, conn.calendarId, ventanaMin, ventanaMax); } catch (e) { busy = []; }
       }
-      const ocupaCalendarioReal = (persona, f) => {
-        const busy = busyPorPersona[persona];
-        if (!busy || !busy.length) return false;
+      const ocupaCalendarioReal = (f) => {
+        if (!busy.length) return false;
         const finReunion = new Date(f.getTime() + 60 * 60 * 1000);
         return busy.some((b) => new Date(b.start) < finReunion && new Date(b.end) > f);
       };
@@ -392,17 +409,14 @@ export default async function handler(req, res) {
       for (let d = 0; d < 21 && slots.length < 40; d++) {
         const dia = new Date(minDate.getTime() + d * 24 * 3600 * 1000);
         const dow = dia.getDay(); // 0=domingo
-        for (const persona of personas) {
-          for (const [diaSem, hora] of disp[persona] || []) {
-            if (diaSem !== dow) continue;
-            const [hh, mm] = hora.split(":").map(Number);
-            const f = new Date(dia); f.setHours(hh, mm, 0, 0);
-            if (f < minDate) continue;
-            const key = persona + "|" + f.toISOString();
-            if (ocupadosSet.has(key)) continue;
-            if (ocupaCalendarioReal(persona, f)) continue;
-            slots.push({ fecha: f.toISOString(), responsable: persona, calendarioReal: !!busyPorPersona[persona] });
-          }
+        for (const { dia_semana, hora } of dispRows) {
+          if (dia_semana !== dow) continue;
+          const [hh, mm] = hora.split(":").map(Number);
+          const f = new Date(dia); f.setHours(hh, mm, 0, 0);
+          if (f < minDate) continue;
+          if (ocupadosSet.has(f.toISOString())) continue;
+          if (ocupaCalendarioReal(f)) continue;
+          slots.push({ fecha: f.toISOString(), responsable: persona.nombre, calendarioReal: !!conn });
         }
       }
       slots.sort((a, b) => a.fecha.localeCompare(b.fecha));
@@ -456,9 +470,10 @@ export default async function handler(req, res) {
     // ── Calendario: URL de conexión (cualquier miembro del equipo puede iniciarla) ──
     if (action === "calendarAuthUrl") {
       if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
-      const responsable = req.body.responsable;
-      if (!RESPONSABLES_CALENDARIO.includes(responsable)) return res.status(400).json({ error: "Responsable desconocido" });
-      const state = Buffer.from(JSON.stringify({ responsable, sessionCode: sc })).toString("base64");
+      const miNombre = await nombreDeSesion(sc);
+      if (!miNombre) return res.status(400).json({ error: "Tu usuario no tiene un perfil propio (¿estás con el código maestro?) — creá tu usuario personal en Equipo primero." });
+      // Sincronización 100% personal: solo se puede conectar el propio calendario, nunca el de otra persona.
+      const state = Buffer.from(JSON.stringify({ responsable: miNombre, sessionCode: sc })).toString("base64");
       try {
         return res.json({ url: gcal.buildAuthUrl(state) });
       } catch (e) {
@@ -638,14 +653,41 @@ export default async function handler(req, res) {
 
     if (action === "calendarStatus") {
       if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
-      const { data } = await db.from("calendar_conexiones").select("responsable, google_email, conectado_por, conectado_at");
-      const porResponsable = Object.fromEntries((data || []).map((c) => [c.responsable, c]));
-      return res.json({ responsables: RESPONSABLES_CALENDARIO, conexiones: porResponsable });
+      const miNombre = await nombreDeSesion(sc);
+      if (!miNombre) return res.json({ miNombre: null, conectado: null });
+      const { data } = await db.from("calendar_conexiones").select("google_email, conectado_at").eq("responsable", miNombre).maybeSingle();
+      return res.json({ miNombre, conectado: data || null });
     }
 
     if (action === "calendarDisconnect") {
       if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
-      await db.from("calendar_conexiones").delete().eq("responsable", req.body.responsable);
+      const miNombre = await nombreDeSesion(sc);
+      if (!miNombre) return res.status(400).json({ error: "Tu usuario no tiene un perfil propio" });
+      await db.from("calendar_conexiones").delete().eq("responsable", miNombre);
+      return res.json({ ok: true });
+    }
+
+    // Disponibilidad semanal personal — cada persona ve y edita únicamente la suya.
+    if (action === "getMyAvailability") {
+      if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
+      const { data: yo } = await db.from("equipo").select("id").eq("codigo", sc).maybeSingle();
+      if (!yo) return res.json({ slots: [] });
+      const { data } = await db.from("disponibilidad_equipo").select("dia_semana, hora").eq("equipo_id", yo.id).order("dia_semana").order("hora");
+      return res.json({ slots: data || [] });
+    }
+
+    if (action === "setMyAvailability") {
+      if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
+      const { data: yo } = await db.from("equipo").select("id").eq("codigo", sc).maybeSingle();
+      if (!yo) return res.status(400).json({ error: "Tu usuario no tiene un perfil propio (¿estás con el código maestro?) — creá tu usuario personal en Equipo primero." });
+      const slots = Array.isArray(req.body.slots) ? req.body.slots : [];
+      const limpio = slots
+        .filter((s) => Number.isInteger(s.dia_semana) && s.dia_semana >= 0 && s.dia_semana <= 6 && /^\d{2}:\d{2}$/.test(s.hora))
+        .map((s) => ({ equipo_id: yo.id, dia_semana: s.dia_semana, hora: s.hora }));
+      // Reemplazo total: se borra lo anterior y se inserta la lista nueva completa — más simple
+      // y predecible que ir comparando diffs para una lista chica como esta.
+      await db.from("disponibilidad_equipo").delete().eq("equipo_id", yo.id);
+      if (limpio.length) await db.from("disponibilidad_equipo").insert(limpio);
       return res.json({ ok: true });
     }
 
@@ -851,7 +893,7 @@ export default async function handler(req, res) {
       const cli = await getCliente(cc);
       const { data: rm } = await db.from("redmine_altas").select("*").eq("cliente_id", cli.id).maybeSingle();
       if (!rm) return res.status(404).json({ error: "Todavía no hay alta preparada (se dispara con el primer login del cliente)" });
-      const result = await sendToRedmine(rm.payloads);
+      const result = await sendToRedmine(rm.payloads, await redmineKeyDelCliente(cli));
       await db.from("redmine_altas").update({ estado: result.estado, detalle: result.detalle, actualizado_at: new Date().toISOString() }).eq("id", rm.id);
       await addHistory(cli.id, who || "Equipo", result.estado === "enviado" ? "Reenvió el alta a Redmine: creada la Feature y la US de sandbox" : "Reintentó el envío a Redmine — " + result.detalle);
       return res.json(await assemble(cli));
