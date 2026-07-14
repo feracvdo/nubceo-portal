@@ -203,6 +203,7 @@ async function assemble(cliente) {
       notas: (notas.data || []).map((n) => ({ ts: n.creado_at, who: n.autor, txt: n.texto })),
       plazos: Object.fromEntries((plazos.data || []).map((p) => [p.paso, {
         fechaLimite: p.fecha_limite, recordatorioEnviado: p.recordatorio_enviado_at, incumplimientoEnviado: p.incumplimiento_enviado_at,
+        cumplimiento: p.cumplimiento || null,
       }])),
       pasosCompletos,
       hitos: hitosPara(respuestasObj),
@@ -212,7 +213,7 @@ async function assemble(cliente) {
 }
 
 // ── Objeto del portal → tablas (solo las secciones presentes) ──
-async function decompose(cliente, data) {
+async function decompose(cliente, data, esTeam) {
   const cid = cliente.id;
   if (data.involucrados !== undefined) {
     await db.from("involucrados").delete().eq("cliente_id", cid);
@@ -221,11 +222,17 @@ async function decompose(cliente, data) {
       await db.from("involucrados").insert(filas.map((p) => ({
         cliente_id: cid, nombre: p.nombre.trim(), cargo: (p.cargo || "").trim() || null,
         email: p.email.trim(), telefono: (p.telefono || "").trim() || null,
-        rol: ["sponsor", "key_user", "otro"].includes(p.rol) ? p.rol : "otro",
+        rol: ["sponsor", "key_user", "desarrollador", "otro"].includes(p.rol) ? p.rol : "otro",
       })));
     }
   }
   if (data.relevamiento !== undefined) {
+    // Una vez enviado (no borrador), el cliente ya no puede editarlo — el equipo sí puede,
+    // por si hace falta corregir algo puntual sin pasar por "reabrir".
+    const { data: actual } = await db.from("relevamientos").select("enviado_at").eq("cliente_id", cid).maybeSingle();
+    if (actual?.enviado_at && !esTeam) {
+      throw new Error("El relevamiento ya fue enviado y no se puede editar. Si necesitás corregir algo, escribile a tu implementador.");
+    }
     const upd = { cliente_id: cid, respuestas: data.relevamiento, enviado_at: data.relevamientoEnviado || null, actualizado_at: new Date().toISOString() };
     // Al enviar el relevamiento, se genera "por atrás" el diagrama de flujo del proceso
     if (data.relevamientoEnviado) {
@@ -302,8 +309,25 @@ export default async function handler(req, res) {
     if (action === "saveClient") {
       const cli = await getCliente(cc);
       if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
-      await decompose(cli, req.body.data || {});
+      try {
+        await decompose(cli, req.body.data || {}, team);
+      } catch (e) {
+        return res.status(400).json({ error: e.message });
+      }
       if (req.body.log) await addHistory(cli.id, who || (team ? "Equipo Nubceo" : "Cliente"), req.body.log);
+      return res.json(await assemble(cli));
+    }
+
+    if (action === "setMiEmpresa") {
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      const upd = {};
+      if (req.body.razonSocial !== undefined) upd.razon_social = (req.body.razonSocial || "").trim() || null;
+      if (req.body.cuits !== undefined) upd.cuits = Array.isArray(req.body.cuits) ? req.body.cuits.map((c) => String(c).trim()).filter(Boolean) : [];
+      if (req.body.logo !== undefined) upd.logo = req.body.logo || null;
+      // El tenant NUNCA se edita desde acá — es un dato técnico, no de la empresa.
+      if (Object.keys(upd).length) await db.from("clientes").update(upd).eq("id", cli.id);
+      await addHistory(cli.id, who || "Cliente", "Actualizó los datos de la empresa (razón social / CUITs / logo)");
       return res.json(await assemble(cli));
     }
 
@@ -495,6 +519,27 @@ export default async function handler(req, res) {
     }
 
     // ── Plazos por paso: el equipo "calendariza" cada paso; el cron diario dispara los mails ──
+    if (action === "reabrirRelevamiento") {
+      if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      await db.from("relevamientos").update({ enviado_at: null }).eq("cliente_id", cli.id);
+      await addHistory(cli.id, who || "Equipo", "Reabrió el relevamiento para que el cliente pueda corregirlo");
+      return res.json(await assemble(cli));
+    }
+
+    if (action === "setCumplimientoPlazo") {
+      if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      const valor = ["cumplido_tiempo", "cumplido_tarde", "incumplido"].includes(req.body.cumplimiento) ? req.body.cumplimiento : null;
+      const { data: upd } = await db.from("plazos_cliente").update({ cumplimiento: valor }).eq("cliente_id", cli.id).eq("paso", req.body.paso).select().maybeSingle();
+      if (!upd) return res.status(404).json({ error: "Ese hito todavía no tiene un plazo definido" });
+      const NOMBRE_CUMPLIMIENTO = { cumplido_tiempo: "Cumplido a tiempo", cumplido_tarde: "Cumplido con atraso", incumplido: "No cumplido" };
+      await addHistory(cli.id, who || "Equipo", "Marcó el hito «" + (NOMBRE_HITO_GENERICO[req.body.paso] || req.body.paso) + "»: " + (valor ? NOMBRE_CUMPLIMIENTO[valor] : "sin confirmar"));
+      return res.json(await assemble(cli));
+    }
+
     if (action === "setPlazo") {
       const cli = await getCliente(cc);
       if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
