@@ -36,8 +36,8 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.10.4";
-const APP_VERSION_FECHA = "2026-07-13";
+const APP_VERSION = "1.11.0";
+const APP_VERSION_FECHA = "2026-07-14";
 
 const FASES = [
   "Vinculación",
@@ -671,10 +671,40 @@ const EventoLinea = ({ e }) => (
   </div>
 );
 
+const fmtDateSolo = (iso) => {
+  if (!iso) return "—";
+  return new Date(iso + "T00:00:00").toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
+};
+
+// ─── Menú lateral del portal del cliente ───
+const CLIENT_NAV_ITEMS = [
+  ["implementacion", "📋", "Implementación"],
+  ["cronograma", "🗓", "Cronograma"],
+  ["perfil", "🏢", "Mi Perfil"],
+];
+function ClientSidebar({ activo, onCambiar }) {
+  return (
+    <div style={{ width: 200, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+      <div style={{ display: "grid", gap: 3 }}>
+        {CLIENT_NAV_ITEMS.map(([id, icon, lbl]) => (
+          <div key={id} onClick={() => onCambiar(id)} style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, cursor: "pointer",
+            fontSize: 13.5, fontWeight: activo === id ? 700 : 500,
+            background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
+          }}>
+            <span style={{ fontSize: 15 }}>{icon}</span>{lbl}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ClientPortal({ session, onLogout }) {
   const [data, setData] = useState(null);
   const [meta, setMeta] = useState(null);
   const [tab, setTab] = useState("procesadoras");
+  const [modulo, setModulo] = useState("implementacion"); // implementacion | cronograma | perfil
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
 
@@ -752,67 +782,80 @@ function ClientPortal({ session, onLogout }) {
   return (
     <div>
       <Nav name={meta.name} who={session.who} onLogout={onLogout} implementador={meta.implementadorNombre ? { nombre: meta.implementadorNombre, email: meta.implementadorEmail } : null} />
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: "26px 20px 60px" }}>
-        <Card style={{ marginBottom: SP.lg }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
-            <div>
-              <Label>Tu implementación</Label>
-              <div style={{ fontSize: 21, fontWeight: 700, color: T.n900 }}>{completados} de {PASOS.length} pasos completados</div>
-            </div>
-            <div style={{ fontSize: 13, color: T.okTx, fontWeight: 700, minHeight: 18 }}>{savedMsg}</div>
-          </div>
-          <div style={{ height: 6, borderRadius: 100, background: T.n100, overflow: "hidden", marginBottom: 16, maxWidth: 320 }}>
-            <div style={{ width: Math.round((completados / PASOS.length) * 100) + "%", height: "100%", background: completados === PASOS.length ? "#22c55e" : T.primary, borderRadius: 100, transition: "width .3s" }} />
-          </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {PASOS.map((p, i) => {
-              const activo = tab === p.id, ok = completo[p.id], libre = unlocked[p.id];
-              const pendiente = p.id === "sucursales" && omitioSucursales;
-              return (
-                <div key={p.id} onClick={() => libre && setTab(p.id)} title={libre ? (ok ? "Completado — podés volver a ver y editar" : "") : "Completá los pasos anteriores para desbloquear"} style={{
-                  display: "flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 100, fontSize: 13,
-                  cursor: libre ? "pointer" : "not-allowed", opacity: libre ? 1 : 0.45,
-                  fontWeight: activo ? 700 : 500,
-                  background: activo ? T.primary : ok ? T.okBg : pendiente ? T.warnBg : "#fff",
-                  color: activo ? "#fff" : ok ? T.okTx : pendiente ? T.warnTx : T.n600,
-                  border: "1px solid " + (activo ? T.primary : ok ? "#bbe8c9" : pendiente ? "#fde68a" : T.n200),
-                }}>
-                  <span style={{ fontWeight: 700 }}>{ok ? "✓" : pendiente ? "!" : !libre ? "🔒" : ""}</span> {i + 1}. {p.n}{pendiente ? " (pendiente)" : ""}
+      <div style={{ display: "flex" }}>
+        <ClientSidebar activo={modulo} onCambiar={setModulo} />
+        <div style={{ flex: 1, minWidth: 0, maxWidth: 900, margin: "0 auto", padding: "26px 20px 60px" }}>
+
+          {modulo === "implementacion" && (
+            <>
+              <Card style={{ marginBottom: SP.lg }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
+                  <div>
+                    <Label>Tu implementación</Label>
+                    <div style={{ fontSize: 21, fontWeight: 700, color: T.n900 }}>{completados} de {PASOS.length} pasos completados</div>
+                  </div>
+                  <div style={{ fontSize: 13, color: T.okTx, fontWeight: 700, minHeight: 18 }}>{savedMsg}</div>
                 </div>
-              );
-            })}
-            <div onClick={() => setTab("historial")} style={{ padding: "8px 13px", borderRadius: 100, fontSize: 13, cursor: "pointer", fontWeight: tab === "historial" ? 700 : 500, background: tab === "historial" ? T.primary : "transparent", color: tab === "historial" ? "#fff" : T.n400, border: "1px solid " + (tab === "historial" ? T.primary : T.n200) }}>Historial</div>
-          </div>
-          {omitioSucursales && (
-            <Alert tone="warning" style={{ marginTop: 14 }}>
-              El paso 4 (Sucursales) quedó <b>pendiente</b>. Podés seguir avanzando, pero es necesario completarlo para terminar la implementación — volvé cuando tengas el archivo.
-            </Alert>
+                <div style={{ height: 6, borderRadius: 100, background: T.n100, overflow: "hidden", marginBottom: 16, maxWidth: 320 }}>
+                  <div style={{ width: Math.round((completados / PASOS.length) * 100) + "%", height: "100%", background: completados === PASOS.length ? "#22c55e" : T.primary, borderRadius: 100, transition: "width .3s" }} />
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {PASOS.map((p, i) => {
+                    const activo = tab === p.id, ok = completo[p.id], libre = unlocked[p.id];
+                    const pendiente = p.id === "sucursales" && omitioSucursales;
+                    return (
+                      <div key={p.id} onClick={() => libre && setTab(p.id)} title={libre ? (ok ? "Completado — podés volver a ver" : "") : "Completá los pasos anteriores para desbloquear"} style={{
+                        display: "flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 100, fontSize: 13,
+                        cursor: libre ? "pointer" : "not-allowed", opacity: libre ? 1 : 0.45,
+                        fontWeight: activo ? 700 : 500,
+                        background: activo ? T.primary : ok ? T.okBg : pendiente ? T.warnBg : "#fff",
+                        color: activo ? "#fff" : ok ? T.okTx : pendiente ? T.warnTx : T.n600,
+                        border: "1px solid " + (activo ? T.primary : ok ? "#bbe8c9" : pendiente ? "#fde68a" : T.n200),
+                      }}>
+                        <span style={{ fontWeight: 700 }}>{ok ? "✓" : pendiente ? "!" : !libre ? "🔒" : ""}</span> {i + 1}. {p.n}{pendiente ? " (pendiente)" : ""}
+                      </div>
+                    );
+                  })}
+                  <div onClick={() => setTab("historial")} style={{ padding: "8px 13px", borderRadius: 100, fontSize: 13, cursor: "pointer", fontWeight: tab === "historial" ? 700 : 500, background: tab === "historial" ? T.primary : "transparent", color: tab === "historial" ? "#fff" : T.n400, border: "1px solid " + (tab === "historial" ? T.primary : T.n200) }}>Historial</div>
+                </div>
+                {omitioSucursales && (
+                  <Alert tone="warning" style={{ marginTop: 14 }}>
+                    El paso 4 (Sucursales) quedó <b>pendiente</b>. Podés seguir avanzando, pero es necesario completarlo para terminar la implementación — volvé cuando tengas el archivo.
+                  </Alert>
+                )}
+              </Card>
+
+              {tab === "procesadoras" && <TabProcesadoras data={data} act={act} saving={saving} />}
+              {tab === "introduccion" && <TabIntroduccion act={act} meta={meta} saving={saving} />}
+              {tab === "relevamiento" && <TabRelevamiento data={data} persist={persist} saving={saving} rvOK={!!data.relevamientoEnviado} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
+              {tab === "sucursales" && <TabSucursales data={data} meta={meta} persist={persist} act={act} saving={saving} />}
+              {tab === "conexion" && <TabConexion data={data} persist={persist} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
+              {tab === "capacitacion" && <TabCapacitacion data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
+              {tab === "sandbox" && <TabPruebasEtapa etapa="sandbox" tipoEvento="resultados_sandbox" data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
+              {tab === "golive" && <TabPruebasEtapa etapa="golive" tipoEvento="golive" data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
+              {tab === "historial" && <TabHistorial history={data.history} />}
+
+              {/* Navegación entre pasos: volver atrás para ver/editar, avanzar al completar */}
+              {idxTab >= 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
+                  {idxTab > 0
+                    ? <Btn variant="ghost" onClick={() => setTab(PASOS[idxTab - 1].id)}>← Paso {idxTab}: {PASOS[idxTab - 1].n}</Btn>
+                    : <span />}
+                  {idxTab < PASOS.length - 1 && (
+                    avanzable[tab]
+                      ? <Btn onClick={() => setTab(PASOS[idxTab + 1].id)}>Siguiente — Paso {idxTab + 2}: {PASOS[idxTab + 1].n} →</Btn>
+                      : <span style={{ fontSize: 13, color: T.n400 }}>Completá este paso para pasar al siguiente</span>
+                  )}
+                </div>
+              )}
+            </>
           )}
-        </Card>
 
-        {tab === "procesadoras" && <TabProcesadoras data={data} act={act} saving={saving} />}
-        {tab === "introduccion" && <TabIntroduccion act={act} meta={meta} saving={saving} />}
-        {tab === "relevamiento" && <TabRelevamiento data={data} persist={persist} saving={saving} rvOK={!!data.relevamientoEnviado} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
-        {tab === "sucursales" && <TabSucursales data={data} meta={meta} persist={persist} act={act} saving={saving} />}
-        {tab === "conexion" && <TabConexion data={data} persist={persist} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
-        {tab === "capacitacion" && <TabCapacitacion data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
-        {tab === "sandbox" && <TabPruebasEtapa etapa="sandbox" tipoEvento="resultados_sandbox" data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
-        {tab === "golive" && <TabPruebasEtapa etapa="golive" tipoEvento="golive" data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
-        {tab === "historial" && <TabHistorial history={data.history} />}
+          {modulo === "cronograma" && <TabCronograma data={data} />}
 
-        {/* Navegación entre pasos: volver atrás para ver/editar, avanzar al completar */}
-        {idxTab >= 0 && (
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
-            {idxTab > 0
-              ? <Btn variant="ghost" onClick={() => setTab(PASOS[idxTab - 1].id)}>← Paso {idxTab}: {PASOS[idxTab - 1].n}</Btn>
-              : <span />}
-            {idxTab < PASOS.length - 1 && (
-              avanzable[tab]
-                ? <Btn onClick={() => setTab(PASOS[idxTab + 1].id)}>Siguiente — Paso {idxTab + 2}: {PASOS[idxTab + 1].n} →</Btn>
-                : <span style={{ fontSize: 13, color: T.n400 }}>Completá este paso para pasar al siguiente</span>
-            )}
-          </div>
-        )}
+          {modulo === "perfil" && <TabMiEmpresa data={data} meta={meta} act={act} persist={persist} saving={saving} />}
+
+        </div>
       </div>
     </div>
   );
@@ -1008,11 +1051,12 @@ const RV_PREGUNTAS = [
     info: "Acuerdos especiales con un banco, una sucursal que opera distinto, un sistema viejo por cambiar, cobros que van a una cuenta particular… Todo lo que en su empresa se resuelve 'de una forma especial' nos interesa conocerlo antes del workshop." },
 ];
 
-function QItem({ q, rv, set, error }) {
+function QItem({ q, rv, set, error, readOnly }) {
   const [showInfo, setShowInfo] = useState(false);
   const opts = q.otro ? [...q.opts, ["otro", "Otro"]] : q.opts;
   const val = rv[q.id];
   const otroOn = q.otro && (q.type === "multi" ? (val || []).includes("otro") : val === "otro");
+  const lblDe = (v) => (opts.find(([ov]) => ov === v) || [, v])[1];
   return (
     <div id={"q-" + q.id} style={{ marginBottom: 18, padding: error ? "12px 14px" : 0, margin: error ? "0 -14px 18px" : "0 0 18px", borderRadius: error ? 10 : 0, background: error ? T.errBg : "transparent", border: error ? "1px solid " + T.errBorder : "none" }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 8 }}>
@@ -1039,19 +1083,32 @@ function QItem({ q, rv, set, error }) {
           {q.info}
         </div>
       )}
-      {q.type === "radio" && <Radio options={opts} value={val} onChange={(v) => set(q.id, v)} />}
-      {q.type === "multi" && <Multi options={opts} value={val || []} onChange={(v) => set(q.id, v)} />}
-      {q.type === "text" && <Input value={val || ""} onChange={(e) => set(q.id, e.target.value)} style={error ? { borderColor: T.errBorder } : undefined} />}
-      {q.type === "textarea" && (
-        <textarea
-          value={val || ""} onChange={(e) => set(q.id, e.target.value)} rows={3}
-          style={{ width: "100%", boxSizing: "border-box", padding: 12, border: "1px solid " + (error ? T.errBorder : T.n200), borderRadius: 6, fontSize: 14, fontFamily: "inherit", color: T.n800, resize: "vertical", outline: "none" }}
-        />
-      )}
-      {otroOn && (
-        <div style={{ marginTop: 8 }}>
-          <Input placeholder={q.otroLbl || "Contanos cuál / detallá"} value={rv[q.id + "Otro"] || ""} onChange={(e) => set(q.id + "Otro", e.target.value)} />
+      {readOnly ? (
+        <div style={{ fontSize: 14, color: val ? T.n800 : T.n400, fontStyle: val ? "normal" : "italic" }}>
+          {q.type === "multi"
+            ? ((val || []).length ? (val || []).map(lblDe).join(", ") : "Sin respuesta")
+            : q.type === "radio"
+              ? (val ? lblDe(val) : "Sin respuesta")
+              : (val || "Sin respuesta")}
+          {otroOn && rv[q.id + "Otro"] && <span> — {rv[q.id + "Otro"]}</span>}
         </div>
+      ) : (
+        <>
+          {q.type === "radio" && <Radio options={opts} value={val} onChange={(v) => set(q.id, v)} />}
+          {q.type === "multi" && <Multi options={opts} value={val || []} onChange={(v) => set(q.id, v)} />}
+          {q.type === "text" && <Input value={val || ""} onChange={(e) => set(q.id, e.target.value)} style={error ? { borderColor: T.errBorder } : undefined} />}
+          {q.type === "textarea" && (
+            <textarea
+              value={val || ""} onChange={(e) => set(q.id, e.target.value)} rows={3}
+              style={{ width: "100%", boxSizing: "border-box", padding: 12, border: "1px solid " + (error ? T.errBorder : T.n200), borderRadius: 6, fontSize: 14, fontFamily: "inherit", color: T.n800, resize: "vertical", outline: "none" }}
+            />
+          )}
+          {otroOn && (
+            <div style={{ marginTop: 8 }}>
+              <Input placeholder={q.otroLbl || "Contanos cuál / detallá"} value={rv[q.id + "Otro"] || ""} onChange={(e) => set(q.id + "Otro", e.target.value)} />
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -1102,7 +1159,139 @@ function TabHistorial({ history }) {
   );
 }
 
-// __CLIENT_B__ (se ensambla después de RV_PREGUNTAS y QItem)
+// ─── Cronograma (Gantt liviano): hitos del proceso con fecha límite y cumplimiento ───
+function TabCronograma({ data }) {
+  const hitos = data.hitos || [];
+  const completos = data.hitosCompletos || {};
+  const plazos = data.plazos || {};
+  const hoy = new Date().toISOString().slice(0, 10);
+
+  const estadoDe = (h) => {
+    const plazo = plazos[h.id];
+    const completo = !!completos[h.id];
+    if (plazo?.cumplimiento === "cumplido_tiempo") return { label: "Cumplido a tiempo", tone: "green" };
+    if (plazo?.cumplimiento === "cumplido_tarde") return { label: "Cumplido con atraso", tone: "amber" };
+    if (plazo?.cumplimiento === "incumplido") return { label: "No cumplido", tone: "red" };
+    if (completo) return { label: "Completado", tone: "green" };
+    if (plazo?.fechaLimite && plazo.fechaLimite < hoy) return { label: "Plazo vencido", tone: "red" };
+    if (plazo?.fechaLimite) return { label: "En curso", tone: "blue" };
+    return { label: "Sin fecha definida", tone: "gray" };
+  };
+  const colorPunto = { green: "#22c55e", amber: "#f59e0b", red: "#ef4444", blue: T.primary, gray: T.n200 };
+
+  return (
+    <Card>
+      <SectionHeader
+        title="Cronograma de tu implementación"
+        subtitle="Estos son los hitos clave del proceso, con las fechas que coordinamos con tu implementador. Se va actualizando solo a medida que avanza cada etapa."
+      />
+      {hitos.length === 0 && <div style={{ color: T.n400, fontSize: 14 }}>Todavía no hay hitos para mostrar.</div>}
+      <div style={{ display: "grid", gap: 0, marginTop: 6 }}>
+        {hitos.map((h, i) => {
+          const est = estadoDe(h);
+          const plazo = plazos[h.id];
+          return (
+            <div key={h.id} style={{ display: "flex", gap: 14 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <div style={{ width: 13, height: 13, borderRadius: "50%", background: colorPunto[est.tone], marginTop: 4, flexShrink: 0, boxShadow: "0 0 0 3px " + T.card }} />
+                {i < hitos.length - 1 && <div style={{ width: 2, flex: 1, background: T.n100, minHeight: 32 }} />}
+              </div>
+              <div style={{ paddingBottom: 22, flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, color: T.n900 }}>{h.nombre}</div>
+                  <Badge tone={est.tone}>{est.label}</Badge>
+                </div>
+                <div style={{ fontSize: 12.5, color: T.n400, marginTop: 2 }}>
+                  Responsable: {h.responsable}{plazo?.fechaLimite ? " · Fecha límite: " + fmtDateSolo(plazo.fechaLimite) : " · Fecha límite a coordinar"}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+}
+
+// ─── Mi Perfil (cliente): datos de la empresa editables (salvo tenant) + contactos ───
+function TabMiEmpresa({ data, meta, act, persist, saving }) {
+  const [razonSocial, setRazonSocial] = useState(meta.razonSocial || "");
+  const [cuits, setCuits] = useState(meta.cuits || []);
+  const [cuitInput, setCuitInput] = useState("");
+  const [logo, setLogo] = useState(meta.logo || null);
+  const [msg, setMsg] = useState("");
+  const [inv, setInv] = useState(data.involucrados || []);
+  const [invMsg, setInvMsg] = useState("");
+
+  const guardarEmpresa = async () => {
+    const r = await act("setMiEmpresa", { razonSocial, cuits, logo });
+    setMsg(r ? "Guardado ✓" : "No se pudo guardar");
+    setTimeout(() => setMsg(""), 2500);
+  };
+  const guardarContactos = async () => {
+    await persist({ involucrados: inv }, "Actualizó los contactos de la empresa");
+    setInvMsg("Guardado ✓");
+    setTimeout(() => setInvMsg(""), 2500);
+  };
+
+  return (
+    <div style={{ display: "grid", gap: SP.lg }}>
+      <Card>
+        <SectionHeader title="Datos de la empresa" subtitle="Podés editar todo lo de acá abajo salvo el tenant, que es un dato técnico fijo de tu cuenta y no se puede cambiar desde el portal." />
+        <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 18, flexWrap: "wrap" }}>
+          <ImageUpload value={logo} onChange={setLogo} label="logo de tu empresa" />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+          <div>
+            <Label>Nombre en el portal</Label>
+            <div style={{ fontSize: 14, color: T.n600, padding: "10px 0" }}>{meta.name} <span style={{ fontSize: 11.5, color: T.n400 }}>(no editable — escribile a tu implementador si hay que corregirlo)</span></div>
+          </div>
+          <div>
+            <Label>Tenant</Label>
+            <div style={{ fontSize: 14, color: T.n600, padding: "10px 0" }}>{meta.tenant || "—"} <span style={{ fontSize: 11.5, color: T.n400 }}>(no editable)</span></div>
+          </div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <Label>Razón social</Label>
+          <Input value={razonSocial} onChange={(e) => setRazonSocial(e.target.value)} placeholder="Ej: Freddo S.A." />
+        </div>
+        <div style={{ marginBottom: 6 }}>
+          <Label>CUIT(s)</Label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Input value={cuitInput} onChange={(e) => setCuitInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (cuitInput.trim()) { setCuits([...cuits, cuitInput.trim()]); setCuitInput(""); } } }}
+              placeholder="Ej: 30-12345678-9 (Enter para agregar)" />
+            <Btn variant="secondary" size="sm" onClick={() => { if (cuitInput.trim()) { setCuits([...cuits, cuitInput.trim()]); setCuitInput(""); } }}>+ Agregar</Btn>
+          </div>
+          {cuits.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+              {cuits.map((c, i) => (
+                <span key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, background: T.primary50, color: T.primary800, border: "1px solid " + T.primary100, borderRadius: 100, padding: "4px 10px" }}>
+                  {c} <span onClick={() => setCuits(cuits.filter((_, idx) => idx !== i))} style={{ cursor: "pointer" }}>✕</span>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <ActionBar>
+          <Btn onClick={guardarEmpresa} disabled={saving}>Guardar</Btn>
+          {msg && <span style={{ fontSize: 13, fontWeight: 600, color: T.okTx }}>{msg}</span>}
+        </ActionBar>
+      </Card>
+
+      <Card>
+        <SectionHeader title="Contactos" subtitle="Sponsor, key users y demás personas de tu empresa vinculadas a la implementación. Podés agregarlos o editarlos en cualquier momento, esté o no enviado el relevamiento." />
+        <Involucrados inv={inv} setInv={setInv} />
+        <ActionBar>
+          <Btn onClick={guardarContactos} disabled={saving}>Guardar contactos</Btn>
+          {invMsg && <span style={{ fontSize: 13, fontWeight: 600, color: T.okTx }}>{invMsg}</span>}
+        </ActionBar>
+      </Card>
+    </div>
+  );
+}
+
+
 
 // ── Paso 3: Relevamiento (con involucrados y agenda de workshop) ──
 const ROLES = [["sponsor", "Sponsor"], ["key_user", "Key user"], ["desarrollador", "Desarrollador"], ["otro", "Otro"]];
@@ -1171,33 +1360,52 @@ function TabRelevamiento({ data, persist, saving, rvOK, session, setAll }) {
       <Card>
         <SectionHeader
           title="Relevamiento de procesos"
-          badge={rvOK ? <Badge tone="green">Enviado el {fmtDate(data.relevamientoEnviado)}</Badge> : <Badge tone="blue">{respondidas} de {visibles} respondidas</Badge>}
-          subtitle={<>Completar todo el formulario es necesario para avanzar: con tus respuestas armamos el mapa de tu operación y preparamos el workshop a medida. Al lado de cada pregunta hay un botón <b style={{ fontStyle: "italic", fontFamily: "Georgia, serif" }}>i</b> con la explicación en lenguaje simple. Podés guardar borrador y seguir después, sin necesidad de completar todo todavía.</>}
+          badge={rvOK ? <Badge tone="green">Enviado el {fmtDate(data.relevamientoEnviado)} · 🔒 Bloqueado</Badge> : <Badge tone="blue">{respondidas} de {visibles} respondidas</Badge>}
+          subtitle={rvOK
+            ? "Ya está enviado, así que quedó bloqueado para que el equipo trabaje sobre una versión estable — podés revisar tus respuestas abajo, pero no editarlas. Si necesitás corregir algo, escribile a tu implementador con el botón de arriba."
+            : <>Completar todo el formulario es necesario para avanzar: con tus respuestas armamos el mapa de tu operación y preparamos el workshop a medida. Al lado de cada pregunta hay un botón <b style={{ fontStyle: "italic", fontFamily: "Georgia, serif" }}>i</b> con la explicación en lenguaje simple. Podés guardar borrador y seguir después, sin necesidad de completar todo todavía.</>}
         />
-        <Involucrados inv={inv} setInv={setInv} />
-        {!tieneSponsor || !tieneKeyUser ? (
-          <Alert tone="warning" style={{ marginBottom: 14 }}>Para enviar el relevamiento indicá al menos un Sponsor y un Key user (con nombre y mail).</Alert>
-        ) : null}
-        {intentoEnviar && faltantes.length > 0 && (
-          <Alert tone="error" style={{ marginBottom: 14 }}>
-            <div style={{ marginBottom: 6 }}>Te faltan completar {faltantes.length} pregunta{faltantes.length > 1 ? "s" : ""} para poder enviar el relevamiento:</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {faltantes.slice(0, 8).map((q) => (
-                <span key={q.id} onClick={() => irA(q.id)} style={{ cursor: "pointer", textDecoration: "underline", fontWeight: 600 }}>→ {q.lbl}</span>
+        {rvOK ? (
+          <div style={{ marginBottom: 18 }}>
+            <Label>Involucrados enviados</Label>
+            <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
+              {invValidos.map((p, i) => (
+                <div key={i} style={{ fontSize: 13.5, color: T.n800 }}>
+                  <b>{p.nombre}</b> — {ROLES.find(([v]) => v === p.rol)?.[1] || p.rol} · {p.email}
+                </div>
               ))}
-              {faltantes.length > 8 && <span>… y {faltantes.length - 8} más (marcadas en rojo más abajo).</span>}
             </div>
-          </Alert>
+          </div>
+        ) : (
+          <>
+            <Involucrados inv={inv} setInv={setInv} />
+            {!tieneSponsor || !tieneKeyUser ? (
+              <Alert tone="warning" style={{ marginBottom: 14 }}>Para enviar el relevamiento indicá al menos un Sponsor y un Key user (con nombre y mail).</Alert>
+            ) : null}
+            {intentoEnviar && faltantes.length > 0 && (
+              <Alert tone="error" style={{ marginBottom: 14 }}>
+                <div style={{ marginBottom: 6 }}>Te faltan completar {faltantes.length} pregunta{faltantes.length > 1 ? "s" : ""} para poder enviar el relevamiento:</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  {faltantes.slice(0, 8).map((q) => (
+                    <span key={q.id} onClick={() => irA(q.id)} style={{ cursor: "pointer", textDecoration: "underline", fontWeight: 600 }}>→ {q.lbl}</span>
+                  ))}
+                  {faltantes.length > 8 && <span>… y {faltantes.length - 8} más (marcadas en rojo más abajo).</span>}
+                </div>
+              </Alert>
+            )}
+          </>
         )}
         {RV_PREGUNTAS.map((q, i) => {
           if (q.sec) return <div key={i} style={{ fontSize: 12, fontWeight: 700, color: T.primary, textTransform: "uppercase", letterSpacing: "0.07em", margin: "26px 0 14px", paddingBottom: 8, borderBottom: "1px solid " + T.primary50 }}>{q.sec}</div>;
           if (q.showIf && !q.showIf(rv)) return null;
-          return <QItem key={q.id} q={q} rv={rv} set={set} error={intentoEnviar && !contestada(q)} />;
+          return <QItem key={q.id} q={q} rv={rv} set={set} error={intentoEnviar && !contestada(q)} readOnly={rvOK} />;
         })}
-        <ActionBar>
-          <Btn variant="secondary" onClick={guardarBorrador} disabled={saving}>Guardar borrador</Btn>
-          <Btn onClick={enviar} disabled={saving || (!tieneSponsor || !tieneKeyUser)}>{rvOK ? "Reenviar actualizado" : "Enviar relevamiento"}</Btn>
-        </ActionBar>
+        {!rvOK && (
+          <ActionBar>
+            <Btn variant="secondary" onClick={guardarBorrador} disabled={saving}>Guardar borrador</Btn>
+            <Btn onClick={enviar} disabled={saving || (!tieneSponsor || !tieneKeyUser)}>Enviar relevamiento</Btn>
+          </ActionBar>
+        )}
       </Card>
 
       {rvOK && (
@@ -2274,6 +2482,24 @@ function AdminPortal({ session, onLogout }) {
     } catch (e) { flash(e.message); }
   };
 
+  const cambiarCumplimiento = async (paso, cumplimiento) => {
+    if (!sel) return;
+    try {
+      const r = await api("setCumplimientoPlazo", { sessionCode: sc, code: sel, paso, cumplimiento, who: session.who });
+      setSelData(r.data);
+    } catch (e) { flash(e.message); }
+  };
+
+  const reabrirRelevamiento = async () => {
+    if (!sel) return;
+    if (!window.confirm("¿Reabrir el relevamiento para que " + (selMeta?.name || "el cliente") + " lo pueda editar de nuevo?")) return;
+    try {
+      const r = await api("reabrirRelevamiento", { sessionCode: sc, code: sel, who: session.who });
+      setSelMeta(r.meta); setSelData(r.data);
+      flash("Relevamiento reabierto ✓");
+    } catch (e) { flash(e.message); }
+  };
+
   const guardarFinanzas = async () => {
     if (!sel) return;
     try {
@@ -2526,7 +2752,10 @@ function AdminPortal({ session, onLogout }) {
               <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 4px" }}>Relevamiento</h3>
               {selData.relevamientoEnviado
                 ? <>
-                    <Badge tone="green">Enviado {fmtDate(selData.relevamientoEnviado)}</Badge>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <Badge tone="green">Enviado {fmtDate(selData.relevamientoEnviado)}</Badge>
+                      <span onClick={reabrirRelevamiento} style={{ fontSize: 12, fontWeight: 600, color: T.primary, cursor: "pointer" }}>🔓 Reabrir para que lo edite el cliente</span>
+                    </div>
                     <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
                       {RV_PREGUNTAS.filter((q) => q.id && fmtRespuesta(q, selData.relevamiento)).map((q) => (
                         <div key={q.id} style={{ fontSize: 13, lineHeight: 1.45 }}>
@@ -2657,6 +2886,7 @@ function AdminPortal({ session, onLogout }) {
                   onQuitar={() => quitarPlazo(h.id)}
                   onEnviarAhora={() => enviarAvisoAhora(h.id)}
                   onToggleManual={h.id === "fin_desarrollo_api" ? marcarApiCompleta : null}
+                  onCumplimiento={(valor) => cambiarCumplimiento(h.id, valor)}
                 />
               ))}
             </div>
@@ -3122,7 +3352,7 @@ function AdminPortal({ session, onLogout }) {
 }
 
 // ── Fila de "Plazos y recordatorios": fecha límite por paso + estado del aviso ──
-function FilaPlazo({ paso, completo, plazo, onGuardar, onQuitar, onEnviarAhora, onToggleManual }) {
+function FilaPlazo({ paso, completo, plazo, onGuardar, onQuitar, onEnviarAhora, onToggleManual, onCumplimiento }) {
   const [fecha, setFecha] = useState(plazo?.fechaLimite || "");
   const [enviando, setEnviando] = useState(false);
   useEffect(() => { setFecha(plazo?.fechaLimite || ""); }, [plazo?.fechaLimite]);
@@ -3151,6 +3381,16 @@ function FilaPlazo({ paso, completo, plazo, onGuardar, onQuitar, onEnviarAhora, 
       <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={completo}
         style={{ height: 34, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 12.5, fontFamily: "inherit", color: T.n800, background: completo ? T.n50 : "#fff" }} />
       <Btn size="sm" variant="secondary" onClick={guardar} disabled={completo || !fecha || fecha === plazo?.fechaLimite}>Guardar</Btn>
+      {plazo?.fechaLimite && (
+        <select value={plazo?.cumplimiento || ""} onChange={(e) => onCumplimiento(e.target.value || null)}
+          title="Confirmá si se cumplió el plazo — esto es lo que ve el cliente en su Cronograma"
+          style={{ height: 34, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 6px", fontSize: 12, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+          <option value="">Sin confirmar</option>
+          <option value="cumplido_tiempo">✓ Cumplido a tiempo</option>
+          <option value="cumplido_tarde">◐ Cumplido con atraso</option>
+          <option value="incumplido">✕ No cumplido</option>
+        </select>
+      )}
       {plazo?.fechaLimite && !completo && (
         <>
           <Btn size="sm" variant="ghost" onClick={enviarAhora} disabled={enviando}>{enviando ? "Enviando…" : "Enviar aviso ahora"}</Btn>
