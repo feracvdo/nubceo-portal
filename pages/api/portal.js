@@ -4,7 +4,7 @@
 // código de sesión y el service role hace el trabajo (RLS bloquea el resto).
 import { supabaseAdmin as db } from "../../lib/supabaseAdmin";
 import {
-  buildRedminePayloads, sendToRedmine, listarTrackers,
+  buildRedminePayloads, sendToRedmine, listarTrackers, corregirTrackerDeTicket,
   buildTicketMigracionVentas, buildTicketEliminarPos, buildTicketCambioRolAdmin, buildTicketLibre,
 } from "../../lib/redmine";
 import { buildDiagrama } from "../../lib/diagrama";
@@ -945,6 +945,24 @@ export default async function handler(req, res) {
       const cli = req.body.code ? await getCliente(cc) : null;
       const trackers = await listarTrackers(cli ? await redmineKeyDelCliente(cli) : null);
       return res.json({ trackers });
+    }
+
+    if (action === "vincularTicketRedmine") {
+      if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      const featureId = Number(req.body.featureIssueId);
+      if (!featureId || !Number.isInteger(featureId)) return res.status(400).json({ error: "Ingresá el número de ticket tal cual aparece en la URL de Redmine (solo el número)" });
+      const { data: rm } = await db.from("redmine_altas").select("id").eq("cliente_id", cli.id).maybeSingle();
+      if (rm) {
+        await db.from("redmine_altas").update({ feature_issue_id: featureId, estado: "enviado", detalle: null }).eq("id", rm.id);
+      } else {
+        await db.from("redmine_altas").insert({ cliente_id: cli.id, estado: "enviado", detalle: null, payloads: [], feature_issue_id: featureId });
+      }
+      let avisoTracker = "";
+      try { avisoTracker = await corregirTrackerDeTicket(featureId, "Feature", await redmineKeyDelCliente(cli)); } catch (e) { avisoTracker = " (no se pudo verificar el tracker: " + e.message + ")"; }
+      await addHistory(cli.id, who || "Equipo", "Vinculó manualmente el ticket #" + featureId + " de Redmine como Feature de este cliente" + avisoTracker);
+      return res.json(await assemble(cli));
     }
 
     if (action === "crearTicketRedmine") {
