@@ -36,7 +36,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.12.0";
+const APP_VERSION = "1.13.0";
 const APP_VERSION_FECHA = "2026-07-14";
 
 const FASES = [
@@ -1965,9 +1965,22 @@ const ImageUpload = ({ value, onChange, label, round }) => {
 function KanbanBoard({ clientes, onAbrir, onMoverFase }) {
   const [arrastrando, setArrastrando] = useState(null); // código del cliente en drag
   const [sobreCol, setSobreCol] = useState(null);
+  const scrollRef = useRef(null);
+  const desplazar = (dir) => scrollRef.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
 
   return (
-    <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 8 }}>
+    <div style={{ position: "relative" }}>
+      <style>{`
+        .kanban-scroll::-webkit-scrollbar { height: 12px; }
+        .kanban-scroll::-webkit-scrollbar-track { background: ${T.n100}; border-radius: 100px; }
+        .kanban-scroll::-webkit-scrollbar-thumb { background: ${T.primary100}; border-radius: 100px; border: 2px solid ${T.n100}; }
+        .kanban-scroll::-webkit-scrollbar-thumb:hover { background: ${T.primary}; }
+      `}</style>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 8 }}>
+        <span onClick={() => desplazar(-1)} title="Desplazar a la izquierda" style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid " + T.n200, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, color: T.n600 }}>←</span>
+        <span onClick={() => desplazar(1)} title="Desplazar a la derecha" style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid " + T.n200, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, color: T.n600 }}>→</span>
+      </div>
+      <div ref={scrollRef} className="kanban-scroll" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 12, scrollbarWidth: "thin" }}>
       {FASES.map((faseNombre, faseIdx) => {
         const items = clientes.filter((c) => c.phase === faseIdx);
         return (
@@ -2029,6 +2042,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase }) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -2526,6 +2540,32 @@ function AdminPortal({ session, onLogout }) {
     } catch (e) { flash(e.message); }
   };
 
+  const [generandoAlta, setGenerandoAlta] = useState(false);
+  const generarAltaAhora = async () => {
+    if (!sel) return;
+    setGenerandoAlta(true);
+    try {
+      const r = await api("onboarding", { sessionCode: sc, code: sel, who: session.who });
+      setSelData(r.data); setSelMeta(r.meta);
+      flash("Alta disparada ✓");
+    } catch (e) { flash(e.message); }
+    finally { setGenerandoAlta(false); }
+  };
+
+  const [vinculando, setVinculando] = useState(false);
+  const [featureIdManual, setFeatureIdManual] = useState("");
+  const vincularTicket = async () => {
+    if (!sel || !featureIdManual.trim()) return;
+    setVinculando(true);
+    try {
+      const r = await api("vincularTicketRedmine", { sessionCode: sc, code: sel, featureIssueId: featureIdManual.trim(), who: session.who });
+      setSelData(r.data);
+      setFeatureIdManual("");
+      flash("Ticket vinculado ✓");
+    } catch (e) { flash(e.message); }
+    finally { setVinculando(false); }
+  };
+
   const regenerarCreds = async () => {
     if (!sel) return;
     try {
@@ -2638,8 +2678,8 @@ function AdminPortal({ session, onLogout }) {
     return (
       <div>
         <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin />
-        <div style={{ maxWidth: 940, margin: "0 auto", padding: "26px 20px 60px" }}>
-          <div style={{ marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ maxWidth: 940, margin: "0 auto", padding: "0 20px 60px" }}>
+          <div style={{ position: "sticky", top: 61, zIndex: 5, background: T.bg, marginBottom: 14, padding: "14px 0 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Btn variant="ghost" size="sm" onClick={cerrarDetalle}>← Volver al listado</Btn>
             {session.tipoUsuario === "superuser" && <Btn variant="ghost" size="sm" onClick={() => archivarCliente(sel, meta.name)} style={{ color: T.n600 }}>📥 Archivar cliente</Btn>}
           </div>
@@ -2823,27 +2863,44 @@ function AdminPortal({ session, onLogout }) {
               <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: 0 }}>Alta en Redmine y credenciales de API</h3>
               {selData.redmine
                 ? <Badge tone={selData.redmine.status === "enviado" ? "green" : "amber"}>{selData.redmine.status === "enviado" ? "Tickets creados en Redmine" : "En cola de envío"}</Badge>
-                : <Badge tone="gray">Se dispara con el primer login del cliente</Badge>}
+                : <Badge tone="gray">Todavía no se disparó</Badge>}
             </div>
             {meta.tenant && <div style={{ fontSize: 13, color: T.n600, marginTop: 6 }}>Tenant productivo: <b style={{ color: T.n800 }}>{meta.tenant}</b></div>}
+            {!selData.redmine && (
+              <div style={{ marginTop: 12 }}>
+                <Btn variant="secondary" size="sm" onClick={generarAltaAhora} disabled={generandoAlta}>{generandoAlta ? "Generando…" : "Generar alta en Redmine ahora"}</Btn>
+                <div style={{ fontSize: 12, color: T.n400, marginTop: 6 }}>Normalmente esto se dispara solo cuando el cliente entra por primera vez al portal — este botón lo hace ya, sin esperar a que entre.</div>
+              </div>
+            )}
             {selData.redmine?.featureIssueId && cfg.url && (
               <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap" }}>
                 <a href={cfg.url.replace(/\/+$/, "") + "/issues/" + selData.redmine.featureIssueId} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 600, color: T.primary }}>Feature #{selData.redmine.featureIssueId} →</a>
                 {selData.redmine.userStoryIssueId && <a href={cfg.url.replace(/\/+$/, "") + "/issues/" + selData.redmine.userStoryIssueId} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 600, color: T.primary }}>User Story #{selData.redmine.userStoryIssueId} →</a>}
               </div>
             )}
+            {selData.redmine && !selData.redmine.featureIssueId && (
+              <Alert tone="warning" style={{ marginTop: 10 }}>
+                <div style={{ marginBottom: 8 }}>Este cliente tiene un alta hecha, pero el portal no guardó el número real del ticket (pasa con altas de antes de esta actualización). Si ya existe en Redmine, pegá acá su número para vincularlo — de paso, si había quedado con el tracker por defecto, se corrige a "Feature".</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Input value={featureIdManual} onChange={(e) => setFeatureIdManual(e.target.value)} placeholder="Ej: 20450" style={{ maxWidth: 160 }} />
+                  <Btn variant="secondary" size="sm" onClick={vincularTicket} disabled={vinculando || !featureIdManual.trim()}>{vinculando ? "Vinculando…" : "Vincular"}</Btn>
+                </div>
+              </Alert>
+            )}
             {selData.redmine && (
               <>
                 {selData.redmine.detail && <div style={{ marginTop: 10, background: T.warnBg, color: T.warnTx, fontSize: 13, padding: "9px 12px", borderRadius: 8, lineHeight: 1.5 }}>{selData.redmine.detail}</div>}
-                <details style={{ marginTop: 12 }}>
-                  <summary style={{ fontSize: 13, fontWeight: 600, color: T.primary, cursor: "pointer" }}>Ver payload de los tickets ({selData.redmine.payloads.length})</summary>
-                  {selData.redmine.payloads.map((p, i) => (
-                    <div key={i} style={{ marginTop: 10 }}>
-                      <div style={{ fontSize: 12.5, fontWeight: 600, color: T.n600, marginBottom: 4 }}>{p.titulo}</div>
-                      <pre style={{ background: T.n50, border: "1px solid " + T.n200, borderRadius: 8, padding: 12, fontSize: 12, overflowX: "auto", margin: 0, color: T.n800 }}>{JSON.stringify(p.body, null, 2)}</pre>
-                    </div>
-                  ))}
-                </details>
+                {selData.redmine.payloads?.length > 0 && (
+                  <details style={{ marginTop: 12 }}>
+                    <summary style={{ fontSize: 13, fontWeight: 600, color: T.primary, cursor: "pointer" }}>Ver payload de los tickets ({selData.redmine.payloads.length})</summary>
+                    {selData.redmine.payloads.map((p, i) => (
+                      <div key={i} style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 600, color: T.n600, marginBottom: 4 }}>{p.titulo}</div>
+                        <pre style={{ background: T.n50, border: "1px solid " + T.n200, borderRadius: 8, padding: 12, fontSize: 12, overflowX: "auto", margin: 0, color: T.n800 }}>{JSON.stringify(p.body, null, 2)}</pre>
+                      </div>
+                    ))}
+                  </details>
+                )}
                 {selData.redmine.status !== "enviado" && (
                   <div style={{ marginTop: 12 }}>
                     <Btn variant="outline" size="sm" onClick={reenviarRedmine}>Reintentar envío a Redmine</Btn>
