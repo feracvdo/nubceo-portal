@@ -36,7 +36,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.11.0";
+const APP_VERSION = "1.12.0";
 const APP_VERSION_FECHA = "2026-07-14";
 
 const FASES = [
@@ -2060,6 +2060,110 @@ function Sidebar({ activo, onCambiar }) {
 }
 
 // ─── Fila de una persona del equipo, con acciones según tipo de usuario del que mira ───
+// ─── Crear tickets en Redmine a demanda para un cliente puntual, sin que entre al portal ───
+function TicketsRedmineCard({ sel, sc, session, tieneFeature }) {
+  const [plantilla, setPlantilla] = useState("migracion_ventas");
+  const [desde, setDesde] = useState("");
+  const [hasta, setHasta] = useState("");
+  const [entorno, setEntorno] = useState("sandbox");
+  const [usuarios, setUsuarios] = useState("");
+  const [subject, setSubject] = useState("");
+  const [description, setDescription] = useState("");
+  const [trackerName, setTrackerName] = useState("");
+  const [trackers, setTrackers] = useState([]);
+  const [creando, setCreando] = useState(false);
+  const [msg, setMsg] = useState(null);
+
+  useEffect(() => {
+    if (!sel) return;
+    (async () => {
+      try { const r = await api("listarTrackersRedmine", { sessionCode: sc, code: sel }); setTrackers(r.trackers || []); } catch (e) { /* opcional, cae al tracker por defecto */ }
+    })();
+  }, [sel, sc]);
+
+  const selStyle = { width: "100%", height: 40, borderRadius: 8, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" };
+  const taStyle = { width: "100%", boxSizing: "border-box", padding: 10, border: "1px solid " + T.n200, borderRadius: 8, fontSize: 14, fontFamily: "inherit", color: T.n800, resize: "vertical" };
+
+  const crear = async () => {
+    setCreando(true); setMsg(null);
+    try {
+      const body = { sessionCode: sc, code: sel, who: session.who, plantilla, trackerName: trackerName || undefined };
+      if (plantilla === "migracion_ventas") { body.desde = desde; body.hasta = hasta; }
+      if (plantilla === "eliminar_pos") { body.entorno = entorno; }
+      if (plantilla === "cambio_rol_admin") { body.usuarios = usuarios; }
+      if (plantilla === "libre") { body.subject = subject; body.description = description; }
+      const r = await api("crearTicketRedmine", body);
+      setMsg({ ok: true, texto: "Ticket creado" + (r.issueId ? " — #" + r.issueId : "") + " ✓" });
+      setDesde(""); setHasta(""); setUsuarios(""); setSubject(""); setDescription("");
+    } catch (e) {
+      setMsg({ ok: false, texto: e.message });
+    } finally { setCreando(false); }
+  };
+
+  return (
+    <Card style={{ marginBottom: 16 }}>
+      <SectionHeader title="Crear ticket en Redmine" subtitle="Tickets a demanda para este cliente puntual, sin que tenga que entrar al portal — quedan colgados de su Feature de alta." />
+      {!tieneFeature && <Alert tone="warning" style={{ marginBottom: 14 }}>Este cliente todavía no tiene la Feature de alta creada en Redmine — primero hace falta un alta exitosa (arriba) antes de poder colgarle tickets nuevos.</Alert>}
+
+      <div style={{ marginBottom: 14 }}>
+        <Label>Plantilla</Label>
+        <select value={plantilla} onChange={(e) => setPlantilla(e.target.value)} disabled={!tieneFeature} style={selStyle}>
+          <option value="migracion_ventas">Migración de ventas de plataforma (Sales)</option>
+          <option value="eliminar_pos">Eliminar pos_sales y pos_payments</option>
+          <option value="cambio_rol_admin">Cambio de rol a Administrador</option>
+          <option value="libre">Ticket libre</option>
+        </select>
+      </div>
+
+      {plantilla === "migracion_ventas" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+          <div><Label>Desde</Label><input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} style={selStyle} /></div>
+          <div><Label>Hasta</Label><input type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} style={selStyle} /></div>
+        </div>
+      )}
+
+      {plantilla === "eliminar_pos" && (
+        <div style={{ marginBottom: 14, maxWidth: 260 }}>
+          <Label>Entorno</Label>
+          <select value={entorno} onChange={(e) => setEntorno(e.target.value)} style={selStyle}>
+            <option value="sandbox">Sandbox</option>
+            <option value="productivo">Producción</option>
+          </select>
+        </div>
+      )}
+
+      {plantilla === "cambio_rol_admin" && (
+        <div style={{ marginBottom: 14 }}>
+          <Label>Usuarios que deben quedar como administradores</Label>
+          <textarea value={usuarios} onChange={(e) => setUsuarios(e.target.value)} rows={2} placeholder="Ej: juan@cliente.com, maria@cliente.com" style={taStyle} />
+        </div>
+      )}
+
+      {plantilla === "libre" && (
+        <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+          <div><Label>Asunto</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
+          <div><Label>Descripción</Label><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} style={taStyle} /></div>
+        </div>
+      )}
+
+      {trackers.length > 0 && (
+        <div style={{ marginBottom: 14, maxWidth: 260 }}>
+          <Label>Tracker (opcional)</Label>
+          <select value={trackerName} onChange={(e) => setTrackerName(e.target.value)} style={selStyle}>
+            <option value="">Task (por defecto)</option>
+            {trackers.map((t) => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
+          </select>
+        </div>
+      )}
+
+      {msg && <Alert tone={msg.ok ? "success" : "error"} style={{ marginBottom: 14 }}>{msg.texto}</Alert>}
+      <ActionBar>
+        <Btn onClick={crear} disabled={!tieneFeature || creando}>{creando ? "Creando…" : "Crear ticket"}</Btn>
+      </ActionBar>
+    </Card>
+  );
+}
+
 function EquipoLista({ miembros, esSuperuser, onEliminar, onSetTipoUsuario, miCodigo }) {
   if (!miembros.length) return <div style={{ fontSize: 13, color: T.n400 }}>Todavía no hay nadie en este equipo.</div>;
   const etiquetaTipo = (t) => t === "superuser" ? "Superuser" : t === "admin" ? "Admin" : "Colaborador";
@@ -2385,10 +2489,15 @@ function AdminPortal({ session, onLogout }) {
   };
 
   const cambiarFase = async (code, phase) => {
+    // Optimista: el tablero responde al toque de soltar la tarjeta, sin esperar la vuelta del servidor.
+    setClients((prev) => (prev ? prev.map((c) => (c.code === code ? { ...c, phase } : c)) : prev));
     try {
       const r = await api("setPhase", { sessionCode: sc, code, fase: phase, faseNombre: FASES[phase], who: session.who });
       if (sel === code) { setSelMeta(r.meta); setSelData(r.data); }
-    } catch (e) { flash(e.message); }
+    } catch (e) {
+      flash(e.message);
+      cargarListado(); // si falló, recargamos de la base para no dejar el tablero desincronizado
+    }
   };
 
   const asignar = async (code, implementadorId, rol = "implementador") => {
@@ -2717,6 +2826,12 @@ function AdminPortal({ session, onLogout }) {
                 : <Badge tone="gray">Se dispara con el primer login del cliente</Badge>}
             </div>
             {meta.tenant && <div style={{ fontSize: 13, color: T.n600, marginTop: 6 }}>Tenant productivo: <b style={{ color: T.n800 }}>{meta.tenant}</b></div>}
+            {selData.redmine?.featureIssueId && cfg.url && (
+              <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap" }}>
+                <a href={cfg.url.replace(/\/+$/, "") + "/issues/" + selData.redmine.featureIssueId} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 600, color: T.primary }}>Feature #{selData.redmine.featureIssueId} →</a>
+                {selData.redmine.userStoryIssueId && <a href={cfg.url.replace(/\/+$/, "") + "/issues/" + selData.redmine.userStoryIssueId} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 600, color: T.primary }}>User Story #{selData.redmine.userStoryIssueId} →</a>}
+              </div>
+            )}
             {selData.redmine && (
               <>
                 {selData.redmine.detail && <div style={{ marginTop: 10, background: T.warnBg, color: T.warnTx, fontSize: 13, padding: "9px 12px", borderRadius: 8, lineHeight: 1.5 }}>{selData.redmine.detail}</div>}
@@ -2746,6 +2861,8 @@ function AdminPortal({ session, onLogout }) {
               </div>
             )}
           </Card>
+
+          <TicketsRedmineCard sel={sel} sc={sc} session={session} tieneFeature={!!selData.redmine?.featureIssueId} />
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
             <Card>
