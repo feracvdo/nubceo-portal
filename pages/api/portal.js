@@ -3,7 +3,10 @@
 // El navegador nunca toca Supabase directo: cada request valida el
 // código de sesión y el service role hace el trabajo (RLS bloquea el resto).
 import { supabaseAdmin as db } from "../../lib/supabaseAdmin";
-import { buildRedminePayloads, sendToRedmine } from "../../lib/redmine";
+import {
+  buildRedminePayloads, sendToRedmine, listarTrackers,
+  buildTicketMigracionVentas, buildTicketEliminarPos, buildTicketCambioRolAdmin, buildTicketLibre,
+} from "../../lib/redmine";
 import { buildDiagrama } from "../../lib/diagrama";
 import * as gcal from "../../lib/googleCalendar";
 import { calcularPasos, computarPasos, faseSugerida } from "../../lib/pasos";
@@ -198,7 +201,7 @@ async function assemble(cliente) {
       sucursalesArchivo: fArch("sucursales"),
       ventasArchivo: fArch("ventas"),
       apiCreds: creds.data ? { key: creds.data.api_key, secret: creds.data.api_secret, createdAt: creds.data.generado_at } : undefined,
-      redmine: rm.data ? { status: rm.data.estado, detail: rm.data.detalle, payloads: rm.data.payloads, ts: rm.data.actualizado_at } : undefined,
+      redmine: rm.data ? { status: rm.data.estado, detail: rm.data.detalle, payloads: rm.data.payloads, ts: rm.data.actualizado_at, featureIssueId: rm.data.feature_issue_id, userStoryIssueId: rm.data.user_story_issue_id } : undefined,
       history: (hist.data || []).map((h) => ({ ts: h.creado_at, who: h.quien, txt: h.texto })),
       notas: (notas.data || []).map((n) => ({ ts: n.creado_at, who: n.autor, txt: n.texto })),
       plazos: Object.fromEntries((plazos.data || []).map((p) => [p.paso, {
@@ -339,7 +342,10 @@ export default async function handler(req, res) {
         const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "redmine").maybeSingle();
         const payloads = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId, cli.cuits);
         const result = await sendToRedmine(payloads, await redmineKeyDelCliente(cli));
-        await db.from("redmine_altas").insert({ cliente_id: cli.id, estado: result.estado, detalle: result.detalle, payloads });
+        await db.from("redmine_altas").insert({
+          cliente_id: cli.id, estado: result.estado, detalle: result.detalle, payloads,
+          feature_issue_id: result.issueIds?.[0] || null, user_story_issue_id: result.issueIds?.[1] || null,
+        });
         const creds = await generarCredenciales(cli);
         await db.from("credenciales_api").upsert(
           { cliente_id: cli.id, entorno: "sandbox", api_key: creds.api_key, api_secret: creds.api_secret, generado_at: new Date().toISOString() },
@@ -934,6 +940,44 @@ export default async function handler(req, res) {
       return res.json({ ok: true });
     }
 
+    if (action === "listarTrackersRedmine") {
+      if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
+      const cli = req.body.code ? await getCliente(cc) : null;
+      const trackers = await listarTrackers(cli ? await redmineKeyDelCliente(cli) : null);
+      return res.json({ trackers });
+    }
+
+    if (action === "crearTicketRedmine") {
+      if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      const { data: rm } = await db.from("redmine_altas").select("feature_issue_id").eq("cliente_id", cli.id).maybeSingle();
+      if (!rm?.feature_issue_id) return res.status(400).json({ error: "Este cliente todavía no tiene la Feature de alta creada en Redmine — hace falta un alta exitosa antes de poder colgarle tickets nuevos." });
+
+      const plantilla = req.body.plantilla;
+      let payload;
+      if (plantilla === "migracion_ventas") {
+        if (!req.body.desde || !req.body.hasta) return res.status(400).json({ error: "Falta el período (desde / hasta)" });
+        payload = buildTicketMigracionVentas(cli.nombre, req.body.desde, req.body.hasta, req.body.trackerName);
+      } else if (plantilla === "eliminar_pos") {
+        payload = buildTicketEliminarPos(cli.nombre, req.body.entorno === "productivo" ? "productivo" : "sandbox", req.body.trackerName);
+      } else if (plantilla === "cambio_rol_admin") {
+        if (!(req.body.usuarios || "").trim()) return res.status(400).json({ error: "Indicá qué usuarios deben quedar como administradores" });
+        payload = buildTicketCambioRolAdmin(cli.nombre, req.body.usuarios, req.body.trackerName);
+      } else if (plantilla === "libre") {
+        if (!(req.body.subject || "").trim()) return res.status(400).json({ error: "Falta el asunto del ticket" });
+        payload = buildTicketLibre(cli.nombre, req.body.subject, req.body.description, req.body.trackerName);
+      } else {
+        return res.status(400).json({ error: "Plantilla de ticket desconocida" });
+      }
+
+      const result = await sendToRedmine([payload], await redmineKeyDelCliente(cli), rm.feature_issue_id);
+      if (result.estado !== "enviado") return res.status(502).json({ error: "No se pudo crear el ticket: " + (result.detalle || "error desconocido") });
+      const nuevoId = result.issueIds?.[0];
+      await addHistory(cli.id, who || "Equipo", "Creó un ticket en Redmine (\"" + payload.issue.subject + "\")" + (nuevoId ? " — #" + nuevoId : ""));
+      return res.json({ ok: true, issueId: nuevoId });
+    }
+
     if (action === "retryRedmine") {
       const cli = await getCliente(cc);
       const { data: rm } = await db.from("redmine_altas").select("*").eq("cliente_id", cli.id).maybeSingle();
@@ -942,9 +986,17 @@ export default async function handler(req, res) {
       // así, si algo se completó después del primer login (ej: el CUIT), el reintento ya sale
       // bien en vez de reenviar para siempre el payload viejo guardado la primera vez.
       const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "redmine").maybeSingle();
-      const payloads = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId, cli.cuits);
-      const result = await sendToRedmine(payloads, await redmineKeyDelCliente(cli));
-      await db.from("redmine_altas").update({ payloads, estado: result.estado, detalle: result.detalle, actualizado_at: new Date().toISOString() }).eq("id", rm.id);
+      const payloadsCompletos = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId, cli.cuits);
+      // Si la Feature ya se había creado bien en un intento anterior, NO la volvemos a crear
+      // (evita duplicarla) — solo reintentamos lo que falta, colgado de esa Feature real.
+      const payloads = rm.feature_issue_id ? [payloadsCompletos[1]] : payloadsCompletos;
+      const result = await sendToRedmine(payloads, await redmineKeyDelCliente(cli), rm.feature_issue_id || null);
+      const featureId = rm.feature_issue_id || result.issueIds?.[0] || null;
+      const userStoryId = rm.feature_issue_id ? (result.issueIds?.[0] || rm.user_story_issue_id) : (result.issueIds?.[1] || rm.user_story_issue_id);
+      await db.from("redmine_altas").update({
+        payloads: payloadsCompletos, estado: result.estado, detalle: result.detalle, actualizado_at: new Date().toISOString(),
+        feature_issue_id: featureId, user_story_issue_id: userStoryId,
+      }).eq("id", rm.id);
       await addHistory(cli.id, who || "Equipo", result.estado === "enviado" ? "Reenvió el alta a Redmine: creada la Feature y la US de sandbox" : "Reintentó el envío a Redmine — " + result.detalle);
       return res.json(await assemble(cli));
     }
