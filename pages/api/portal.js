@@ -154,7 +154,7 @@ async function assemble(cliente) {
   // Auto-avance de fase: la fase sugerida es cuántos pasos seguidos (desde el principio)
   // están completos — así no da saltos raros si algo se completa fuera de orden. Nunca
   // retrocede solo, y el equipo puede pisarlo en cualquier momento a mano desde el tablero.
-  const faseSug = faseSugerida(pasosCompletos);
+  const faseSug = faseSugerida(pasosCompletos, hitosCompletos);
   let faseActual = cliente.fase;
   if (faseSug > faseActual) {
     await db.from("clientes").update({ fase: faseSug }).eq("id", cid);
@@ -616,7 +616,7 @@ export default async function handler(req, res) {
       // Antes esto era ~8 queries POR CLIENTE, una por una (400+ queries con 50 clientes).
       // Ahora es un puñado de queries en bloque para TODOS los clientes de una, y después
       // se agrupa en memoria — el cuello de botella pasa a ser Node, no la red hacia Supabase.
-      const [{ data: relRows }, { data: archRows }, { data: procRows }, { data: evRows }, { data: credRows }, { data: sucRows }, { data: notasRows }] = await Promise.all([
+      const [{ data: relRows }, { data: archRows }, { data: procRows }, { data: evRows }, { data: credRows }, { data: sucRows }, { data: notasRows }, { data: pruebasRows }] = await Promise.all([
         db.from("relevamientos").select("cliente_id, respuestas, enviado_at").in("cliente_id", ids),
         db.from("archivos").select("cliente_id, tipo, validacion").in("cliente_id", ids),
         db.from("procesadoras_cliente").select("cliente_id, estado").in("cliente_id", ids),
@@ -624,6 +624,7 @@ export default async function handler(req, res) {
         db.from("credenciales_api").select("cliente_id").in("cliente_id", ids),
         db.from("sucursales").select("cliente_id").in("cliente_id", ids),
         db.from("notas_internas").select("cliente_id").in("cliente_id", ids),
+        db.from("pruebas").select("cliente_id, etapa, status").in("cliente_id", ids),
       ]);
       const agrupar = (rows) => { const m = new Map(); for (const r of rows || []) { if (!m.has(r.cliente_id)) m.set(r.cliente_id, []); m.get(r.cliente_id).push(r); } return m; };
       const relPorCliente = new Map((relRows || []).map((r) => [r.cliente_id, r])); // 1:1 (unique en el schema)
@@ -633,18 +634,23 @@ export default async function handler(req, res) {
       const credPorCliente = agrupar(credRows);
       const sucPorCliente = agrupar(sucRows);
       const notasPorCliente = agrupar(notasRows);
+      const pruebasPorCliente = agrupar(pruebasRows);
 
       const out = [];
       const actualizacionesFase = [];
       for (const cli of clis || []) {
+        const procesadorasCli = procPorCliente.get(cli.id) || [];
+        const eventosCli = evPorCliente.get(cli.id) || [];
         const { pasos, respuestas, ventas } = computarPasos(cli, {
           relevamientoRow: relPorCliente.get(cli.id),
           archivos: archPorCliente.get(cli.id) || [],
-          procesadoras: procPorCliente.get(cli.id) || [],
-          eventos: evPorCliente.get(cli.id) || [],
+          procesadoras: procesadorasCli,
+          eventos: eventosCli,
           tieneApi: (credPorCliente.get(cli.id) || []).length > 0,
         });
-        const faseSug = faseSugerida(pasos);
+        const pruebasObj = Object.fromEntries((pruebasPorCliente.get(cli.id) || []).map((p) => [p.etapa, p]));
+        const hitos = calcularHitos(cli, pasos, { procesadoras: procesadorasCli, eventos: eventosCli, pruebas: pruebasObj });
+        const faseSug = faseSugerida(pasos, hitos);
         let fase = cli.fase;
         if (faseSug > fase) { actualizacionesFase.push(db.from("clientes").update({ fase: faseSug }).eq("id", cli.id)); fase = faseSug; }
         out.push({
