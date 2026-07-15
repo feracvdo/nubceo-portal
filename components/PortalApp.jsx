@@ -36,17 +36,18 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.13.0";
+const APP_VERSION = "1.14.0";
 const APP_VERSION_FECHA = "2026-07-14";
 
 const FASES = [
   "Vinculación",
-  "Arranque",
-  "Relevamiento y workshop",
-  "Datos de prueba",
-  "Reglas y configuración",
+  "Introducción",
+  "Relevamiento",
+  "Workshop",
+  "Integración API/CSV",
+  "Configuración de reglas y secuencias",
   "Capacitación",
-  "Go-live",
+  "Go-Live",
   "Hypercare",
 ];
 
@@ -1995,7 +1996,11 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase }) {
               transition: "background .15s",
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "2px 4px 10px" }}>
+            <div style={{
+              position: "sticky", top: 96, zIndex: 3, margin: "-10px -10px 10px", padding: "12px 14px 10px",
+              background: sobreCol === faseIdx ? T.primary50 : T.n50, borderRadius: "12px 12px 0 0",
+              display: "flex", justifyContent: "space-between", alignItems: "baseline",
+            }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: T.n800 }}>{faseIdx + 1} · {faseNombre}</span>
               <span style={{ fontSize: 11.5, color: T.n400, fontWeight: 700 }}>{items.length}</span>
             </div>
@@ -3260,7 +3265,72 @@ function AdminPortal({ session, onLogout }) {
                 </div>
                 <Btn variant="secondary" size="sm" onClick={toggleFullscreen}>{tableroFull ? "✕ Salir de pantalla completa" : "⛶ Pantalla completa (para reuniones)"}</Btn>
               </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+                <Input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre o código…" style={{ maxWidth: 240 }} />
+                <select value={filtroImpl} onChange={(e) => setFiltroImpl(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                  <option value="">Todos los implementadores</option>
+                  {implementadoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                </select>
+                {(busqueda || filtroImpl) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); }}>Limpiar filtros</Btn>}
+              </div>
               <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} />
+        {/* Panel lateral rápido del tablero: se abre al hacer clic en una tarjeta */}
+        {panelCliente && (
+          <div onClick={() => setPanelCliente(null)} style={{ position: "fixed", inset: 0, background: "rgba(13,17,32,0.4)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: 380, maxWidth: "92vw", height: "100%", background: "#fff", padding: 24, overflowY: "auto", boxShadow: "-8px 0 24px rgba(13,17,32,0.18)" }}>
+              {!panelData ? (
+                <div style={{ color: T.n400, fontSize: 14 }}>Cargando…</div>
+              ) : (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                      <div style={{ width: 48, height: 48, borderRadius: 10, background: T.n50, border: "1px solid " + T.n200, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: T.n400 }}>
+                        {panelData.meta.logo ? <img src={panelData.meta.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : panelData.meta.name.slice(0, 1).toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 17, fontWeight: 700, color: T.n900 }}>{panelData.meta.name}</div>
+                        <div style={{ fontSize: 12, color: T.n400 }}>{panelCliente}</div>
+                      </div>
+                    </div>
+                    <span onClick={() => setPanelCliente(null)} style={{ cursor: "pointer", fontSize: 18, color: T.n400 }}>✕</span>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 12, marginBottom: 18 }}>
+                    {[
+                      ["Comercial de la cuenta", panelData.meta.comercial || "—"],
+                      ["Tenant", panelData.meta.tenant || "—"],
+                      ["Implementador/a", panelData.meta.implementadorNombre || "Sin asignar"],
+                      ["Desarrollador/a", panelData.meta.desarrolladorNombre || "Sin asignar"],
+                    ].map(([lbl, val]) => (
+                      <div key={lbl}>
+                        <div style={{ fontSize: 11, color: T.n400, textTransform: "uppercase", letterSpacing: "0.04em" }}>{lbl}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: T.n800 }}>{val}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ borderTop: "1px solid " + T.n100, paddingTop: 14, marginBottom: 18 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: T.n600, marginBottom: 8 }}>💰 Facturación</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: T.n400, textTransform: "uppercase" }}>Fee</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: T.n800 }}>{panelData.meta.finanzas?.fee != null ? fmtMoneda(panelData.meta.finanzas.fee, panelData.meta.finanzas.moneda) : "—"}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 11, color: T.n400, textTransform: "uppercase" }}>Estado</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: panelData.meta.finanzas?.estadoPago === "con_deuda" ? T.errTx : T.okTx }}>
+                          {panelData.meta.finanzas?.estadoPago === "con_deuda" ? "Con deuda" : "Al día"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <Btn onClick={() => { if (document.fullscreenElement) document.exitFullscreen?.(); setTableroFull(false); setPanelCliente(null); abrir(panelCliente); }} style={{ width: "100%" }}>Ver ficha completa →</Btn>
+                </>
+              )}
+            </div>
+          </div>
+        )}
             </div>
           )}
 
@@ -3462,64 +3532,6 @@ function AdminPortal({ session, onLogout }) {
             )
           )}
         </div>
-
-        {/* Panel lateral rápido del tablero: se abre al hacer clic en una tarjeta */}
-        {panelCliente && (
-          <div onClick={() => setPanelCliente(null)} style={{ position: "fixed", inset: 0, background: "rgba(13,17,32,0.4)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ width: 380, maxWidth: "92vw", height: "100%", background: "#fff", padding: 24, overflowY: "auto", boxShadow: "-8px 0 24px rgba(13,17,32,0.18)" }}>
-              {!panelData ? (
-                <div style={{ color: T.n400, fontSize: 14 }}>Cargando…</div>
-              ) : (
-                <>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
-                    <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                      <div style={{ width: 48, height: 48, borderRadius: 10, background: T.n50, border: "1px solid " + T.n200, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: T.n400 }}>
-                        {panelData.meta.logo ? <img src={panelData.meta.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : panelData.meta.name.slice(0, 1).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 17, fontWeight: 700, color: T.n900 }}>{panelData.meta.name}</div>
-                        <div style={{ fontSize: 12, color: T.n400 }}>{panelCliente}</div>
-                      </div>
-                    </div>
-                    <span onClick={() => setPanelCliente(null)} style={{ cursor: "pointer", fontSize: 18, color: T.n400 }}>✕</span>
-                  </div>
-
-                  <div style={{ display: "grid", gap: 12, marginBottom: 18 }}>
-                    {[
-                      ["Comercial de la cuenta", panelData.meta.comercial || "—"],
-                      ["Tenant", panelData.meta.tenant || "—"],
-                      ["Implementador/a", panelData.meta.implementadorNombre || "Sin asignar"],
-                      ["Desarrollador/a", panelData.meta.desarrolladorNombre || "Sin asignar"],
-                    ].map(([lbl, val]) => (
-                      <div key={lbl}>
-                        <div style={{ fontSize: 11, color: T.n400, textTransform: "uppercase", letterSpacing: "0.04em" }}>{lbl}</div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: T.n800 }}>{val}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ borderTop: "1px solid " + T.n100, paddingTop: 14, marginBottom: 18 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: T.n600, marginBottom: 8 }}>💰 Facturación</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 11, color: T.n400, textTransform: "uppercase" }}>Fee</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: T.n800 }}>{panelData.meta.finanzas?.fee != null ? fmtMoneda(panelData.meta.finanzas.fee, panelData.meta.finanzas.moneda) : "—"}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 11, color: T.n400, textTransform: "uppercase" }}>Estado</div>
-                        <div style={{ fontSize: 15, fontWeight: 700, color: panelData.meta.finanzas?.estadoPago === "con_deuda" ? T.errTx : T.okTx }}>
-                          {panelData.meta.finanzas?.estadoPago === "con_deuda" ? "Con deuda" : "Al día"}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <Btn onClick={() => { setPanelCliente(null); abrir(panelCliente); }} style={{ width: "100%" }}>Ver ficha completa →</Btn>
-                </>
-              )}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
