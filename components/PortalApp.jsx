@@ -36,8 +36,8 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.14.0";
-const APP_VERSION_FECHA = "2026-07-14";
+const APP_VERSION = "1.14.1";
+const APP_VERSION_FECHA = "2026-07-15";
 
 const FASES = [
   "Vinculación",
@@ -1992,19 +1992,16 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase }) {
             onDrop={(e) => { e.preventDefault(); const code = e.dataTransfer.getData("text/plain"); if (code) onMoverFase(code, faseIdx); setArrastrando(null); setSobreCol(null); }}
             style={{
               minWidth: 240, width: 240, flexShrink: 0, background: sobreCol === faseIdx ? T.primary50 : T.n50,
-              border: "1.5px dashed " + (sobreCol === faseIdx ? T.primary : T.n200), borderRadius: 12, padding: 10,
-              transition: "background .15s",
+              border: "1.5px dashed " + (sobreCol === faseIdx ? T.primary : T.n200), borderRadius: 12,
+              transition: "background .15s", display: "flex", flexDirection: "column",
+              maxHeight: "calc(100vh - 260px)",
             }}
           >
-            <div style={{
-              position: "sticky", top: 96, zIndex: 3, margin: "-10px -10px 10px", padding: "12px 14px 10px",
-              background: sobreCol === faseIdx ? T.primary50 : T.n50, borderRadius: "12px 12px 0 0",
-              display: "flex", justifyContent: "space-between", alignItems: "baseline",
-            }}>
+            <div style={{ position: "sticky", top: 0, zIndex: 2, background: sobreCol === faseIdx ? T.primary50 : T.n50, display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "10px 10px 8px", borderRadius: "12px 12px 0 0" }}>
               <span style={{ fontSize: 12.5, fontWeight: 700, color: T.n800 }}>{faseIdx + 1} · {faseNombre}</span>
               <span style={{ fontSize: 11.5, color: T.n400, fontWeight: 700 }}>{items.length}</span>
             </div>
-            <div style={{ display: "grid", gap: 8, minHeight: 40 }}>
+            <div style={{ display: "grid", gap: 8, minHeight: 40, overflowY: "auto", padding: "0 10px 10px" }}>
               {items.map((cli) => {
                 const pct = Math.round((cli.completados / cli.totalPasos) * 100);
                 const alertas = detectarAlertas(cli.relevamiento);
@@ -3257,7 +3254,7 @@ function AdminPortal({ session, onLogout }) {
 
           {/* ══════════ MÓDULO: TABLERO ══════════ */}
           {modulo === "tablero" && (
-            <div ref={tableroRef} style={{ background: tableroFull ? "#fff" : "transparent", padding: tableroFull ? 20 : 0, minHeight: tableroFull ? "100vh" : "auto" }}>
+            <div ref={tableroRef} style={{ background: tableroFull ? "#fff" : "transparent", padding: tableroFull ? 20 : 0, height: tableroFull ? "100vh" : "auto", overflowY: tableroFull ? "auto" : "visible" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
                 <div>
                   <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: 0 }}>Tablero de implementación</h2>
