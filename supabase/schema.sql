@@ -36,7 +36,8 @@ create table clientes (
   estado_pago             text not null default 'al_dia' check (estado_pago in ('al_dia','con_deuda')),
   deuda_desde             date,
   finanzas_notas          text,
-  fase              smallint not null default 0 check (fase between 0 and 7),  -- 0..7: Go-live (6) e Hypercare (7) son fases separadas
+  fase              smallint not null default 0 check (fase between 0 and 8),  -- 0..8: ver FASES en components/PortalApp.jsx
+  ultima_actividad  timestamptz,           -- denormalizado: se actualiza en cada addHistory(), evita escanear historial en el listado
   intro_leida       boolean not null default false,
   sucursales_omitido boolean not null default false,
   creado_at         timestamptz not null default now()
@@ -150,6 +151,8 @@ create table redmine_altas (
   estado         text not null default 'en_cola' check (estado in ('en_cola', 'enviado')),
   detalle        text,                        -- motivo si quedó en cola
   payloads       jsonb not null,              -- cuerpos exactos para POST /issues.json
+  feature_issue_id   integer,                 -- ID real del ticket Feature ya creado en Redmine
+  user_story_issue_id integer,                -- ID real del ticket User Story ya creado en Redmine
   actualizado_at timestamptz not null default now()
 );
 
@@ -175,11 +178,20 @@ create table notas_internas (
 --    (Implementaciones, Eduardo Andre, Santiago Suarez, Mariana Macri) ──
 create table calendar_conexiones (
   id             uuid primary key default gen_random_uuid(),
-  responsable    text not null unique,       -- clave: mismo nombre que en config.disponibilidad
+  responsable    text not null unique,       -- nombre de la persona (100% personal, nunca un rol compartido)
   google_email   text,
   refresh_token  text not null,
   conectado_por  text,
   conectado_at   timestamptz not null default now()
+);
+
+-- ── Disponibilidad semanal personal — cada persona carga la suya desde su perfil ──
+create table disponibilidad_equipo (
+  id          uuid primary key default gen_random_uuid(),
+  equipo_id   uuid not null references equipo(id) on delete cascade,
+  dia_semana  smallint not null check (dia_semana between 0 and 6),
+  hora        text not null,
+  unique (equipo_id, dia_semana, hora)
 );
 
 -- ── Plazos por paso, con control de qué mails de recordatorio/incumplimiento ya se enviaron ──
@@ -188,6 +200,7 @@ create table plazos_cliente (
   cliente_id                  uuid not null references clientes(id) on delete cascade,
   paso                        text not null,  -- lista de hitos vive en lib/hitos.js, no hay check fijo acá
   fecha_limite                date not null,
+  cumplimiento                text check (cumplimiento in ('cumplido_tiempo', 'cumplido_tarde', 'incumplido')), -- null = sin confirmar
   recordatorio_enviado_at     timestamptz,
   incumplimiento_enviado_at   timestamptz,
   creado_por                  text,
@@ -213,6 +226,8 @@ create index idx_eventos_cliente on eventos (cliente_id, fecha);
 create index idx_historial_cliente on historial (cliente_id, creado_at desc);
 create index idx_notas_cliente on notas_internas (cliente_id, creado_at desc);
 create index idx_plazos_cliente on plazos_cliente (cliente_id);
+create index idx_clientes_ultima_actividad on clientes (ultima_actividad desc);
+create index idx_disponibilidad_equipo on disponibilidad_equipo (equipo_id);
 
 -- ============================================================
 -- Seguridad: Row Level Security
@@ -242,12 +257,13 @@ alter table plazos_cliente enable row level security;
 -- ── Datos iniciales de ejemplo (borrar en producción) ──
 insert into clientes (codigo, nombre, tenant_productivo) values ('DEMO123', 'Cliente Demo S.A.', 'demo-prod');
 
--- Disponibilidad semanal del equipo para los agendadores
--- (dia: 1=lunes ... 5=viernes; horarios de inicio de reuniones de 1 hora)
-insert into config (clave, valor) values ('disponibilidad', '{
-  "Implementaciones":   [[1,"10:00"],[1,"11:00"],[2,"15:00"],[3,"10:00"],[4,"11:00"],[4,"15:00"],[5,"10:00"]],
-  "Eduardo Andre":      [[2,"10:00"],[2,"11:00"],[4,"14:00"],[4,"15:00"]],
-  "Santiago Suarez":    [[1,"14:00"],[3,"14:00"],[3,"15:00"],[5,"11:00"]],
-  "Mariana Macri":      [[2,"14:00"],[3,"11:00"],[5,"14:00"],[5,"15:00"]]
-}'::jsonb);
 insert into equipo (codigo, nombre) values ('FER-IMPL', 'Fernanda');
+
+-- Disponibilidad de ejemplo para la implementadora demo — cada persona carga la suya
+-- desde Mi perfil una vez logueada; esto es solo para que el seed no quede vacío.
+-- (dia: 0=domingo ... 6=sábado; horarios de inicio de reuniones de 1 hora)
+insert into disponibilidad_equipo (equipo_id, dia_semana, hora)
+select id, dia, hora from equipo, (values
+  (1,'10:00'), (1,'11:00'), (2,'15:00'), (3,'10:00'), (4,'11:00'), (4,'15:00'), (5,'10:00')
+) as t(dia, hora)
+where codigo = 'FER-IMPL';
