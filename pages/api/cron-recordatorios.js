@@ -1,23 +1,12 @@
 // pages/api/cron-recordatorios.js
-// Corre 1 vez por día (ver vercel.json → 13:00 UTC = 10:00 Argentina) y para cada
-// plazo definido decide si corresponde mandar el recordatorio ("resta 1 día") o el
-// aviso de incumplimiento ("plazo vencido") — sin duplicar envíos gracias a las
-// columnas *_enviado_at de plazos_cliente.
+// Corre 1 vez por día (ver vercel.json → 13:00 UTC = 10:00 Argentina). Solo manda algo
+// si "Mails automáticos" está prendido en Configuración — apagado por default, para que
+// el equipo dispare los avisos a mano desde la tarjeta de cada cliente hasta que se
+// termine de probar el envío.
 import { supabaseAdmin as db } from "../../lib/supabaseAdmin";
 import { calcularPasos } from "../../lib/pasos";
 import { hitosPara, calcularHitos } from "../../lib/hitos";
-import { procesarAvisoPlazo } from "../../lib/avisosPlazos";
-
-// Argentina no tiene horario de verano desde 2009: UTC-3 todo el año.
-function hoyEnArgentina() {
-  const ahora = new Date(Date.now() - 3 * 3600 * 1000);
-  return ahora.toISOString().slice(0, 10); // YYYY-MM-DD
-}
-function diffDias(fechaA, fechaB) {
-  const a = new Date(fechaA + "T00:00:00Z");
-  const b = new Date(fechaB + "T00:00:00Z");
-  return Math.round((a - b) / 86400000);
-}
+import { procesarAvisoPlazo, hoyEnArgentina, decidirTipoAviso } from "../../lib/avisosPlazos";
 
 export default async function handler(req, res) {
   // Vercel Cron manda esta cabecera cuando CRON_SECRET está configurado; si alguien
@@ -27,6 +16,11 @@ export default async function handler(req, res) {
     if (auth !== "Bearer " + process.env.CRON_SECRET) return res.status(401).json({ error: "No autorizado" });
   }
 
+  const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "avisos").maybeSingle();
+  if (!cfgRow?.valor?.automatico) {
+    return res.status(200).json({ ok: true, omitido: "Mails automáticos está apagado en Configuración — no se mandó nada. Usá el botón manual en cada cliente." });
+  }
+
   const hoy = hoyEnArgentina();
   const resultados = { fecha: hoy, recordatorios: [], incumplimientos: [], omitidos: [], errores: [] };
 
@@ -34,12 +28,8 @@ export default async function handler(req, res) {
     const { data: plazos } = await db.from("plazos_cliente").select("*");
     for (const plazo of plazos || []) {
       try {
-        const dias = diffDias(plazo.fecha_limite, hoy);
-        // Ventana amplia (0 o 1 días para el recordatorio) para no perder el aviso si el cron
-        // no corrió justo el día exacto; el flag *_enviado_at evita mandarlo dos veces.
-        const necesitaRecordatorio = !plazo.recordatorio_enviado_at && dias >= 0 && dias <= 1;
-        const necesitaIncumplimiento = !plazo.incumplimiento_enviado_at && dias < 0;
-        if (!necesitaRecordatorio && !necesitaIncumplimiento) continue;
+        const tipo = decidirTipoAviso(plazo, hoy);
+        if (!tipo) continue;
 
         const { data: cliente } = await db.from("clientes").select("*").eq("id", plazo.cliente_id).maybeSingle();
         if (!cliente) continue;
@@ -57,7 +47,6 @@ export default async function handler(req, res) {
           continue;
         }
 
-        const tipo = necesitaIncumplimiento ? "incumplimiento" : "recordatorio";
         const r = await procesarAvisoPlazo(db, { cliente, plazoRow: plazo, tipo });
         if (r.enviado) resultados[tipo === "incumplimiento" ? "incumplimientos" : "recordatorios"].push({ cliente: cliente.nombre, paso: plazo.paso });
         else resultados.omitidos.push({ cliente: cliente.nombre, paso: plazo.paso, motivo: r.motivo });
