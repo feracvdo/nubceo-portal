@@ -11,7 +11,7 @@ import { buildDiagrama } from "../../lib/diagrama";
 import * as gcal from "../../lib/googleCalendar";
 import { calcularPasos, computarPasos, faseSugerida } from "../../lib/pasos";
 import { hitosPara, calcularHitos, NOMBRE_HITO_GENERICO } from "../../lib/hitos";
-import { procesarAvisoPlazo } from "../../lib/avisosPlazos";
+import { procesarAvisoPlazo, enviarAvisosPendientesDeCliente } from "../../lib/avisosPlazos";
 import crypto from "crypto";
 
 const ADMIN_CODE = process.env.ADMIN_CODE || "NUBCEO-EQUIPO";
@@ -406,9 +406,6 @@ export default async function handler(req, res) {
       const { data: persona } = await db.from("equipo").select("id, nombre").eq("id", equipoIdDestino).maybeSingle();
       if (!persona) return res.status(400).json({ error: "La persona asignada a este cliente ya no está en el equipo — reasignalo desde el módulo Clientes." });
 
-      const { data: dispRows } = await db.from("disponibilidad_equipo").select("dia_semana, hora").eq("equipo_id", persona.id);
-      if (!dispRows || !dispRows.length) return res.status(400).json({ error: persona.nombre + " todavía no cargó su disponibilidad semanal — puede hacerlo desde Mi perfil." });
-
       // Mínimo: mañana; para el workshop, al menos 3 días después de enviado el relevamiento
       let minDate = new Date(Date.now() + 24 * 3600 * 1000);
       if (tipo === "workshop") {
@@ -417,8 +414,6 @@ export default async function handler(req, res) {
         const tresDias = new Date(new Date(rv.enviado_at).getTime() + 3 * 24 * 3600 * 1000);
         if (tresDias > minDate) minDate = tresDias;
       }
-      const { data: ocupados } = await db.from("eventos").select("fecha").eq("responsable", persona.nombre).eq("estado", "agendado");
-      const ocupadosSet = new Set((ocupados || []).map((e) => new Date(e.fecha).toISOString()));
 
       // Si la persona sincronizó su Google Calendar, la disponibilidad se filtra también
       // contra sus horarios ocupados reales (no solo lo agendado desde el portal).
@@ -429,6 +424,23 @@ export default async function handler(req, res) {
       if (conn) {
         try { busy = await gcal.freeBusy(conn.access_token, conn.calendarId, ventanaMin, ventanaMax); } catch (e) { busy = []; }
       }
+
+      let { data: dispRows } = await db.from("disponibilidad_equipo").select("dia_semana, hora").eq("equipo_id", persona.id);
+      if (!dispRows || !dispRows.length) {
+        if (conn) {
+          // Con el calendario conectado no hace falta cargar nada a mano: se ofrece un
+          // horario comercial estándar (lun a vie, 10 a 17) y se descarta automáticamente
+          // todo lo que el calendario real ya tenga ocupado.
+          dispRows = [];
+          for (let dia = 1; dia <= 5; dia++) for (let hh = 10; hh <= 17; hh++) dispRows.push({ dia_semana: dia, hora: String(hh).padStart(2, "0") + ":00" });
+        } else {
+          return res.status(400).json({ error: persona.nombre + " todavía no conectó su Google Calendar — puede hacerlo desde Mi perfil para que el portal ofrezca sus horarios libres automáticamente." });
+        }
+      }
+
+      const { data: ocupados } = await db.from("eventos").select("fecha").eq("responsable", persona.nombre).eq("estado", "agendado");
+      const ocupadosSet = new Set((ocupados || []).map((e) => new Date(e.fecha).toISOString()));
+
       const ocupaCalendarioReal = (f) => {
         if (!busy.length) return false;
         const finReunion = new Date(f.getTime() + 60 * 60 * 1000);
@@ -585,6 +597,19 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "No se pudo enviar el mail: " + e.message });
       }
       return res.json(await assemble(cli));
+    }
+
+    if (action === "enviarAvisosPendientesCliente") {
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      let resultado;
+      try {
+        resultado = await enviarAvisosPendientesDeCliente(db, cli);
+      } catch (e) {
+        return res.status(500).json({ error: "No se pudo enviar: " + e.message });
+      }
+      const datos = await assemble(cli);
+      return res.json({ ...datos, avisos: resultado });
     }
 
     if (action === "setApiDesarrolloCompleto") {
@@ -943,6 +968,17 @@ export default async function handler(req, res) {
 
     if (action === "saveConfig") {
       await db.from("config").upsert({ clave: "redmine", valor: req.body.cfg || {} });
+      return res.json({ ok: true });
+    }
+
+    if (action === "getAvisosConfig") {
+      const { data } = await db.from("config").select("valor").eq("clave", "avisos").maybeSingle();
+      return res.json({ automatico: !!data?.valor?.automatico });
+    }
+
+    if (action === "setAvisosConfig") {
+      if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
+      await db.from("config").upsert({ clave: "avisos", valor: { automatico: !!req.body.automatico } });
       return res.json({ ok: true });
     }
 
