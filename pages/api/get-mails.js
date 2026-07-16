@@ -14,7 +14,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'cliente_id es requerido' });
     }
 
-    // Obtener mails enviados
     const { data: mails, error: mailsError } = await db
       .from('mailsEnviados')
       .select('*')
@@ -25,7 +24,6 @@ export default async function handler(req, res) {
       throw mailsError;
     }
 
-    // Obtener contactos del cliente
     const { data: contactos, error: contactosError } = await db
       .from('involucrados')
       .select('*')

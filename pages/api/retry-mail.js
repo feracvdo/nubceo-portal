@@ -24,7 +24,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'mail_id es requerido' });
     }
 
-    // Obtener el registro de mail
     const { data: mailRecord, error: mailError } = await db
       .from('mailsEnviados')
       .select('*')
@@ -35,7 +34,6 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Mail no encontrado' });
     }
 
-    // Obtener datos del cliente
     const { data: cliente, error: clienteError } = await db
       .from('clientes')
       .select('*')
@@ -46,7 +44,6 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
 
-    // Generar el mail según la plantilla guardada
     if (!plantillas[mailRecord.plantilla]) {
       return res.status(400).json({ error: 'Plantilla no válida' });
     }
@@ -54,14 +51,12 @@ export default async function handler(req, res) {
     const { html, subject } = plantillas[mailRecord.plantilla](cliente);
 
     try {
-      // Enviar mail
       await enviarMail({
         to: mailRecord.destinatarios,
         subject,
         html,
       });
 
-      // Actualizar estado en la BD
       await db
         .from('mailsEnviados')
         .update({
@@ -78,7 +73,6 @@ export default async function handler(req, res) {
     } catch (emailError) {
       console.error('Error reenviando mail:', emailError);
 
-      // Actualizar con nuevo error
       await db
         .from('mailsEnviados')
         .update({

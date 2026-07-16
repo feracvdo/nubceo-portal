@@ -28,7 +28,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Plantilla no válida' });
     }
 
-    // Obtener datos del cliente
     const { data: cliente, error: clienteError } = await db
       .from('clientes')
       .select('*')
@@ -39,22 +38,17 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
 
-    // Generar el mail según la plantilla
     const { html, subject } = plantillas[plantilla](cliente);
-
-    // Extraer emails de destinatarios
     const emails = destinatarios.map(d => d.email);
     const nombredestinos = destinatarios.map(d => d.email);
 
     try {
-      // Enviar mail
       await enviarMail({
         to: emails,
         subject,
         html,
       });
 
-      // Guardar en historial
       const { data: mailRecord, error: insertError } = await db
         .from('mailsEnviados')
         .insert({
@@ -80,7 +74,6 @@ export default async function handler(req, res) {
     } catch (emailError) {
       console.error('Error enviando mail:', emailError);
 
-      // Guardar como error en historial
       await db
         .from('mailsEnviados')
         .insert({

@@ -27,7 +27,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Plantilla no válida' });
     }
 
-    // Obtener datos del cliente
     const { data: cliente, error: clienteError } = await db
       .from('clientes')
       .select('*')
@@ -38,7 +37,6 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
 
-    // Generar el mail según la plantilla
     const { html, subject } = plantillas[plantilla](cliente);
 
     return res.status(200).json({

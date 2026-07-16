@@ -10,7 +10,6 @@ export default async function handler(req, res) {
 
     const { cliente_id, nombre, email, rol } = req.body;
 
-    // Validaciones
     if (!cliente_id || !nombre || !email || !rol) {
       return res.status(400).json({ error: 'Parámetros incompletos' });
     }
@@ -24,7 +23,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Rol inválido' });
     }
 
-    // Verificar que el cliente existe
     const { data: cliente, error: clienteError } = await db
       .from('clientes')
       .select('id')
@@ -35,7 +33,6 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
 
-    // Insertar contacto
     const { data: contacto, error: insertError } = await db
       .from('involucrados')
       .insert({
