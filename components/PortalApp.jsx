@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { CONECTORES, ESTADOS_PROCESADORA, DOCS, COLUMNAS_OBLIGATORIAS, TEMPLATE_SUCURSALES } from "../lib/nubceo";
 import { validarVentas, validarTabla, exportarNubceo } from "../lib/validadorVentas";
 import { convertirSucursales, exportarTemplateSucursales } from "../lib/sucursalesTemplate";
+import MailsCard from "./MailsCard";
 
 // ─── Tokens de marca Nubceo (tema C — Soft, portal de usuario) ───
 const T = {
@@ -817,6 +818,7 @@ function ClientPortal({ session, onLogout }) {
                       </div>
                     );
                   })}
+                  <div onClick={() => setTab("mails")} style={{ padding: "8px 13px", borderRadius: 100, fontSize: 13, cursor: "pointer", fontWeight: tab === "mails" ? 700 : 500, background: tab === "mails" ? T.primary : "transparent", color: tab === "mails" ? "#fff" : T.n400, border: "1px solid " + (tab === "mails" ? T.primary : T.n200) }}>📧 Mails</div>
                   <div onClick={() => setTab("historial")} style={{ padding: "8px 13px", borderRadius: 100, fontSize: 13, cursor: "pointer", fontWeight: tab === "historial" ? 700 : 500, background: tab === "historial" ? T.primary : "transparent", color: tab === "historial" ? "#fff" : T.n400, border: "1px solid " + (tab === "historial" ? T.primary : T.n200) }}>Historial</div>
                 </div>
                 {omitioSucursales && (
@@ -834,6 +836,7 @@ function ClientPortal({ session, onLogout }) {
               {tab === "capacitacion" && <TabCapacitacion data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
               {tab === "sandbox" && <TabPruebasEtapa etapa="sandbox" tipoEvento="resultados_sandbox" data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
               {tab === "golive" && <TabPruebasEtapa etapa="golive" tipoEvento="golive" data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
+              {tab === "mails" && <MailsCard cliente={selData} db={db} />}
               {tab === "historial" && <TabHistorial history={data.history} />}
 
               {/* Navegación entre pasos: volver atrás para ver/editar, avanzar al completar */}
