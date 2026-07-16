@@ -36,7 +36,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.14.1";
+const APP_VERSION = "1.15.0";
 const APP_VERSION_FECHA = "2026-07-15";
 
 const FASES = [
@@ -1963,7 +1963,7 @@ const ImageUpload = ({ value, onChange, label, round }) => {
 };
 
 // ─── Tablero tipo agile: columnas = fases del proyecto, tarjetas arrastrables ───
-function KanbanBoard({ clientes, onAbrir, onMoverFase }) {
+function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoAvisosDe }) {
   const [arrastrando, setArrastrando] = useState(null); // código del cliente en drag
   const [sobreCol, setSobreCol] = useState(null);
   const scrollRef = useRef(null);
@@ -2036,6 +2036,15 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase }) {
                       {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
                       {cli.notasCount > 0 && <Badge tone="gray">📝 {cli.notasCount}</Badge>}
                     </div>
+                    {onEnviarAvisos && (
+                      <div
+                        onClick={(e) => { e.stopPropagation(); onEnviarAvisos(cli.code); }}
+                        title="Mandar ahora el recordatorio o aviso de incumplimiento que corresponda, si hay alguno pendiente"
+                        style={{ marginTop: 8, paddingTop: 7, borderTop: "1px solid " + T.n100, fontSize: 11, fontWeight: 600, color: enviandoAvisosDe === cli.code ? T.n400 : T.primary, cursor: enviandoAvisosDe === cli.code ? "default" : "pointer" }}
+                      >
+                        {enviandoAvisosDe === cli.code ? "Enviando…" : "✉️ Enviar avisos pendientes"}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -2248,6 +2257,7 @@ function AdminPortal({ session, onLogout }) {
   const [msg, setMsg] = useState("");
   const [cfg, setCfg] = useState({ url: "", projectId: "" });
   const [apiKeyEnEnv, setApiKeyEnEnv] = useState(false);
+  const [avisosAutomaticos, setAvisosAutomaticos] = useState(false);
   const [cfgMsg, setCfgMsg] = useState("");
   const [modulo, setModulo] = useState("clientes"); // clientes | tablero | perfil | equipo | config
   const [nuevoCodigo, setNuevoCodigo] = useState("");
@@ -2454,7 +2464,29 @@ function AdminPortal({ session, onLogout }) {
         setApiKeyEnEnv(r.apiKeyEnEnv);
       } catch (e) { /* config opcional */ }
     })();
+    (async () => {
+      try { const r = await api("getAvisosConfig", { sessionCode: sc }); setAvisosAutomaticos(!!r.automatico); } catch (e) { /* opcional */ }
+    })();
   }, [sc]);
+
+  const toggleAvisosAutomaticos = async (valor) => {
+    setAvisosAutomaticos(valor);
+    try { await api("setAvisosConfig", { sessionCode: sc, automatico: valor, who: session.who }); } catch (e) { flash(e.message); setAvisosAutomaticos(!valor); }
+  };
+
+  const [enviandoAvisosDe, setEnviandoAvisosDe] = useState(null); // código del cliente en curso
+  const enviarAvisosPendientes = async (code) => {
+    setEnviandoAvisosDe(code);
+    try {
+      const r = await api("enviarAvisosPendientesCliente", { sessionCode: sc, code, who: session.who });
+      const { enviados, omitidos, sinPlazos } = r.avisos || {};
+      if (sinPlazos) flash(code + ": este cliente todavía no tiene plazos definidos.");
+      else if (enviados?.length) flash(code + ": se enviaron " + enviados.length + " aviso(s) — " + enviados.map((e) => e.paso).join(", "));
+      else flash(code + ": no había ningún aviso pendiente para mandar ahora.");
+      if (sel === code) { setSelMeta(r.meta); setSelData(r.data); }
+    } catch (e) { flash(e.message); }
+    finally { setEnviandoAvisosDe(null); }
+  };
 
   const flash = (texto, ms = 4000) => { setMsg(texto); setTimeout(() => setMsg(""), ms); };
 
@@ -3270,7 +3302,7 @@ function AdminPortal({ session, onLogout }) {
                 </select>
                 {(busqueda || filtroImpl) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); }}>Limpiar filtros</Btn>}
               </div>
-              <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} />
+              <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} onEnviarAvisos={enviarAvisosPendientes} enviandoAvisosDe={enviandoAvisosDe} />
         {/* Panel lateral rápido del tablero: se abre al hacer clic en una tarjeta */}
         {panelCliente && (
           <div onClick={() => setPanelCliente(null)} style={{ position: "fixed", inset: 0, background: "rgba(13,17,32,0.4)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
@@ -3436,6 +3468,21 @@ function AdminPortal({ session, onLogout }) {
                 </div>
                 {cfgMsg && <div style={{ marginTop: 10, fontSize: 13, color: T.okTx, fontWeight: 600 }}>{cfgMsg}</div>}
               </Card>
+
+              <Card>
+                <SectionHeader
+                  title="Mails automáticos de plazos"
+                  subtitle="El cron diario (10:00 AR) manda solo el recordatorio y el aviso de incumplimiento cuando corresponde. Mientras lo estás probando, dejalo apagado y usá el botón ✉️ de la tarjeta de cada cliente (en el tablero) o 'Enviar aviso ahora' en Plazos y recordatorios para mandarlos vos, a demanda."
+                />
+                <div onClick={() => toggleAvisosAutomaticos(!avisosAutomaticos)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
+                  <span style={{
+                    width: 40, height: 22, borderRadius: 100, background: avisosAutomaticos ? T.primary : T.n200, position: "relative", transition: "background .15s", flexShrink: 0,
+                  }}>
+                    <span style={{ position: "absolute", top: 2, left: avisosAutomaticos ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s", boxShadow: "0 1px 2px rgba(0,0,0,0.2)" }} />
+                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: T.n800 }}>{avisosAutomaticos ? "Prendido — el cron manda los mails solo, todos los días" : "Apagado — no se manda nada solo, todo es manual"}</span>
+                </div>
+              </Card>
             </>
           )}
 
@@ -3481,8 +3528,12 @@ function AdminPortal({ session, onLogout }) {
                     </div>
 
                     <div style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid " + T.n200 }}>
-                      <Label>🗓 Mi disponibilidad semanal</Label>
-                      <div style={{ fontSize: 11.5, color: T.n400, marginBottom: 8 }}>Estos son los horarios que ven tus clientes al agendar workshop, reunión técnica, capacitación, etc. Si no cargás nada acá, no te van a poder agendar nada.</div>
+                      <Label>🗓 Mi disponibilidad semanal (opcional)</Label>
+                      <div style={{ fontSize: 11.5, color: T.n400, marginBottom: 8 }}>
+                        {calStatus?.conectado
+                          ? "Con tu Google Calendar conectado, no hace falta cargar nada acá: el portal ya ofrece de 10 a 17hs (lun a vie) descartando automáticamente lo que tengas ocupado en tu calendario real. Cargá esto solo si querés acotar más esos horarios (ej: solo mañanas)."
+                          : "Sin el calendario conectado, esto es obligatorio: son los horarios que ven tus clientes al agendar. Conectá tu Google Calendar arriba y te ahorrás cargar esto — se genera solo."}
+                      </div>
                       {disponibilidad.length > 0 && (
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
                           {disponibilidad.slice().sort((a, b) => a.dia_semana - b.dia_semana || a.hora.localeCompare(b.hora)).map((s) => (
