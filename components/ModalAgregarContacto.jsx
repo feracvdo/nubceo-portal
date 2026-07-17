@@ -1,43 +1,44 @@
 import { useState } from 'react';
 
+// Tokens de marca Nubceo (tema C — Soft)
+const T = {
+  primary: "#0a6bf4",
+  primary50: "#e8f1fe",
+  n200: "#d8dce6",
+  n400: "#8e96a8",
+  n600: "#4b5468",
+  n800: "#1e2433",
+  n900: "#0d1120",
+  errTx: "#991b1b",
+};
+
 export default function ModalAgregarContacto({ onAgregar, onCancelar }) {
   const [nombre, setNombre] = useState('');
   const [email, setEmail] = useState('');
-  const [rol, setRol] = useState('otro');
+  const [rol, setRol] = useState('sponsor');
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
+  const roles = [
+    { value: 'sponsor', label: 'Sponsor (decisor)' },
+    { value: 'key_user', label: 'Key User' },
+    { value: 'otro', label: 'Otro' },
+  ];
 
+  const handleGuardar = () => {
     if (!nombre.trim()) {
       setError('El nombre es requerido');
       return;
     }
-
-    if (!email.trim() || !email.includes('@')) {
-      setError('Email válido es requerido');
+    if (!email.trim()) {
+      setError('El email es requerido');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('Email inválido');
       return;
     }
 
-    if (!rol) {
-      setError('Selecciona un rol');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      await onAgregar({ nombre, email, rol });
-      setNombre('');
-      setEmail('');
-      setRol('otro');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    onAgregar({ nombre: nombre.trim(), email: email.trim(), rol });
   };
 
   return (
@@ -52,47 +53,65 @@ export default function ModalAgregarContacto({ onAgregar, onCancelar }) {
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 1000,
-      padding: '20px',
     }}>
       <div style={{
-        background: 'var(--surface-2)',
-        borderRadius: '12px',
-        border: '0.5px solid var(--border)',
-        padding: '24px',
-        maxWidth: '400px',
-        width: '100%',
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+        background: '#fff',
+        borderRadius: 12,
+        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
+        width: '90%',
+        maxWidth: 400,
+        padding: 24,
       }}>
-        <h2 style={{
-          fontSize: '18px',
-          fontWeight: 500,
-          margin: '0 0 20px 0',
-          color: 'var(--text-primary)',
+        {/* Header */}
+        <div style={{
+          marginBottom: 20,
+          paddingBottom: 16,
+          borderBottom: `1px solid ${T.n200}`,
         }}>
-          Agregar nuevo contacto
-        </h2>
+          <h2 style={{
+            fontSize: 18,
+            fontWeight: 600,
+            margin: 0,
+            color: T.n900,
+          }}>
+            Agregar contacto
+          </h2>
+          <p style={{
+            fontSize: 13,
+            color: T.n600,
+            margin: '6px 0 0 0',
+          }}>
+            Suma un nuevo contacto del cliente para que reciba mails
+          </p>
+        </div>
 
+        {/* Error */}
         {error && (
           <div style={{
-            background: 'var(--bg-danger)',
-            color: 'var(--text-danger)',
-            padding: '12px',
-            borderRadius: '6px',
-            marginBottom: '16px',
-            fontSize: '13px',
+            background: '#fee2e2',
+            color: T.errTx,
+            padding: 12,
+            borderRadius: 6,
+            marginBottom: 16,
+            fontSize: 13,
+            border: `1px solid ${T.errTx}22`,
           }}>
-            {error}
+            ❌ {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Formulario */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Nombre */}
           <div>
             <label style={{
               display: 'block',
-              fontSize: '13px',
+              fontSize: 12,
               fontWeight: 600,
-              color: 'var(--text-primary)',
-              marginBottom: '6px',
+              color: T.n900,
+              marginBottom: 6,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
             }}>
               Nombre
             </label>
@@ -100,28 +119,32 @@ export default function ModalAgregarContacto({ onAgregar, onCancelar }) {
               type="text"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              placeholder="Carlos Perez"
+              placeholder="Ej: Juan Pérez"
               style={{
                 width: '100%',
-                padding: '9px 12px',
-                border: '0.5px solid var(--border)',
-                borderRadius: '6px',
-                fontSize: '13px',
-                background: 'var(--surface-2)',
-                color: 'var(--text-primary)',
+                padding: '10px 12px',
+                border: `1px solid ${T.n200}`,
+                borderRadius: 6,
+                fontSize: 13,
+                fontFamily: 'inherit',
                 boxSizing: 'border-box',
+                transition: 'border-color 0.2s',
               }}
-              disabled={loading}
+              onFocus={(e) => e.target.style.borderColor = T.primary}
+              onBlur={(e) => e.target.style.borderColor = T.n200}
             />
           </div>
 
+          {/* Email */}
           <div>
             <label style={{
               display: 'block',
-              fontSize: '13px',
+              fontSize: 12,
               fontWeight: 600,
-              color: 'var(--text-primary)',
-              marginBottom: '6px',
+              color: T.n900,
+              marginBottom: 6,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
             }}>
               Email
             </label>
@@ -129,28 +152,32 @@ export default function ModalAgregarContacto({ onAgregar, onCancelar }) {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="carlos@freddo.com"
+              placeholder="juan@empresa.com"
               style={{
                 width: '100%',
-                padding: '9px 12px',
-                border: '0.5px solid var(--border)',
-                borderRadius: '6px',
-                fontSize: '13px',
-                background: 'var(--surface-2)',
-                color: 'var(--text-primary)',
+                padding: '10px 12px',
+                border: `1px solid ${T.n200}`,
+                borderRadius: 6,
+                fontSize: 13,
+                fontFamily: 'inherit',
                 boxSizing: 'border-box',
+                transition: 'border-color 0.2s',
               }}
-              disabled={loading}
+              onFocus={(e) => e.target.style.borderColor = T.primary}
+              onBlur={(e) => e.target.style.borderColor = T.n200}
             />
           </div>
 
+          {/* Rol */}
           <div>
             <label style={{
               display: 'block',
-              fontSize: '13px',
+              fontSize: 12,
               fontWeight: 600,
-              color: 'var(--text-primary)',
-              marginBottom: '6px',
+              color: T.n900,
+              marginBottom: 6,
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
             }}>
               Rol
             </label>
@@ -159,69 +186,81 @@ export default function ModalAgregarContacto({ onAgregar, onCancelar }) {
               onChange={(e) => setRol(e.target.value)}
               style={{
                 width: '100%',
-                padding: '9px 12px',
-                border: '0.5px solid var(--border)',
-                borderRadius: '6px',
-                fontSize: '13px',
-                background: 'var(--surface-2)',
-                color: 'var(--text-primary)',
+                padding: '10px 12px',
+                border: `1px solid ${T.n200}`,
+                borderRadius: 6,
+                fontSize: 13,
+                fontFamily: 'inherit',
+                background: '#fff',
+                color: T.n800,
                 cursor: 'pointer',
                 boxSizing: 'border-box',
               }}
-              disabled={loading}
             >
-              <option value="sponsor">Sponsor</option>
-              <option value="key_user">Key User</option>
-              <option value="otro">Otro</option>
+              {roles.map(r => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
             </select>
           </div>
+        </div>
 
-          <div style={{
-            display: 'flex',
-            gap: '8px',
-            marginTop: '12px',
-            paddingTop: '12px',
-            borderTop: '0.5px solid var(--border)',
-          }}>
-            <button
-              type="button"
-              onClick={onCancelar}
-              disabled={loading}
-              style={{
-                flex: 1,
-                padding: '10px',
-                background: 'transparent',
-                border: '0.5px solid var(--border)',
-                borderRadius: '6px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: loading ? 'default' : 'pointer',
-                color: 'var(--text-primary)',
-                opacity: loading ? 0.5 : 1,
-              }}
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                flex: 1,
-                padding: '10px',
-                background: 'var(--fill-accent)',
-                color: 'white',
-                border: '0.5px solid var(--border-accent)',
-                borderRadius: '6px',
-                fontSize: '13px',
-                fontWeight: 600,
-                cursor: loading ? 'default' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-              }}
-            >
-              {loading ? 'Agregando...' : 'Agregar'}
-            </button>
-          </div>
-        </form>
+        {/* Botones */}
+        <div style={{
+          display: 'flex',
+          gap: 10,
+          marginTop: 24,
+          paddingTop: 16,
+          borderTop: `1px solid ${T.n200}`,
+        }}>
+          <button
+            onClick={onCancelar}
+            style={{
+              flex: 1,
+              background: 'transparent',
+              border: `1px solid ${T.n200}`,
+              color: T.n800,
+              padding: '10px 16px',
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = T.n200 + '22';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = 'transparent';
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleGuardar}
+            style={{
+              flex: 1,
+              background: T.primary,
+              color: '#fff',
+              border: 'none',
+              padding: '10px 16px',
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = '#0550c0';
+              e.target.style.transform = 'translateY(-2px)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = T.primary;
+              e.target.style.transform = 'translateY(0)';
+            }}
+          >
+            ✓ Guardar contacto
+          </button>
+        </div>
       </div>
     </div>
   );

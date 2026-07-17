@@ -1,11 +1,38 @@
 import { useState, useEffect } from 'react';
 import ModalAgregarContacto from './ModalAgregarContacto';
 
+// Tokens de marca Nubceo (tema C — Soft, igual a PortalApp)
+const T = {
+  bg: "#eef4ff",
+  card: "#ffffff",
+  cardBorder: "#c7dcfd",
+  primary: "#0a6bf4",
+  primary50: "#e8f1fe",
+  primary100: "#b9d2fb",
+  primary600: "#0550c0",
+  primary800: "#033a8a",
+  primary900: "#02265c",
+  sky: "#38b6ff",
+  n50: "#f7f8fa",
+  n100: "#eef0f4",
+  n200: "#d8dce6",
+  n400: "#8e96a8",
+  n600: "#4b5468",
+  n800: "#1e2433",
+  n900: "#0d1120",
+  okBg: "#dcfce7",
+  okTx: "#166534",
+  warnBg: "#fef9c3",
+  warnTx: "#854d0e",
+  errBg: "#fee2e2",
+  errTx: "#991b1b",
+};
+
 export default function MailsCard({ cliente }) {
   const [mails, setMails] = useState([]);
   const [contactos, setContactos] = useState([]);
   const [plantillaSeleccionada, setPlantillaSeleccionada] = useState('');
-  const [destinatariosSeleccionados, setDestinatariosSeleccionados] = useState({});
+  const [destinatariosSeleccionados, setDestinatariosSeleccionados] = useState({ fernanda: true });
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState(null);
@@ -25,20 +52,9 @@ export default function MailsCard({ cliente }) {
     { id: 'silvana', nombre: 'Silvana Mascitelli', email: 'silvana.mascitelli@nubceo.com', rol: 'Líder Impl.', tipo: 'nubceo' },
   ];
 
-  // Cargar mails y contactos del cliente
   useEffect(() => {
     cargarDatos();
   }, [cliente?.id]);
-
-  // Al cargar, marcar implementadora como checked por defecto
-  useEffect(() => {
-    if (equipoNubceo.length > 0) {
-      setDestinatariosSeleccionados(prev => ({
-        ...prev,
-        'fernanda': true
-      }));
-    }
-  }, []);
 
   const cargarDatos = async () => {
     try {
@@ -49,6 +65,7 @@ export default function MailsCard({ cliente }) {
       setContactos(result.contactos || []);
     } catch (err) {
       console.error('Error cargando datos:', err);
+      setError('No se pudieron cargar los mails');
     }
   };
 
@@ -146,7 +163,6 @@ export default function MailsCard({ cliente }) {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
 
-      // Abrir preview en nueva pestaña
       const previewWindow = window.open('', '_blank');
       previewWindow.document.write(result.html);
       previewWindow.document.close();
@@ -174,172 +190,140 @@ export default function MailsCard({ cliente }) {
   };
 
   return (
-    <div style={{
-      background: 'var(--surface-2)',
-      border: '0.5px solid var(--border)',
-      borderRadius: '12px',
-      padding: '20px',
-      marginTop: '24px',
-    }}>
+    <div style={{ width: '100%' }}>
       {/* Header */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '8px',
-        marginBottom: '20px',
-        paddingBottom: '16px',
-        borderBottom: '0.5px solid var(--border)',
+        gap: 10,
+        marginBottom: 20,
+        paddingBottom: 16,
+        borderBottom: `1px solid ${T.n200}`,
       }}>
-        <i className="ti ti-mail" style={{ fontSize: '20px', color: 'var(--text-primary)' }}></i>
-        <h2 style={{ fontSize: '18px', fontWeight: 500, margin: 0, color: 'var(--text-primary)' }}>Mails</h2>
+        <span style={{ fontSize: 22, fontWeight: 600, color: T.n900 }}>📧</span>
+        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: T.n900 }}>Mails</h2>
       </div>
 
-      {/* Mensajes */}
+      {/* Mensajes de estado */}
       {error && (
         <div style={{
-          background: 'var(--bg-danger)',
-          color: 'var(--text-danger)',
-          padding: '12px',
-          borderRadius: '6px',
-          marginBottom: '16px',
-          fontSize: '13px',
+          background: T.errBg,
+          color: T.errTx,
+          padding: 12,
+          borderRadius: 6,
+          marginBottom: 16,
+          fontSize: 13,
+          border: `1px solid ${T.errTx}22`,
         }}>
-          {error}
+          ❌ {error}
         </div>
       )}
       {success && (
         <div style={{
-          background: 'var(--bg-success)',
-          color: 'var(--text-success)',
-          padding: '12px',
-          borderRadius: '6px',
-          marginBottom: '16px',
-          fontSize: '13px',
+          background: T.okBg,
+          color: T.okTx,
+          padding: 12,
+          borderRadius: 6,
+          marginBottom: 16,
+          fontSize: 13,
+          border: `1px solid ${T.okTx}22`,
         }}>
-          {success}
+          ✓ {success}
         </div>
       )}
 
-      {/* Historial */}
+      {/* Historial de mails */}
       {mails.length > 0 && (
-        <div style={{ marginBottom: '32px' }}>
+        <div style={{ marginBottom: 32 }}>
           <div style={{
-            fontSize: '12px',
-            fontWeight: 600,
-            color: 'var(--text-secondary)',
+            fontSize: 11,
+            fontWeight: 700,
+            color: T.n400,
             textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-            marginBottom: '12px',
+            letterSpacing: '0.08em',
+            marginBottom: 12,
           }}>
             Historial de envíos
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {mails.map(mail => (
               <div key={mail.id} style={{
-                background: 'var(--surface-1)',
-                border: '0.5px solid var(--border)',
-                borderRadius: '8px',
-                padding: '12px 14px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
+                background: mail.estado === 'error' ? T.errBg : T.primary50,
+                border: `1px solid ${mail.estado === 'error' ? T.errTx : T.primary100}`,
+                borderRadius: 8,
+                padding: 12,
+                fontSize: 13,
               }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
-                    {plantillas.find(p => p.id === mail.plantilla)?.nombre || mail.plantilla}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: T.n900, marginBottom: 4 }}>
+                      {mail.plantilla || 'Mail'} {mail.estado === 'enviado' ? '✓' : mail.estado === 'error' ? '✕' : '⏳'}
+                    </div>
+                    <div style={{ fontSize: 12, color: T.n600, marginBottom: 6 }}>
+                      {mail.destinatarios?.join(', ') || 'Sin destinatarios'}
+                    </div>
+                    {mail.error_msg && (
+                      <div style={{ fontSize: 12, color: T.errTx, fontStyle: 'italic' }}>
+                        Error: {mail.error_msg}
+                      </div>
+                    )}
                   </div>
-                  <div style={{
-                    fontSize: '12px',
-                    color: 'var(--text-secondary)',
-                    marginTop: '4px',
-                    wordBreak: 'break-word',
-                  }}>
-                    Enviado a: {mail.destinatarios?.join(', ')}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                    {new Date(mail.enviado_at).toLocaleDateString('es-AR', {
-                      day: '2-digit',
-                      month: 'long',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                  <div style={{ fontSize: 11, color: T.n400, whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    {new Date(mail.enviado_at).toLocaleDateString('es-AR')}
                   </div>
                 </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-                  {mail.estado === 'enviado' ? (
-                    <span style={{
-                      background: 'var(--bg-success)',
-                      color: 'var(--text-success)',
-                      padding: '4px 10px',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      whiteSpace: 'nowrap',
-                    }}>
-                      ✓ Enviado
-                    </span>
-                  ) : (
-                    <span style={{
-                      background: 'var(--bg-danger)',
-                      color: 'var(--text-danger)',
-                      padding: '4px 10px',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      whiteSpace: 'nowrap',
-                    }}>
-                      Error
-                    </span>
-                  )}
+                {mail.estado === 'error' && (
                   <button
-                    onClick={() => mail.estado === 'error' && handleReintentar(mail.id)}
+                    onClick={() => handleReintentar(mail.id)}
+                    disabled={loading}
                     style={{
+                      marginTop: 10,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: T.primary,
                       background: 'transparent',
-                      border: '0.5px solid var(--border)',
-                      padding: '5px 10px',
-                      borderRadius: '6px',
-                      fontSize: '12px',
-                      cursor: mail.estado === 'error' ? 'pointer' : 'default',
-                      color: 'var(--text-primary)',
-                      fontWeight: 500,
-                      opacity: mail.estado === 'error' ? 1 : 0.5,
+                      border: `1px solid ${T.primary}`,
+                      padding: '6px 12px',
+                      borderRadius: 4,
+                      cursor: loading ? 'default' : 'pointer',
+                      opacity: loading ? 0.5 : 1,
                     }}
-                    disabled={mail.estado !== 'error'}
                   >
-                    {mail.estado === 'error' ? 'Reintentar' : 'Ver'}
+                    Reintentar envío
                   </button>
-                </div>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
 
+      {/* Divididor */}
+      <div style={{ height: 1, background: T.n200, margin: '24px 0' }} />
+
       {/* Enviar nuevo mail */}
-      <div style={{ paddingTop: '20px', borderTop: '0.5px solid var(--border)' }}>
+      <div>
         <div style={{
-          fontSize: '12px',
-          fontWeight: 600,
-          color: 'var(--text-secondary)',
+          fontSize: 11,
+          fontWeight: 700,
+          color: T.n400,
           textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          marginBottom: '16px',
+          letterSpacing: '0.08em',
+          marginBottom: 16,
         }}>
           Enviar nuevo mail
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* Plantilla */}
           <div>
             <label style={{
               display: 'block',
-              fontSize: '13px',
+              fontSize: 13,
               fontWeight: 600,
-              color: 'var(--text-primary)',
-              marginBottom: '8px',
+              color: T.n900,
+              marginBottom: 8,
             }}>
               Plantilla
             </label>
@@ -348,13 +332,14 @@ export default function MailsCard({ cliente }) {
               onChange={(e) => setPlantillaSeleccionada(e.target.value)}
               style={{
                 width: '100%',
-                padding: '9px 12px',
-                border: '0.5px solid var(--border)',
-                borderRadius: '6px',
-                fontSize: '13px',
-                background: 'var(--surface-2)',
-                color: 'var(--text-primary)',
+                padding: '10px 12px',
+                border: `1px solid ${T.n200}`,
+                borderRadius: 6,
+                fontSize: 13,
+                background: T.card,
+                color: T.n800,
                 cursor: 'pointer',
+                fontFamily: 'inherit',
               }}
             >
               <option value="">Seleccionar plantilla...</option>
@@ -370,20 +355,20 @@ export default function MailsCard({ cliente }) {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              marginBottom: '12px',
+              marginBottom: 12,
             }}>
               <label style={{
-                fontSize: '13px',
+                fontSize: 13,
                 fontWeight: 600,
-                color: 'var(--text-primary)',
+                color: T.n900,
               }}>
                 Destinatarios
               </label>
               <button
                 onClick={() => setShowModal(true)}
                 style={{
-                  fontSize: '12px',
-                  color: 'var(--text-accent)',
+                  fontSize: 12,
+                  color: T.primary,
                   background: 'transparent',
                   border: 'none',
                   cursor: 'pointer',
@@ -396,37 +381,39 @@ export default function MailsCard({ cliente }) {
             </div>
 
             <div style={{
-              background: 'var(--surface-1)',
-              border: '0.5px solid var(--border)',
-              borderRadius: '8px',
-              padding: '14px',
-              maxHeight: '350px',
+              background: T.primary50,
+              border: `1px solid ${T.primary100}`,
+              borderRadius: 8,
+              padding: 14,
+              maxHeight: 350,
               overflowY: 'auto',
             }}>
               {/* Equipo Nubceo */}
-              <div style={{ marginBottom: '14px' }}>
+              <div style={{ marginBottom: 14 }}>
                 <div style={{
-                  fontSize: '11px',
+                  fontSize: 11,
                   fontWeight: 700,
-                  color: 'var(--text-secondary)',
+                  color: T.primary800,
                   textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  marginBottom: '8px',
+                  letterSpacing: '0.08em',
+                  marginBottom: 8,
                 }}>
                   Equipo Nubceo
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {equipoNubceo.map(persona => (
                     <label key={persona.id} style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
+                      gap: 8,
                       padding: '8px 10px',
-                      background: destinatariosSeleccionados[persona.id] ? 'var(--bg-accent)' : 'var(--surface-2)',
-                      border: '0.5px solid var(--border)',
-                      borderRadius: '6px',
+                      background: destinatariosSeleccionados[persona.id] ? T.primary : 'transparent',
+                      border: `1px solid ${T.primary100}`,
+                      borderRadius: 6,
                       cursor: 'pointer',
-                      fontSize: '13px',
+                      fontSize: 13,
+                      color: destinatariosSeleccionados[persona.id] ? '#fff' : T.n800,
+                      transition: 'all 0.2s',
                     }}>
                       <input
                         type="checkbox"
@@ -437,10 +424,10 @@ export default function MailsCard({ cliente }) {
                         }))}
                         style={{ margin: 0, cursor: 'pointer' }}
                       />
-                      <span style={{ flex: 1 }}>{persona.nombre}</span>
+                      <span style={{ flex: 1, fontWeight: 500 }}>{persona.nombre}</span>
                       <span style={{
-                        fontSize: '11px',
-                        color: destinatariosSeleccionados[persona.id] ? 'var(--text-accent)' : 'var(--text-secondary)',
+                        fontSize: 11,
+                        opacity: 0.8,
                       }}>
                         ({persona.rol})
                       </span>
@@ -451,29 +438,30 @@ export default function MailsCard({ cliente }) {
 
               {/* Contactos del cliente */}
               {contactos.length > 0 && (
-                <div style={{ marginBottom: '14px', paddingTop: '10px', borderTop: '0.5px solid var(--border)' }}>
+                <div style={{ marginBottom: 14, paddingTop: 10, borderTop: `1px solid ${T.primary100}` }}>
                   <div style={{
-                    fontSize: '11px',
+                    fontSize: 11,
                     fontWeight: 700,
-                    color: 'var(--text-secondary)',
+                    color: T.primary800,
                     textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    marginBottom: '8px',
+                    letterSpacing: '0.08em',
+                    marginBottom: 8,
                   }}>
                     Contactos del cliente
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {contactos.map(contacto => (
                       <label key={contacto.id} style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px',
+                        gap: 8,
                         padding: '8px 10px',
-                        background: 'var(--surface-2)',
-                        border: '0.5px solid var(--border)',
-                        borderRadius: '6px',
+                        background: destinatariosSeleccionados[contacto.id] ? T.sky : 'transparent',
+                        border: `1px solid ${T.primary100}`,
+                        borderRadius: 6,
                         cursor: 'pointer',
-                        fontSize: '13px',
+                        fontSize: 13,
+                        color: destinatariosSeleccionados[contacto.id] ? '#fff' : T.n800,
                       }}>
                         <input
                           type="checkbox"
@@ -484,10 +472,10 @@ export default function MailsCard({ cliente }) {
                           }))}
                           style={{ margin: 0, cursor: 'pointer' }}
                         />
-                        <span style={{ flex: 1 }}>{contacto.nombre}</span>
+                        <span style={{ flex: 1, fontWeight: 500 }}>{contacto.nombre}</span>
                         <span style={{
-                          fontSize: '11px',
-                          color: 'var(--text-secondary)',
+                          fontSize: 11,
+                          opacity: 0.8,
                           textTransform: 'capitalize',
                         }}>
                           ({contacto.rol})
@@ -501,42 +489,44 @@ export default function MailsCard({ cliente }) {
           </div>
 
           {/* Botones */}
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: 10 }}>
             <button
               onClick={handleVistaPrevia}
               disabled={loading || !plantillaSeleccionada}
               style={{
                 flex: 1,
                 background: 'transparent',
-                border: '0.5px solid var(--border)',
+                border: `1.5px solid ${T.primary}`,
+                color: T.primary,
                 padding: '10px 16px',
-                borderRadius: '6px',
-                fontSize: '13px',
+                borderRadius: 6,
+                fontSize: 13,
                 fontWeight: 600,
-                cursor: loading ? 'default' : 'pointer',
-                color: 'var(--text-primary)',
-                opacity: loading ? 0.5 : 1,
+                cursor: loading || !plantillaSeleccionada ? 'default' : 'pointer',
+                opacity: loading || !plantillaSeleccionada ? 0.5 : 1,
+                transition: 'all 0.2s',
               }}
             >
-              Vista previa
+              👁 Vista previa
             </button>
             <button
               onClick={handleEnviarMail}
               disabled={loading}
               style={{
                 flex: 1,
-                background: 'var(--fill-accent)',
-                color: 'white',
-                border: '0.5px solid var(--border-accent)',
+                background: T.primary,
+                color: '#fff',
+                border: 'none',
                 padding: '10px 16px',
-                borderRadius: '6px',
-                fontSize: '13px',
+                borderRadius: 6,
+                fontSize: 13,
                 fontWeight: 600,
                 cursor: loading ? 'default' : 'pointer',
                 opacity: loading ? 0.7 : 1,
+                transition: 'all 0.2s',
               }}
             >
-              {loading ? 'Enviando...' : 'Enviar mail'}
+              {loading ? '⏳ Enviando...' : '✓ Enviar mail'}
             </button>
           </div>
         </div>
