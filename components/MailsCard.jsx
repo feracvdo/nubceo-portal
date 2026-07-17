@@ -377,3 +377,4 @@ export default function MailsCard({ cliente }) {
     </div>
   );
 }
+ 
