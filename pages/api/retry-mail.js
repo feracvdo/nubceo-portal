@@ -1,14 +1,8 @@
 // pages/api/retry-mail.js
 import { supabaseAdmin as db } from "../../lib/supabaseAdmin";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
@@ -20,13 +14,17 @@ export default async function handler(req, res) {
     const { data: mail, error: errFetch } = await db.from("mailsEnviados").select("*").eq("id", mail_id).maybeSingle();
     if (errFetch || !mail) return res.status(404).json({ error: "Mail no encontrado" });
 
-    // Reintenta envío
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: mail.destinatarios.join(","),
+    // Reintenta envío con Resend
+    const result = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || "noreply@nubceo.com",
+      to: mail.destinatarios,
       subject: mail.asunto,
       html: mail.contenido || "",
     });
+
+    if (!result.id) {
+      throw new Error(result.error?.message || "Error reenviando mail con Resend");
+    }
 
     // Actualiza estado
     await db.from("mailsEnviados").update({ estado: "enviado", error_msg: null }).eq("id", mail_id);
