@@ -3107,7 +3107,7 @@ function AdminPortal({ session, onLogout }) {
           </div>
 
           <Card style={{ marginTop: 16 }}>
-            <MailsCard cliente={selData} db={db} />
+            <MailsCard cliente={selData} />
           </Card>
 
           <Card style={{ marginTop: 16 }}>

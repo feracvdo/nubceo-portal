@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import ModalAgregarContacto from './ModalAgregarContacto';
 
-export default function MailsCard({ cliente, db }) {
+export default function MailsCard({ cliente }) {
   const [mails, setMails] = useState([]);
   const [contactos, setContactos] = useState([]);
   const [plantillaSeleccionada, setPlantillaSeleccionada] = useState('');
@@ -42,11 +42,11 @@ export default function MailsCard({ cliente, db }) {
 
   const cargarDatos = async () => {
     try {
-      const { data: mailsData } = await db.from('mailsEnviados').select('*').eq('cliente_id', cliente?.id).order('enviado_at', { ascending: false });
-      setMails(mailsData || []);
-
-      const { data: contactosData } = await db.from('involucrados').select('*').eq('cliente_id', cliente?.id);
-      setContactos(contactosData || []);
+      const response = await fetch(`/api/get-mails?cliente_id=${cliente?.id}`);
+      if (!response.ok) throw new Error('Error cargando datos');
+      const result = await response.json();
+      setMails(result.mails || []);
+      setContactos(result.contactos || []);
     } catch (err) {
       console.error('Error cargando datos:', err);
     }
@@ -54,19 +54,24 @@ export default function MailsCard({ cliente, db }) {
 
   const handleAgregarContacto = async (nuevoContacto) => {
     try {
-      const { data, error: err } = await db.from('involucrados').insert({
-        cliente_id: cliente?.id,
-        nombre: nuevoContacto.nombre,
-        email: nuevoContacto.email,
-        rol: nuevoContacto.rol,
-      }).select();
+      const response = await fetch('/api/add-contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cliente_id: cliente?.id,
+          nombre: nuevoContacto.nombre,
+          email: nuevoContacto.email,
+          rol: nuevoContacto.rol,
+        }),
+      });
 
-      if (err) throw err;
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Error al agregar');
 
-      setContactos([...contactos, data[0]]);
+      setContactos([...contactos, result.contact]);
       setDestinatariosSeleccionados(prev => ({
         ...prev,
-        [data[0].id]: true
+        [result.contact.id]: true
       }));
       setShowModal(false);
       setSuccess('Contacto agregado correctamente');
