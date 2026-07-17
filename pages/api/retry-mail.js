@@ -1,93 +1,41 @@
-import { createClient } from '@supabase/supabase-js';
-import { mailBienvenida, mailRecordatorioPlantilla, mailVencidoPlantilla, mailWorkshop, mailGoLive } from '../../lib/plantillasMail';
-import { enviarMail } from '../../lib/email';
+// pages/api/retry-mail.js
+import { supabaseAdmin as db } from "../../lib/supabaseAdmin";
+import nodemailer from "nodemailer";
 
-const db = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-
-const plantillas = {
-  bienvenida: (cliente) => mailBienvenida(cliente),
-  recordatorio: (cliente) => mailRecordatorioPlantilla({ clienteNombre: cliente.nombre, pasoNombre: 'Paso pendiente', fechaLimiteTxt: new Date().toLocaleDateString('es-AR') }),
-  vencido: (cliente) => mailVencidoPlantilla({ clienteNombre: cliente.nombre, pasoNombre: 'Paso vencido', fechaLimiteTxt: new Date().toLocaleDateString('es-AR') }),
-  workshop: (cliente) => mailWorkshop({ clienteNombre: cliente.nombre, fechaWorkshop: null, implementador: null }),
-  golive: (cliente) => mailGoLive({ clienteNombre: cliente.nombre, implementador: null }),
-};
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
 
 export default async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
+
+  const { mail_id } = req.body;
+  if (!mail_id) return res.status(400).json({ error: "Falta mail_id" });
+
   try {
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Método no permitido' });
-    }
+    const { data: mail, error: errFetch } = await db.from("mailsEnviados").select("*").eq("id", mail_id).maybeSingle();
+    if (errFetch || !mail) return res.status(404).json({ error: "Mail no encontrado" });
 
-    const { mail_id } = req.query;
+    // Reintenta envío
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: mail.destinatarios.join(","),
+      subject: mail.asunto,
+      html: mail.contenido || "",
+    });
 
-    if (!mail_id) {
-      return res.status(400).json({ error: 'mail_id es requerido' });
-    }
+    // Actualiza estado
+    await db.from("mailsEnviados").update({ estado: "enviado", error_msg: null }).eq("id", mail_id);
 
-    const { data: mailRecord, error: mailError } = await db
-      .from('mailsEnviados')
-      .select('*')
-      .eq('id', mail_id)
-      .single();
-
-    if (mailError || !mailRecord) {
-      return res.status(404).json({ error: 'Mail no encontrado' });
-    }
-
-    const { data: cliente, error: clienteError } = await db
-      .from('clientes')
-      .select('*')
-      .eq('id', mailRecord.cliente_id)
-      .single();
-
-    if (clienteError || !cliente) {
-      return res.status(404).json({ error: 'Cliente no encontrado' });
-    }
-
-    if (!plantillas[mailRecord.plantilla]) {
-      return res.status(400).json({ error: 'Plantilla no válida' });
-    }
-
-    const { html, subject } = plantillas[mailRecord.plantilla](cliente);
-
-    try {
-      await enviarMail({
-        to: mailRecord.destinatarios,
-        subject,
-        html,
-      });
-
-      await db
-        .from('mailsEnviados')
-        .update({
-          estado: 'enviado',
-          error_msg: null,
-          enviado_at: new Date().toISOString(),
-        })
-        .eq('id', mail_id);
-
-      return res.status(200).json({
-        success: true,
-        message: 'Mail reenviado correctamente',
-      });
-    } catch (emailError) {
-      console.error('Error reenviando mail:', emailError);
-
-      await db
-        .from('mailsEnviados')
-        .update({
-          estado: 'error',
-          error_msg: emailError.message,
-        })
-        .eq('id', mail_id);
-
-      return res.status(500).json({
-        success: false,
-        error: 'Error reenviando mail: ' + emailError.message,
-      });
-    }
-  } catch (error) {
-    console.error('Error en endpoint retry-mail:', error);
-    return res.status(500).json({ error: 'Error del servidor: ' + error.message });
+    return res.json({ ok: true, message: "Mail reenviado exitosamente" });
+  } catch (e) {
+    console.error("Error en retry-mail:", e.message);
+    // Guarda el error
+    await db.from("mailsEnviados").update({ estado: "error", error_msg: e.message }).eq("id", mail_id);
+    return res.status(500).json({ error: e.message });
   }
 }
