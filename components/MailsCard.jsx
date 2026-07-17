@@ -116,7 +116,7 @@ export default function MailsCard({ cliente }) {
         .map((c) => c.email)
         .filter(Boolean);
 
-      console.log("[send] Destinatarios:', destinatarios);
+      console.log("[send] Destinatarios:", destinatarios);
 
       if (destinatarios.length === 0) {
         setError("Los contactos seleccionados no tienen email");
@@ -130,7 +130,7 @@ export default function MailsCard({ cliente }) {
       });
       const contenido = await respPreview.text();
 
-      console.log("[send] Sending mail to:', cliente.id);
+      console.log("[send] Sending mail to cliente:", cliente.id);
       const respSend = await fetch("/api/send-mail", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -150,13 +150,13 @@ export default function MailsCard({ cliente }) {
       }
 
       const result = await respSend.json();
-      console.log("[send] Success:', result);
+      console.log("[send] Success:", result);
       alert("Mail enviado exitosamente a " + destinatarios.length + " persona(s)");
       setSelectedContacts([]);
       setPreviewHtml(null);
       await cargarDatos();
     } catch (e) {
-      console.error("[send] Error:', e);
+      console.error("[send] Error:", e);
       setError("Error enviando mail: " + e.message);
     } finally {
       setEnviando(false);
@@ -166,7 +166,7 @@ export default function MailsCard({ cliente }) {
   const handleAgregarContacto = async (nuevoContacto) => {
     try {
       setError(null);
-      console.log("[add-contact] Adding:', nuevoContacto);
+      console.log("[add-contact] Adding:", nuevoContacto);
       const resp = await fetch("/api/add-contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -180,16 +180,16 @@ export default function MailsCard({ cliente }) {
 
       if (!resp.ok) {
         const errData = await resp.json();
-        console.error("[add-contact] Error:', errData);
+        console.error("[add-contact] Error:", errData);
         throw new Error(errData.error || `Error ${resp.status}`);
       }
 
-      console.log("[add-contact] Success');
+      console.log("[add-contact] Success");
       setShowModal(false);
       await cargarDatos();
       alert("Contacto agregado exitosamente");
     } catch (e) {
-      console.error("[add-contact] Error:', e);
+      console.error("[add-contact] Error:", e);
       setError("Error agregando contacto: " + e.message);
     }
   };
