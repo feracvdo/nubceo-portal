@@ -1078,6 +1078,34 @@ export default async function handler(req, res) {
       return res.json(await assemble(cli));
     }
 
+
+    if (action === "setEstadoCliente") {
+      // Guardar estado visual del cliente (gris, verde, amarillo, rojo)
+      const { code, estado } = body;
+      
+      if (!code || !["gris", "verde", "amarillo", "rojo"].includes(estado)) {
+        return res.status(400).json({ error: "Estado inválido" });
+      }
+      
+      try {
+        const cli = await getCliente(code);
+        await db
+          .from("clientes")
+          .update({ 
+            estado_seguimiento: estado, 
+            updated_at: new Date().toISOString() 
+          })
+          .eq("id", cli.id);
+
+        await addHistory(cli.id, who || "Equipo", `Cambió estado a ${estado}`);
+        return res.json({ success: true, estado });
+      } catch (e) {
+        console.error("Error en setEstadoCliente:", e.message);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+
     return res.status(400).json({ error: "Acción desconocida: " + action });
   } catch (e) {
     console.error(e);

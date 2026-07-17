@@ -1964,7 +1964,7 @@ const ImageUpload = ({ value, onChange, label, round }) => {
 };
 
 // ─── Tablero tipo agile: columnas = fases del proyecto, tarjetas arrastrables ───
-function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoAvisosDe }) {
+function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoAvisosDe, estadoCliente = {}, onCambiarEstado }) {
   const [arrastrando, setArrastrando] = useState(null); // código del cliente en drag
   const [sobreCol, setSobreCol] = useState(null);
   const scrollRef = useRef(null);
@@ -2006,6 +2006,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
               {items.map((cli) => {
                 const pct = Math.round((cli.completados / cli.totalPasos) * 100);
                 const alertas = detectarAlertas(cli.relevamiento);
+                const estadoActual = estadoCliente[cli.code] || "gris";
                 return (
                   <div
                     key={cli.code}
@@ -2037,15 +2038,40 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                       {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
                       {cli.notasCount > 0 && <Badge tone="gray">📝 {cli.notasCount}</Badge>}
                     </div>
-                    {onEnviarAvisos && (
-                      <div
-                        onClick={(e) => { e.stopPropagation(); onEnviarAvisos(cli.code); }}
-                        title="Mandar ahora el recordatorio o aviso de incumplimiento que corresponda, si hay alguno pendiente"
-                        style={{ marginTop: 8, paddingTop: 7, borderTop: "1px solid " + T.n100, fontSize: 11, fontWeight: 600, color: enviandoAvisosDe === cli.code ? T.n400 : T.primary, cursor: enviandoAvisosDe === cli.code ? "default" : "pointer" }}
-                      >
-                        {enviandoAvisosDe === cli.code ? "Enviando…" : "✉️ Enviar avisos pendientes"}
+                    {onCambiarEstado && (
+                      <div style={{ marginTop: 8, paddingTop: 7, borderTop: "1px solid " + T.n100 }}>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: T.n400, marginBottom: 4 }}>Estado del cliente</div>
+                        <select
+                          value={estadoActual}
+                          onChange={(e) => onCambiarEstado(cli.code, e.target.value)}
+                          style={{
+                            width: "100%",
+                            padding: "6px 8px",
+                            borderRadius: 4,
+                            border: "1px solid " + T.n200,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            backgroundColor: 
+                              estadoActual === "verde" ? "#dcfce7" :
+                              estadoActual === "amarillo" ? "#fef9c3" :
+                              estadoActual === "rojo" ? "#fee2e2" :
+                              "#f3f4f6",
+                            color:
+                              estadoActual === "verde" ? "#166534" :
+                              estadoActual === "amarillo" ? "#854d0e" :
+                              estadoActual === "rojo" ? "#991b1b" :
+                              T.n400,
+                          }}
+                        >
+                          <option value="gris">⚫ Gris</option>
+                          <option value="verde">🟢 Verde</option>
+                          <option value="amarillo">🟡 Amarillo</option>
+                          <option value="rojo">🔴 Rojo</option>
+                        </select>
                       </div>
                     )}
+
                   </div>
                 );
               })}
@@ -2476,6 +2502,22 @@ function AdminPortal({ session, onLogout }) {
   };
 
   const [enviandoAvisosDe, setEnviandoAvisosDe] = useState(null); // código del cliente en curso
+
+  const [estadoCliente, setEstadoCliente] = useState({}); // {code: "gris"|"verde"|"amarillo"|"rojo"}
+
+  const cambiarEstadoCliente = async (code, nuevoEstado) => {
+    setEstadoCliente((prev) => ({ ...prev, [code]: nuevoEstado }));
+    try {
+      await api("setEstadoCliente", { sessionCode: sc, code, estado: nuevoEstado, who: session.who });
+    } catch (e) {
+      flash("Error al guardar estado: " + e.message);
+      setEstadoCliente((prev) => {
+        const copy = { ...prev };
+        delete copy[code];
+        return copy;
+      });
+    }
+  };
   const enviarAvisosPendientes = async (code) => {
     setEnviandoAvisosDe(code);
     try {
@@ -3241,6 +3283,7 @@ function AdminPortal({ session, onLogout }) {
                 <div style={{ display: "grid", gap: 10 }}>
                   {clientesVisibles.map((cli) => {
                     const alertas = detectarAlertas(cli.relevamiento);
+                const estadoActual = estadoCliente[cli.code] || "gris";
                     const pendRv = !cli.relevamientoEnviado;
                     const pct = Math.round((cli.completados / cli.totalPasos) * 100);
                     return (
@@ -3307,7 +3350,7 @@ function AdminPortal({ session, onLogout }) {
                 </select>
                 {(busqueda || filtroImpl) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); }}>Limpiar filtros</Btn>}
               </div>
-              <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} onEnviarAvisos={enviarAvisosPendientes} enviandoAvisosDe={enviandoAvisosDe} />
+              <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} onEnviarAvisos={enviarAvisosPendientes} enviandoAvisosDe={enviandoAvisosDe} estadoCliente={estadoCliente} onCambiarEstado={cambiarEstadoCliente} />
         {/* Panel lateral rápido del tablero: se abre al hacer clic en una tarjeta */}
         {panelCliente && (
           <div onClick={() => setPanelCliente(null)} style={{ position: "fixed", inset: 0, background: "rgba(13,17,32,0.4)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
