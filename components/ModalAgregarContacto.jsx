@@ -1,264 +1,173 @@
-import { useState } from 'react';
+import { useState } from "react";
 
-// Tokens de marca Nubceo (tema C — Soft)
-const T = {
-  primary: "#0a6bf4",
-  primary50: "#e8f1fe",
-  n200: "#d8dce6",
-  n400: "#8e96a8",
-  n600: "#4b5468",
-  n800: "#1e2433",
-  n900: "#0d1120",
-  errTx: "#991b1b",
-};
+export default function ModalAgregarContacto({ onClose, onGuardar }) {
+  const [nombre, setNombre] = useState("");
+  const [email, setEmail] = useState("");
+  const [rol, setRol] = useState("otro");
+  const [error, setError] = useState("");
+  const [cargando, setCargando] = useState(false);
 
-export default function ModalAgregarContacto({ onAgregar, onCancelar }) {
-  const [nombre, setNombre] = useState('');
-  const [email, setEmail] = useState('');
-  const [rol, setRol] = useState('sponsor');
-  const [error, setError] = useState(null);
-
-  const roles = [
-    { value: 'sponsor', label: 'Sponsor (decisor)' },
-    { value: 'key_user', label: 'Key User' },
-    { value: 'otro', label: 'Otro' },
-  ];
-
-  const handleGuardar = () => {
+  const handleGuardar = async () => {
+    setError("");
     if (!nombre.trim()) {
-      setError('El nombre es requerido');
+      setError("El nombre es requerido");
       return;
     }
     if (!email.trim()) {
-      setError('El email es requerido');
+      setError("El email es requerido");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Email inválido');
+      setError("Email inválido");
       return;
     }
 
-    onAgregar({ nombre: nombre.trim(), email: email.trim(), rol });
+    setCargando(true);
+    try {
+      await onGuardar({ nombre, email, rol });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setCargando(false);
+    }
   };
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      background: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-    }}>
-      <div style={{
-        background: '#fff',
-        borderRadius: 12,
-        boxShadow: '0 10px 40px rgba(0, 0, 0, 0.1)',
-        width: '90%',
-        maxWidth: 400,
-        padding: 24,
-      }}>
-        {/* Header */}
-        <div style={{
-          marginBottom: 20,
-          paddingBottom: 16,
-          borderBottom: `1px solid ${T.n200}`,
-        }}>
-          <h2 style={{
-            fontSize: 18,
-            fontWeight: 600,
-            margin: 0,
-            color: T.n900,
-          }}>
-            Agregar contacto
-          </h2>
-          <p style={{
-            fontSize: 13,
-            color: T.n600,
-            margin: '6px 0 0 0',
-          }}>
-            Suma un nuevo contacto del cliente para que reciba mails
-          </p>
-        </div>
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          backgroundColor: "#fff",
+          padding: "24px",
+          borderRadius: "8px",
+          maxWidth: "400px",
+          width: "90%",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 style={{ marginTop: 0, marginBottom: "16px" }}>Agregar contacto</h2>
+        <p style={{ color: "#666", fontSize: "14px", marginBottom: "16px" }}>
+          Suma un nuevo contacto del cliente para que reciba mails
+        </p>
 
-        {/* Error */}
         {error && (
-          <div style={{
-            background: '#fee2e2',
-            color: T.errTx,
-            padding: 12,
-            borderRadius: 6,
-            marginBottom: 16,
-            fontSize: 13,
-            border: `1px solid ${T.errTx}22`,
-          }}>
-            ❌ {error}
+          <div
+            style={{
+              marginBottom: "12px",
+              padding: "10px",
+              backgroundColor: "#fee",
+              border: "1px solid #f99",
+              borderRadius: "4px",
+              color: "#c00",
+              fontSize: "13px",
+            }}
+          >
+            ✕ {error}
           </div>
         )}
 
-        {/* Formulario */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Nombre */}
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: 12,
-              fontWeight: 600,
-              color: T.n900,
-              marginBottom: 6,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-            }}>
-              Nombre
-            </label>
-            <input
-              type="text"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              placeholder="Ej: Juan Pérez"
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: `1px solid ${T.n200}`,
-                borderRadius: 6,
-                fontSize: 13,
-                fontFamily: 'inherit',
-                boxSizing: 'border-box',
-                transition: 'border-color 0.2s',
-              }}
-              onFocus={(e) => e.target.style.borderColor = T.primary}
-              onBlur={(e) => e.target.style.borderColor = T.n200}
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: 12,
-              fontWeight: 600,
-              color: T.n900,
-              marginBottom: 6,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-            }}>
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="juan@empresa.com"
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: `1px solid ${T.n200}`,
-                borderRadius: 6,
-                fontSize: 13,
-                fontFamily: 'inherit',
-                boxSizing: 'border-box',
-                transition: 'border-color 0.2s',
-              }}
-              onFocus={(e) => e.target.style.borderColor = T.primary}
-              onBlur={(e) => e.target.style.borderColor = T.n200}
-            />
-          </div>
-
-          {/* Rol */}
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: 12,
-              fontWeight: 600,
-              color: T.n900,
-              marginBottom: 6,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
-            }}>
-              Rol
-            </label>
-            <select
-              value={rol}
-              onChange={(e) => setRol(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: `1px solid ${T.n200}`,
-                borderRadius: 6,
-                fontSize: 13,
-                fontFamily: 'inherit',
-                background: '#fff',
-                color: T.n800,
-                cursor: 'pointer',
-                boxSizing: 'border-box',
-              }}
-            >
-              {roles.map(r => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Botones */}
-        <div style={{
-          display: 'flex',
-          gap: 10,
-          marginTop: 24,
-          paddingTop: 16,
-          borderTop: `1px solid ${T.n200}`,
-        }}>
-          <button
-            onClick={onCancelar}
+        <label style={{ display: "block", marginBottom: "12px" }}>
+          <strong style={{ fontSize: "13px" }}>Nombre</strong>
+          <input
+            type="text"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Ej: Fernando García"
             style={{
-              flex: 1,
-              background: 'transparent',
-              border: `1px solid ${T.n200}`,
-              color: T.n800,
-              padding: '10px 16px',
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
+              width: "100%",
+              padding: "8px",
+              marginTop: "4px",
+              border: "1px solid #c7dcfd",
+              borderRadius: "4px",
+              fontSize: "14px",
+              boxSizing: "border-box",
             }}
-            onMouseEnter={(e) => {
-              e.target.style.background = T.n200 + '22';
+          />
+        </label>
+
+        <label style={{ display: "block", marginBottom: "12px" }}>
+          <strong style={{ fontSize: "13px" }}>Email</strong>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="Ej: fernando@empresa.com"
+            style={{
+              width: "100%",
+              padding: "8px",
+              marginTop: "4px",
+              border: "1px solid #c7dcfd",
+              borderRadius: "4px",
+              fontSize: "14px",
+              boxSizing: "border-box",
             }}
-            onMouseLeave={(e) => {
-              e.target.style.background = 'transparent';
+          />
+        </label>
+
+        <label style={{ display: "block", marginBottom: "16px" }}>
+          <strong style={{ fontSize: "13px" }}>Rol</strong>
+          <select
+            value={rol}
+            onChange={(e) => setRol(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "8px",
+              marginTop: "4px",
+              border: "1px solid #c7dcfd",
+              borderRadius: "4px",
+              fontSize: "14px",
+              boxSizing: "border-box",
+            }}
+          >
+            <option value="sponsor">Sponsor (decisor)</option>
+            <option value="key_user">Key User</option>
+            <option value="desarrollador">Desarrollador</option>
+            <option value="otro">Otro</option>
+          </select>
+        </label>
+
+        <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+          <button
+            onClick={onClose}
+            disabled={cargando}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#fff",
+              border: "1px solid #c7dcfd",
+              borderRadius: "4px",
+              cursor: cargando ? "not-allowed" : "pointer",
+              fontSize: "14px",
+              fontWeight: "500",
             }}
           >
             Cancelar
           </button>
           <button
             onClick={handleGuardar}
+            disabled={cargando}
             style={{
-              flex: 1,
-              background: T.primary,
-              color: '#fff',
-              border: 'none',
-              padding: '10px 16px',
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.background = '#0550c0';
-              e.target.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = T.primary;
-              e.target.style.transform = 'translateY(0)';
+              padding: "8px 16px",
+              backgroundColor: cargando ? "#ccc" : "#0a6bf4",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              cursor: cargando ? "not-allowed" : "pointer",
+              fontSize: "14px",
+              fontWeight: "600",
             }}
           >
-            ✓ Guardar contacto
+            {cargando ? "Guardando..." : "✓ Guardar contacto"}
           </button>
         </div>
       </div>

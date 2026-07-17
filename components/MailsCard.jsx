@@ -1,546 +1,377 @@
-import { useState, useEffect } from 'react';
-import ModalAgregarContacto from './ModalAgregarContacto';
-
-// Tokens de marca Nubceo (tema C — Soft, igual a PortalApp)
-const T = {
-  bg: "#eef4ff",
-  card: "#ffffff",
-  cardBorder: "#c7dcfd",
-  primary: "#0a6bf4",
-  primary50: "#e8f1fe",
-  primary100: "#b9d2fb",
-  primary600: "#0550c0",
-  primary800: "#033a8a",
-  primary900: "#02265c",
-  sky: "#38b6ff",
-  n50: "#f7f8fa",
-  n100: "#eef0f4",
-  n200: "#d8dce6",
-  n400: "#8e96a8",
-  n600: "#4b5468",
-  n800: "#1e2433",
-  n900: "#0d1120",
-  okBg: "#dcfce7",
-  okTx: "#166534",
-  warnBg: "#fef9c3",
-  warnTx: "#854d0e",
-  errBg: "#fee2e2",
-  errTx: "#991b1b",
-};
+import { useState, useEffect } from "react";
+import ModalAgregarContacto from "./ModalAgregarContacto";
 
 export default function MailsCard({ cliente }) {
   const [mails, setMails] = useState([]);
   const [contactos, setContactos] = useState([]);
-  const [plantillaSeleccionada, setPlantillaSeleccionada] = useState('');
-  const [destinatariosSeleccionados, setDestinatariosSeleccionados] = useState({ fernanda: true });
-  const [loading, setLoading] = useState(false);
+  const [selectedContacts, setSelectedContacts] = useState([]);
+  const [plantilla, setPlantilla] = useState("bienvenida");
+  const [previewHtml, setPreviewHtml] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
 
-  const plantillas = [
-    { id: 'bienvenida', nombre: 'Mail de bienvenida' },
-    { id: 'recordatorio', nombre: 'Recordatorio de plazo' },
-    { id: 'vencido', nombre: 'Plazo vencido' },
-    { id: 'workshop', nombre: 'Invitación a workshop' },
-    { id: 'golive', nombre: 'Confirmación de go-live' },
-  ];
-
-  const equipoNubceo = [
-    { id: 'fernanda', nombre: 'Fernanda Acevedo', email: 'fernanda.acevedo@nubceo.com', rol: 'Implementadora', tipo: 'nubceo' },
-    { id: 'santiago', nombre: 'Santiago Suarez', email: 'santiago.suarez@nubceo.com', rol: 'Desarrollador', tipo: 'nubceo' },
-    { id: 'silvana', nombre: 'Silvana Mascitelli', email: 'silvana.mascitelli@nubceo.com', rol: 'Líder Impl.', tipo: 'nubceo' },
-  ];
-
+  // Carga mails y contactos al montar
   useEffect(() => {
     cargarDatos();
   }, [cliente?.id]);
 
   const cargarDatos = async () => {
+    if (!cliente?.id) return;
     try {
-      const response = await fetch(`/api/get-mails?cliente_id=${cliente?.id}`);
-      if (!response.ok) throw new Error('Error cargando datos');
-      const result = await response.json();
-      setMails(result.mails || []);
-      setContactos(result.contactos || []);
-    } catch (err) {
-      console.error('Error cargando datos:', err);
-      setError('No se pudieron cargar los mails');
-    }
-  };
-
-  const handleAgregarContacto = async (nuevoContacto) => {
-    try {
-      const response = await fetch('/api/add-contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cliente_id: cliente?.id,
-          nombre: nuevoContacto.nombre,
-          email: nuevoContacto.email,
-          rol: nuevoContacto.rol,
-        }),
-      });
-
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Error al agregar');
-
-      setContactos([...contactos, result.contact]);
-      setDestinatariosSeleccionados(prev => ({
-        ...prev,
-        [result.contact.id]: true
-      }));
-      setShowModal(false);
-      setSuccess('Contacto agregado correctamente');
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError('Error al agregar contacto: ' + err.message);
-    }
-  };
-
-  const handleEnviarMail = async () => {
-    if (!plantillaSeleccionada) {
-      setError('Selecciona una plantilla');
-      return;
-    }
-
-    const destinatarios = [
-      ...equipoNubceo.filter(e => destinatariosSeleccionados[e.id]),
-      ...contactos.filter(c => destinatariosSeleccionados[c.id])
-    ];
-
-    if (destinatarios.length === 0) {
-      setError('Selecciona al menos un destinatario');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/send-mail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cliente_id: cliente?.id,
-          plantilla: plantillaSeleccionada,
-          destinatarios: destinatarios.map(d => ({ email: d.email, nombre: d.nombre })),
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) throw new Error(result.error || 'Error al enviar');
-
-      setSuccess('Mail enviado correctamente');
-      setPlantillaSeleccionada('');
-      setDestinatariosSeleccionados({ fernanda: true });
-      cargarDatos();
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      setError(err.message);
+      setLoading(true);
+      setError(null);
+      const resp = await fetch(`/api/get-mails?cliente_id=${cliente.id}`);
+      if (!resp.ok) throw new Error(`Error ${resp.status}`);
+      const data = await resp.json();
+      
+      setMails(data.mails || []);
+      setContactos(data.contactos || []);
+      
+      // Pre-selecciona a Fernanda (implementadora)
+      const fernanda = data.contactos?.find((c) => c.nombre?.includes("Fernanda"));
+      if (fernanda) {
+        setSelectedContacts([fernanda.id]);
+      }
+    } catch (e) {
+      console.error("Error cargando datos:", e);
+      setError("Error cargando datos: " + e.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleVistaPrevia = async () => {
-    if (!plantillaSeleccionada) {
-      setError('Selecciona una plantilla');
+    if (!plantilla) {
+      setError("Seleccioná una plantilla");
+      return;
+    }
+    try {
+      setError(null);
+      const resp = await fetch("/api/preview-mail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plantilla, cliente: cliente.nombre }),
+      });
+      if (!resp.ok) throw new Error(`Error ${resp.status}`);
+      const html = await resp.text(); // ← IMPORTANTE: .text(), no .json()
+      setPreviewHtml(html);
+    } catch (e) {
+      console.error("Error en preview:", e);
+      setError("Error cargando vista previa: " + e.message);
+    }
+  };
+
+  const handleEnviarMail = async () => {
+    if (!plantilla) {
+      setError("Seleccioná una plantilla");
+      return;
+    }
+    if (selectedContacts.length === 0) {
+      setError("Seleccioná al menos un contacto");
       return;
     }
 
     try {
-      const response = await fetch('/api/preview-mail', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      setEnviando(true);
+      setError(null);
+
+      // Obtén los emails de los contactos seleccionados
+      const destinatarios = contactos
+        .filter((c) => selectedContacts.includes(c.id))
+        .map((c) => c.email)
+        .filter(Boolean);
+
+      if (destinatarios.length === 0) {
+        setError("Los contactos seleccionados no tienen email");
+        return;
+      }
+
+      // Genera el HTML de la plantilla
+      const respPreview = await fetch("/api/preview-mail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plantilla, cliente: cliente.nombre }),
+      });
+      const contenido = await respPreview.text();
+
+      // Envía el mail
+      const respSend = await fetch("/api/send-mail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cliente_id: cliente?.id,
-          plantilla: plantillaSeleccionada,
+          cliente_id: cliente.id,
+          plantilla,
+          asunto: `Nubceo - ${plantilla}`,
+          destinatarios,
+          contenido,
         }),
       });
 
-      if (!response.ok) {
-        const result = await response.json();
-        throw new Error(result.error);
+      if (!respSend.ok) {
+        const errData = await respSend.json();
+        throw new Error(errData.error || `Error ${respSend.status}`);
       }
 
-      // El endpoint devuelve HTML directamente
-      const html = await response.text();
-      const previewWindow = window.open('', '_blank');
-      previewWindow.document.write(html);
-      previewWindow.document.close();
-    } catch (err) {
-      setError(err.message);
+      const result = await respSend.json();
+      alert("Mail enviado exitosamente a " + destinatarios.length + " persona(s)");
+      setSelectedContacts([]);
+      setPreviewHtml(null);
+      await cargarDatos(); // Recarga el historial
+    } catch (e) {
+      console.error("Error enviando mail:", e);
+      setError("Error enviando mail: " + e.message);
+    } finally {
+      setEnviando(false);
     }
   };
 
-  const handleReintentar = async (mailId) => {
-    setLoading(true);
+  const handleAgregarContacto = async (nuevoContacto) => {
     try {
-      const response = await fetch(`/api/retry-mail?mail_id=${mailId}`, {
-        method: 'POST',
+      setError(null);
+      const resp = await fetch("/api/add-contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cliente_id: cliente.id,
+          nombre: nuevoContacto.nombre,
+          email: nuevoContacto.email,
+          rol: nuevoContacto.rol || "otro",
+        }),
       });
 
-      if (!response.ok) throw new Error('Error al reintentar');
+      if (!resp.ok) {
+        const errData = await resp.json();
+        throw new Error(errData.error || `Error ${resp.status}`);
+      }
 
-      setSuccess('Mail reenviado');
-      cargarDatos();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+      setShowModal(false);
+      await cargarDatos(); // Recarga los contactos
+      alert("Contacto agregado exitosamente");
+    } catch (e) {
+      console.error("Error agregando contacto:", e);
+      setError("Error agregando contacto: " + e.message);
     }
   };
 
+  const toggleContacto = (contactoId) => {
+    setSelectedContacts((prev) =>
+      prev.includes(contactoId)
+        ? prev.filter((id) => id !== contactoId)
+        : [...prev, contactoId]
+    );
+  };
+
+  if (loading) return <div style={{ padding: "20px" }}>Cargando mails y contactos...</div>;
+
   return (
-    <div style={{ width: '100%' }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        marginBottom: 20,
-        paddingBottom: 16,
-        borderBottom: `1px solid ${T.n200}`,
-      }}>
-        <span style={{ fontSize: 22, fontWeight: 600, color: T.n900 }}>📧</span>
-        <h2 style={{ fontSize: 18, fontWeight: 600, margin: 0, color: T.n900 }}>Mails</h2>
-      </div>
-
-      {/* Mensajes de estado */}
+    <div style={{ padding: "20px" }}>
       {error && (
-        <div style={{
-          background: T.errBg,
-          color: T.errTx,
-          padding: 12,
-          borderRadius: 6,
-          marginBottom: 16,
-          fontSize: 13,
-          border: `1px solid ${T.errTx}22`,
-        }}>
-          ❌ {error}
-        </div>
-      )}
-      {success && (
-        <div style={{
-          background: T.okBg,
-          color: T.okTx,
-          padding: 12,
-          borderRadius: 6,
-          marginBottom: 16,
-          fontSize: 13,
-          border: `1px solid ${T.okTx}22`,
-        }}>
-          ✓ {success}
+        <div
+          style={{
+            marginBottom: "15px",
+            padding: "12px",
+            backgroundColor: "#fee",
+            borderLeft: "4px solid #f44",
+            borderRadius: "4px",
+            color: "#c00",
+            fontSize: "14px",
+          }}
+        >
+          ✕ {error}
         </div>
       )}
 
-      {/* Historial de mails */}
-      {mails.length > 0 && (
-        <div style={{ marginBottom: 32 }}>
-          <div style={{
-            fontSize: 11,
-            fontWeight: 700,
-            color: T.n400,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            marginBottom: 12,
-          }}>
-            Historial de envíos
-          </div>
+      <div style={{ marginBottom: "30px" }}>
+        <h3>📧 Enviar nuevo mail</h3>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {mails.map(mail => (
-              <div key={mail.id} style={{
-                background: mail.estado === 'error' ? T.errBg : T.primary50,
-                border: `1px solid ${mail.estado === 'error' ? T.errTx : T.primary100}`,
-                borderRadius: 8,
-                padding: 12,
-                fontSize: 13,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 10 }}>
-                  <div>
-                    <div style={{ fontWeight: 600, color: T.n900, marginBottom: 4 }}>
-                      {mail.plantilla || 'Mail'} {mail.estado === 'enviado' ? '✓' : mail.estado === 'error' ? '✕' : '⏳'}
-                    </div>
-                    <div style={{ fontSize: 12, color: T.n600, marginBottom: 6 }}>
-                      {mail.destinatarios?.join(', ') || 'Sin destinatarios'}
-                    </div>
-                    {mail.error_msg && (
-                      <div style={{ fontSize: 12, color: T.errTx, fontStyle: 'italic' }}>
-                        Error: {mail.error_msg}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 11, color: T.n400, whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    {new Date(mail.enviado_at).toLocaleDateString('es-AR')}
-                  </div>
-                </div>
-                {mail.estado === 'error' && (
-                  <button
-                    onClick={() => handleReintentar(mail.id)}
-                    disabled={loading}
-                    style={{
-                      marginTop: 10,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: T.primary,
-                      background: 'transparent',
-                      border: `1px solid ${T.primary}`,
-                      padding: '6px 12px',
-                      borderRadius: 4,
-                      cursor: loading ? 'default' : 'pointer',
-                      opacity: loading ? 0.5 : 1,
-                    }}
-                  >
-                    Reintentar envío
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        <label style={{ display: "block", marginBottom: "15px" }}>
+          <strong>Plantilla</strong>
+          <select
+            value={plantilla}
+            onChange={(e) => setPlantilla(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "8px",
+              marginTop: "5px",
+              borderRadius: "4px",
+              border: "1px solid #c7dcfd",
+              fontSize: "14px",
+            }}
+          >
+            <option value="bienvenida">Mail de bienvenida</option>
+            <option value="recordatorio">Recordatorio</option>
+            <option value="vencido">Plazo vencido</option>
+            <option value="workshop">Invitación Workshop</option>
+            <option value="golive">Invitación Go-Live</option>
+          </select>
+        </label>
 
-      {/* Divididor */}
-      <div style={{ height: 1, background: T.n200, margin: '24px 0' }} />
-
-      {/* Enviar nuevo mail */}
-      <div>
-        <div style={{
-          fontSize: 11,
-          fontWeight: 700,
-          color: T.n400,
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
-          marginBottom: 16,
-        }}>
-          Enviar nuevo mail
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {/* Plantilla */}
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: 13,
-              fontWeight: 600,
-              color: T.n900,
-              marginBottom: 8,
-            }}>
-              Plantilla
-            </label>
-            <select
-              value={plantillaSeleccionada}
-              onChange={(e) => setPlantillaSeleccionada(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 12px',
-                border: `1px solid ${T.n200}`,
-                borderRadius: 6,
-                fontSize: 13,
-                background: T.card,
-                color: T.n800,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              <option value="">Seleccionar plantilla...</option>
-              {plantillas.map(p => (
-                <option key={p.id} value={p.id}>{p.nombre}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Destinatarios */}
-          <div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 12,
-            }}>
-              <label style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: T.n900,
-              }}>
-                Destinatarios
-              </label>
-              <button
-                onClick={() => setShowModal(true)}
-                style={{
-                  fontSize: 12,
-                  color: T.primary,
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  textDecoration: 'underline',
-                }}
-              >
-                + Agregar contacto
-              </button>
+        <label style={{ display: "block", marginBottom: "15px" }}>
+          <strong>Destinatarios</strong>
+          <div
+            style={{
+              marginTop: "8px",
+              padding: "12px",
+              backgroundColor: "#eef4ff",
+              borderRadius: "4px",
+              border: "1px solid #c7dcfd",
+            }}
+          >
+            <div style={{ marginBottom: "10px", fontSize: "13px", color: "#666" }}>
+              <strong>Equipo Nubceo:</strong>
             </div>
+            {contactos
+              .filter((c) => ["implementador", "desarrollador"].includes(c.rol) || c.nombre?.includes("Fernanda"))
+              .map((c) => (
+                <label key={c.id} style={{ display: "block", marginBottom: "6px", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedContacts.includes(c.id)}
+                    onChange={() => toggleContacto(c.id)}
+                    style={{ marginRight: "8px", accentColor: "#0a6bf4" }}
+                  />
+                  <span style={{ fontSize: "14px" }}>
+                    {c.nombre} {c.rol && <span style={{ color: "#999", fontSize: "12px" }}>({c.rol})</span>}
+                  </span>
+                </label>
+              ))}
 
-            <div style={{
-              background: T.primary50,
-              border: `1px solid ${T.primary100}`,
-              borderRadius: 8,
-              padding: 14,
-              maxHeight: 350,
-              overflowY: 'auto',
-            }}>
-              {/* Equipo Nubceo */}
-              <div style={{ marginBottom: 14 }}>
-                <div style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: T.primary800,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  marginBottom: 8,
-                }}>
-                  Equipo Nubceo
+            {contactos.filter((c) => c.cliente_id === cliente.id && !["implementador", "desarrollador"].includes(c.rol)).length > 0 && (
+              <>
+                <div style={{ marginTop: "12px", marginBottom: "8px", fontSize: "13px", color: "#666" }}>
+                  <strong>Contactos del cliente:</strong>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {equipoNubceo.map(persona => (
-                    <label key={persona.id} style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 10px',
-                      background: destinatariosSeleccionados[persona.id] ? T.primary : 'transparent',
-                      border: `1px solid ${T.primary100}`,
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                      fontSize: 13,
-                      color: destinatariosSeleccionados[persona.id] ? '#fff' : T.n800,
-                      transition: 'all 0.2s',
-                    }}>
+                {contactos
+                  .filter((c) => c.cliente_id === cliente.id && !["implementador", "desarrollador"].includes(c.rol))
+                  .map((c) => (
+                    <label key={c.id} style={{ display: "block", marginBottom: "6px", cursor: "pointer" }}>
                       <input
                         type="checkbox"
-                        checked={destinatariosSeleccionados[persona.id] || false}
-                        onChange={(e) => setDestinatariosSeleccionados(prev => ({
-                          ...prev,
-                          [persona.id]: e.target.checked
-                        }))}
-                        style={{ margin: 0, cursor: 'pointer' }}
+                        checked={selectedContacts.includes(c.id)}
+                        onChange={() => toggleContacto(c.id)}
+                        style={{ marginRight: "8px", accentColor: "#0a6bf4" }}
                       />
-                      <span style={{ flex: 1, fontWeight: 500 }}>{persona.nombre}</span>
-                      <span style={{
-                        fontSize: 11,
-                        opacity: 0.8,
-                      }}>
-                        ({persona.rol})
+                      <span style={{ fontSize: "14px" }}>
+                        {c.nombre} {c.email && <span style={{ color: "#999", fontSize: "12px" }}>({c.email})</span>}
                       </span>
                     </label>
                   ))}
-                </div>
-              </div>
-
-              {/* Contactos del cliente */}
-              {contactos.length > 0 && (
-                <div style={{ marginBottom: 14, paddingTop: 10, borderTop: `1px solid ${T.primary100}` }}>
-                  <div style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: T.primary800,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    marginBottom: 8,
-                  }}>
-                    Contactos del cliente
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {contactos.map(contacto => (
-                      <label key={contacto.id} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        padding: '8px 10px',
-                        background: destinatariosSeleccionados[contacto.id] ? T.sky : 'transparent',
-                        border: `1px solid ${T.primary100}`,
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        fontSize: 13,
-                        color: destinatariosSeleccionados[contacto.id] ? '#fff' : T.n800,
-                      }}>
-                        <input
-                          type="checkbox"
-                          checked={destinatariosSeleccionados[contacto.id] || false}
-                          onChange={(e) => setDestinatariosSeleccionados(prev => ({
-                            ...prev,
-                            [contacto.id]: e.target.checked
-                          }))}
-                          style={{ margin: 0, cursor: 'pointer' }}
-                        />
-                        <span style={{ flex: 1, fontWeight: 500 }}>{contacto.nombre}</span>
-                        <span style={{
-                          fontSize: 11,
-                          opacity: 0.8,
-                          textTransform: 'capitalize',
-                        }}>
-                          ({contacto.rol})
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
+          <button
+            onClick={() => setShowModal(true)}
+            style={{
+              marginTop: "10px",
+              padding: "6px 12px",
+              fontSize: "13px",
+              backgroundColor: "#fff",
+              border: "1px solid #0a6bf4",
+              color: "#0a6bf4",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "500",
+            }}
+          >
+            + Agregar contacto
+          </button>
+        </label>
 
-          {/* Botones */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button
-              onClick={handleVistaPrevia}
-              disabled={loading || !plantillaSeleccionada}
-              style={{
-                flex: 1,
-                background: 'transparent',
-                border: `1.5px solid ${T.primary}`,
-                color: T.primary,
-                padding: '10px 16px',
-                borderRadius: 6,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: loading || !plantillaSeleccionada ? 'default' : 'pointer',
-                opacity: loading || !plantillaSeleccionada ? 0.5 : 1,
-                transition: 'all 0.2s',
-              }}
-            >
-              👁 Vista previa
-            </button>
-            <button
-              onClick={handleEnviarMail}
-              disabled={loading}
-              style={{
-                flex: 1,
-                background: T.primary,
-                color: '#fff',
-                border: 'none',
-                padding: '10px 16px',
-                borderRadius: 6,
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: loading ? 'default' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                transition: 'all 0.2s',
-              }}
-            >
-              {loading ? '⏳ Enviando...' : '✓ Enviar mail'}
-            </button>
-          </div>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            onClick={handleVistaPrevia}
+            disabled={enviando}
+            style={{
+              flex: 1,
+              padding: "10px",
+              backgroundColor: "#fff",
+              border: "1px solid #0a6bf4",
+              color: "#0a6bf4",
+              borderRadius: "4px",
+              cursor: enviando ? "not-allowed" : "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+            }}
+          >
+            👁️ Vista previa
+          </button>
+          <button
+            onClick={handleEnviarMail}
+            disabled={enviando || selectedContacts.length === 0}
+            style={{
+              flex: 1,
+              padding: "10px",
+              backgroundColor: enviando || selectedContacts.length === 0 ? "#ccc" : "#0a6bf4",
+              color: "#fff",
+              border: "none",
+              borderRadius: "4px",
+              cursor: enviando || selectedContacts.length === 0 ? "not-allowed" : "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+            }}
+          >
+            {enviando ? "Enviando..." : "✓ Enviar mail"}
+          </button>
         </div>
       </div>
 
-      {/* Modal */}
+      {previewHtml && (
+        <div style={{ marginBottom: "30px" }}>
+          <h3>Vista previa</h3>
+          <div
+            style={{
+              border: "1px solid #ccc",
+              borderRadius: "4px",
+              overflow: "auto",
+              maxHeight: "500px",
+              backgroundColor: "#f9f9f9",
+            }}
+          >
+            <iframe
+              srcDoc={previewHtml}
+              style={{ width: "100%", height: "400px", border: "none" }}
+              title="Vista previa"
+            />
+          </div>
+        </div>
+      )}
+
+      {mails.length > 0 && (
+        <div>
+          <h3>📋 Historial de mails</h3>
+          {mails.map((mail) => (
+            <div
+              key={mail.id}
+              style={{
+                marginBottom: "12px",
+                padding: "12px",
+                backgroundColor: mail.estado === "enviado" ? "#efe" : "#fee",
+                border: `1px solid ${mail.estado === "enviado" ? "#6d6" : "#f99"}`,
+                borderRadius: "4px",
+                fontSize: "13px",
+              }}
+            >
+              <div>
+                <strong>{mail.asunto}</strong>{" "}
+                <span style={{ color: "#666", fontSize: "12px" }}>
+                  {new Date(mail.enviado_at).toLocaleString("es-AR")}
+                </span>
+              </div>
+              <div style={{ color: "#666", fontSize: "12px", marginTop: "4px" }}>
+                A: {mail.destinatarios.join(", ")}
+              </div>
+              {mail.estado === "error" && <div style={{ color: "#c00" }}>Error: {mail.error_msg}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
       {showModal && (
         <ModalAgregarContacto
-          onAgregar={handleAgregarContacto}
-          onCancelar={() => setShowModal(false)}
+          onClose={() => setShowModal(false)}
+          onGuardar={handleAgregarContacto}
         />
       )}
     </div>
