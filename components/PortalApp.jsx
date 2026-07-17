@@ -2026,7 +2026,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                       <div style={{ fontSize: 13, fontWeight: 700, color: T.n900, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cli.name}</div>
                     </div>
                     <div style={{ height: 4, borderRadius: 100, background: T.n100, overflow: "hidden", marginBottom: 7 }}>
-                      <div style={{ width: pct + "%", height: "100%", background: pct === 100 ? "#22c55e" : T.primary, borderRadius: 100 }} />
+                      <div style={{ width: "100%", height: "100%", background: estadoActual === "verde" ? "#22c55e" : estadoActual === "amarillo" ? "#eab308" : estadoActual === "rojo" ? "#ef4444" : "#d1d5db", borderRadius: 100 }} />
                     </div>
                     <div style={{ fontSize: 10.5, color: T.n400, marginBottom: 6 }}>
                       {cli.implementadorNombre || "Sin implementador/a"}{cli.desarrolladorNombre ? " · " + cli.desarrolladorNombre + " (dev)" : ""}
@@ -2039,37 +2039,24 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                       {cli.notasCount > 0 && <Badge tone="gray">📝 {cli.notasCount}</Badge>}
                     </div>
                     {onCambiarEstado && (
-                      <div style={{ marginTop: 8, paddingTop: 7, borderTop: "1px solid " + T.n100 }}>
-                        <div style={{ fontSize: 10, fontWeight: 600, color: T.n400, marginBottom: 4 }}>Estado del cliente</div>
-                        <select
-                          value={estadoActual}
-                          onChange={(e) => onCambiarEstado(cli.code, e.target.value)}
-                          style={{
-                            width: "100%",
-                            padding: "6px 8px",
-                            borderRadius: 4,
-                            border: "1px solid " + T.n200,
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            backgroundColor: 
-                              estadoActual === "verde" ? "#dcfce7" :
-                              estadoActual === "amarillo" ? "#fef9c3" :
-                              estadoActual === "rojo" ? "#fee2e2" :
-                              "#f3f4f6",
-                            color:
-                              estadoActual === "verde" ? "#166534" :
-                              estadoActual === "amarillo" ? "#854d0e" :
-                              estadoActual === "rojo" ? "#991b1b" :
-                              T.n400,
-                          }}
-                        >
-                          <option value="gris">⚫ Gris</option>
-                          <option value="verde">🟢 Verde</option>
-                          <option value="amarillo">🟡 Amarillo</option>
-                          <option value="rojo">🔴 Rojo</option>
-                        </select>
-                      </div>
+                      <div
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const colores = ["gris", "verde", "amarillo", "rojo"];
+                          const idx = colores.indexOf(estadoActual);
+                          const siguiente = colores[(idx + 1) % colores.length];
+                          onCambiarEstado(cli.code, siguiente);
+                        }}
+                        style={{
+                          marginTop: 12,
+                          height: 10,
+                          borderRadius: "0 0 10px 10px",
+                          background: estadoActual === "verde" ? "#22c55e" : estadoActual === "amarillo" ? "#eab308" : estadoActual === "rojo" ? "#ef4444" : "#d1d5db",
+                          cursor: "pointer",
+                          transition: "all 0.2s ease",
+                        }}
+                        title="Click para cambiar estado"
+                      />
                     )}
 
                   </div>
