@@ -339,21 +339,27 @@ export default async function handler(req, res) {
       if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
       const { data: ya } = await db.from("redmine_altas").select("id").eq("cliente_id", cli.id).maybeSingle();
       if (!ya) {
-        const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "redmine").maybeSingle();
-        const payloads = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId, cli.cuits);
-        const result = await sendToRedmine(payloads, await redmineKeyDelCliente(cli));
-        await db.from("redmine_altas").insert({
-          cliente_id: cli.id, estado: result.estado, detalle: result.detalle, payloads,
-          feature_issue_id: result.issueIds?.[0] || null, user_story_issue_id: result.issueIds?.[1] || null,
-        });
+        try {
+          const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "redmine").maybeSingle();
+          const payloads = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId, cli.cuits);
+          const result = await sendToRedmine(payloads, await redmineKeyDelCliente(cli));
+          await db.from("redmine_altas").insert({
+            cliente_id: cli.id, estado: result.estado, detalle: result.detalle, payloads,
+            feature_issue_id: result.issueIds?.[0] || null, user_story_issue_id: result.issueIds?.[1] || null,
+          });
+          await addHistory(cli.id, "Portal (automático)", result.estado === "enviado"
+            ? "Se crearon en Redmine la Feature de alta y la US de tenant sandbox"
+            : "Se preparó el alta en Redmine (Feature de alta + US tenant sandbox) — " + result.detalle);
+        } catch (redmineErr) {
+          console.error("Redmine onboarding error (no fatal):", redmineErr.message);
+          // Continúa sin Redmine por ahora — se puede reintentar después con "retryRedmine"
+          await addHistory(cli.id, "Portal (automático)", "No se pudo conectar con Redmine en este momento — se puede reintentar después");
+        }
         const creds = await generarCredenciales(cli);
         await db.from("credenciales_api").upsert(
           { cliente_id: cli.id, entorno: "sandbox", api_key: creds.api_key, api_secret: creds.api_secret, generado_at: new Date().toISOString() },
           { onConflict: "cliente_id,entorno" }
         );
-        await addHistory(cli.id, "Portal (automático)", result.estado === "enviado"
-          ? "Se crearon en Redmine la Feature de alta y la US de tenant sandbox"
-          : "Se preparó el alta en Redmine (Feature de alta + US tenant sandbox) — " + result.detalle);
         await addHistory(cli.id, "Portal (automático)", "Se generaron las credenciales de API sandbox del cliente");
       }
       return res.json(await assemble(cli));
