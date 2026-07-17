@@ -1081,7 +1081,7 @@ export default async function handler(req, res) {
 
     if (action === "setEstadoCliente") {
       // Guardar estado visual del cliente (gris, verde, amarillo, rojo)
-      const { code, estado } = body;
+      const { estado } = req.body || {};
       
       if (!code || !["gris", "verde", "amarillo", "rojo"].includes(estado)) {
         return res.status(400).json({ error: "Estado inválido" });
