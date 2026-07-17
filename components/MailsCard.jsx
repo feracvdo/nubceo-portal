@@ -160,11 +160,15 @@ export default function MailsCard({ cliente }) {
         }),
       });
 
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error);
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error);
+      }
 
+      // El endpoint devuelve HTML directamente
+      const html = await response.text();
       const previewWindow = window.open('', '_blank');
-      previewWindow.document.write(result.html);
+      previewWindow.document.write(html);
       previewWindow.document.close();
     } catch (err) {
       setError(err.message);
