@@ -1106,6 +1106,63 @@ export default async function handler(req, res) {
     }
 
 
+
+    if (action === "guardarSucursalesMasivo") {
+      // Guardar múltiples sucursales desde upload de Excel
+      const { sucursales } = req.body || {};
+      
+      if (!Array.isArray(sucursales) || sucursales.length === 0) {
+        return res.status(400).json({ error: "No hay sucursales para guardar" });
+      }
+
+      try {
+        const cli = await getCliente(cc);
+        const team = await getTeam(sc);
+        
+        // Preparar datos para insertar
+        const datosInsert = sucursales.map((s) => ({
+          cliente_id: cli.id,
+          team_id: team.id,
+          nombre: s.nombre || "",
+          codigo_pdv: s.codigopdv || "",
+          numero_comercio: s.numercomercio || "",
+          nombre_comercio: s.nombrecomercio || "",
+          plataforma: s.plataforma || "",
+          cuit: s.cuit || "",
+          empresa: s.empresa || "",
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+
+        // Insertar en tabla sucursales_cabecera
+        const { data, error } = await db
+          .from("sucursales_cabecera")
+          .insert(datosInsert);
+
+        if (error) {
+          console.error("Error insertando sucursales:", error.message);
+          return res.status(500).json({ error: "Error al guardar: " + error.message });
+        }
+
+        // Log de auditoría
+        await addHistory(
+          cli.id,
+          who || "Cliente",
+          `Cargó ${sucursales.length} sucursal(es) masivamente`
+        ).catch(() => {});
+
+        return res.json({ 
+          success: true, 
+          cantidad: sucursales.length,
+          mensaje: `${sucursales.length} sucursal(es) guardada(s) correctamente`
+        });
+      } catch (e) {
+        console.error("Error en guardarSucursalesMasivo:", e.message);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+
     return res.status(400).json({ error: "Acción desconocida: " + action });
   } catch (e) {
     console.error(e);

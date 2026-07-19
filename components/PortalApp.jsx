@@ -2490,7 +2490,8 @@ function AdminPortal({ session, onLogout }) {
 
   const [enviandoAvisosDe, setEnviandoAvisosDe] = useState(null); // código del cliente en curso
 
-  const [estadoCliente, setEstadoCliente] = useState({}); // {code: "gris"|"verde"|"amarillo"|"rojo"}
+  const [estadoCliente, setEstadoCliente] = useState({});
+  const [mostrarCargaSucursales, setMostrarCargaSucursales] = useState(false); // {code: "gris"|"verde"|"amarillo"|"rojo"}
 
   const cambiarEstadoCliente = async (code, nuevoEstado) => {
     setEstadoCliente((prev) => ({ ...prev, [code]: nuevoEstado }));
