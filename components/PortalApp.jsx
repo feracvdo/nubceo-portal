@@ -1441,6 +1441,8 @@ function TabSucursales({ data, meta, persist, act, saving }) {
   const [resultado, setResultado] = useState(null);
   const [cuitUnico, setCuitUnico] = useState("");
   const [fileMsg, setFileMsg] = useState("");
+  const [mostrarModalCarga, setMostrarModalCarga] = useState(false);
+  const [cargandoSucursales, setCargandoSucursales] = useState(false);
   const arch = data.sucursalesArchivo;
 
   const onFile = (e) => {
@@ -1462,9 +1464,64 @@ function TabSucursales({ data, meta, persist, act, saving }) {
     }, "Generó el template de sucursales validado (" + resultado.salida.length + " filas" + (resultado.noIdentificadas ? ", " + resultado.noIdentificadas + " no identificadas" : "") + ")");
   };
 
+  const guardarSucursalesMasivas = async (sucursales) => {
+    setCargandoSucursales(true);
+    try {
+      const resp = await fetch("/api/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "guardarSucursalesMasivo",
+          sessionCode: meta.sessionCode,
+          code: data.codigo,
+          sucursales: sucursales,
+          who: "Cliente"
+        }),
+      });
+      const json = await resp.json();
+      if (!resp.ok) throw new Error(json.error);
+      alert(json.mensaje || "Sucursales guardadas correctamente");
+      setMostrarModalCarga(false);
+      if (act) act("reloadCliente");
+    } catch (e) {
+      alert("Error al guardar sucursales: " + e.message);
+    } finally {
+      setCargandoSucursales(false);
+    }
+  };
   return (
     <div style={{ display: "grid", gap: 16 }}>
-      <Card>
+            <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>
+              ✨ Nuevo: Cargá sucursales desde archivo
+            </h2>
+            <p style={{ fontSize: 13.5, color: T.n600, margin: 0, lineHeight: 1.55 }}>
+              Tutorial paso a paso con validación automática. Descargá el template desde Nubceo, 
+              completá con tus datos y subí aquí.
+            </p>
+          </div>
+          <button
+            onClick={() => setMostrarModalCarga(true)}
+            style={{
+              background: T.primary,
+              color: "#fff",
+              border: "none",
+              padding: "10px 20px",
+              borderRadius: 8,
+              fontWeight: 600,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              fontSize: 14,
+            }}
+          >
+            📤 Cargar archivo
+          </button>
+        </div>
+      </Card>
+
+<Card>
         <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>Cargá tu listado interno de sucursales</h2>
         <p style={{ fontSize: 13.5, color: T.n600, lineHeight: 1.55, margin: "0 0 14px" }}>
           No hace falta que armes el template de Nubceo a mano: subí el listado como lo tengas internamente y el portal lo convierte y valida. Tu archivo tiene que tener estas columnas (los nombres pueden variar, las detectamos solas): <b>número de comercio</b> (el que asigna cada procesadora), <b>procesadora</b>, <b>identificador del punto de venta</b> (tu código interno de PDV), <b>nombre de la sucursal</b> y, si tenés más de un CUIT, <b>a qué empresa corresponde</b>.
@@ -1637,6 +1694,8 @@ function SeccionCsv({ data, persist, titulo }) {
   const [valResultado, setValResultado] = useState(null);
   const [fixContable, setFixContable] = useState(true);
   const [fileMsg, setFileMsg] = useState("");
+  const [mostrarModalCarga, setMostrarModalCarga] = useState(false);
+  const [cargandoSucursales, setCargandoSucursales] = useState(false);
 
   const onFile = (e) => {
     const f = e.target.files && e.target.files[0];
@@ -3735,5 +3794,13 @@ function AdminPrueba({ etapa, titulo, prueba, onSave }) {
         <Btn size="sm" variant="secondary" onClick={() => onSave(etapa, status, notas)}>Guardar status</Btn>
       </div>
     </Card>
+
+      {mostrarModalCarga && (
+        <CargaSucursales
+          cliente={data}
+          onClose={() => setMostrarModalCarga(false)}
+          onGuardar={guardarSucursalesMasivas}
+        />
+      )}
   );
 }
