@@ -1463,7 +1463,6 @@ function TabSucursales({ data, meta, persist, act, saving }) {
       sucursales: resultado.salida.map((s) => ({ nombre: s.name, direccion: "", localidad: "", comercio: s.platformBranchReference })),
     }, "Generó el template de sucursales validado (" + resultado.salida.length + " filas" + (resultado.noIdentificadas ? ", " + resultado.noIdentificadas + " no identificadas" : "") + ")");
   };
-
   const guardarSucursalesMasivas = async (sucursales) => {
     setCargandoSucursales(true);
     try {
@@ -1489,39 +1488,23 @@ function TabSucursales({ data, meta, persist, act, saving }) {
       setCargandoSucursales(false);
     }
   };
+
   return (
     <div style={{ display: "grid", gap: 16 }}>
-            <Card>
+      
+      <Card>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
           <div style={{ flex: 1 }}>
-            <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>
-              ✨ Nuevo: Cargá sucursales desde archivo
-            </h2>
-            <p style={{ fontSize: 13.5, color: T.n600, margin: 0, lineHeight: 1.55 }}>
-              Tutorial paso a paso con validación automática. Descargá el template desde Nubceo, 
-              completá con tus datos y subí aquí.
-            </p>
+            <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>✨ Cargá sucursales desde archivo</h2>
+            <p style={{ fontSize: 13.5, color: T.n600, margin: 0, lineHeight: 1.55 }}>Tutorial con validación automática</p>
           </div>
-          <button
-            onClick={() => setMostrarModalCarga(true)}
-            style={{
-              background: T.primary,
-              color: "#fff",
-              border: "none",
-              padding: "10px 20px",
-              borderRadius: 8,
-              fontWeight: 600,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-              fontSize: 14,
-            }}
-          >
-            📤 Cargar archivo
-          </button>
+          <button onClick={() => setMostrarModalCarga(true)} style={{ background: T.primary, color: "#fff", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>📤 Cargar</button>
         </div>
       </Card>
 
-<Card>
+      {mostrarModalCarga && <CargaSucursales cliente={data} onClose={() => setMostrarModalCarga(false)} onGuardar={guardarSucursalesMasivas} />}
+
+      <Card>
         <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>Cargá tu listado interno de sucursales</h2>
         <p style={{ fontSize: 13.5, color: T.n600, lineHeight: 1.55, margin: "0 0 14px" }}>
           No hace falta que armes el template de Nubceo a mano: subí el listado como lo tengas internamente y el portal lo convierte y valida. Tu archivo tiene que tener estas columnas (los nombres pueden variar, las detectamos solas): <b>número de comercio</b> (el que asigna cada procesadora), <b>procesadora</b>, <b>identificador del punto de venta</b> (tu código interno de PDV), <b>nombre de la sucursal</b> y, si tenés más de un CUIT, <b>a qué empresa corresponde</b>.
@@ -1694,8 +1677,6 @@ function SeccionCsv({ data, persist, titulo }) {
   const [valResultado, setValResultado] = useState(null);
   const [fixContable, setFixContable] = useState(true);
   const [fileMsg, setFileMsg] = useState("");
-  const [mostrarModalCarga, setMostrarModalCarga] = useState(false);
-  const [cargandoSucursales, setCargandoSucursales] = useState(false);
 
   const onFile = (e) => {
     const f = e.target.files && e.target.files[0];
@@ -2023,7 +2004,7 @@ const ImageUpload = ({ value, onChange, label, round }) => {
 };
 
 // ─── Tablero tipo agile: columnas = fases del proyecto, tarjetas arrastrables ───
-function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoAvisosDe, estadoCliente = {}, onCambiarEstado }) {
+function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoAvisosDe }) {
   const [arrastrando, setArrastrando] = useState(null); // código del cliente en drag
   const [sobreCol, setSobreCol] = useState(null);
   const scrollRef = useRef(null);
@@ -2065,7 +2046,6 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
               {items.map((cli) => {
                 const pct = Math.round((cli.completados / cli.totalPasos) * 100);
                 const alertas = detectarAlertas(cli.relevamiento);
-                const estadoActual = estadoCliente[cli.code] || "gris";
                 return (
                   <div
                     key={cli.code}
@@ -2085,7 +2065,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                       <div style={{ fontSize: 13, fontWeight: 700, color: T.n900, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cli.name}</div>
                     </div>
                     <div style={{ height: 4, borderRadius: 100, background: T.n100, overflow: "hidden", marginBottom: 7 }}>
-                      <div style={{ width: "100%", height: "100%", background: estadoActual === "verde" ? "#22c55e" : estadoActual === "amarillo" ? "#eab308" : estadoActual === "rojo" ? "#ef4444" : "#d1d5db", borderRadius: 100 }} />
+                      <div style={{ width: pct + "%", height: "100%", background: pct === 100 ? "#22c55e" : T.primary, borderRadius: 100 }} />
                     </div>
                     <div style={{ fontSize: 10.5, color: T.n400, marginBottom: 6 }}>
                       {cli.implementadorNombre || "Sin implementador/a"}{cli.desarrolladorNombre ? " · " + cli.desarrolladorNombre + " (dev)" : ""}
@@ -2097,27 +2077,15 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                       {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
                       {cli.notasCount > 0 && <Badge tone="gray">📝 {cli.notasCount}</Badge>}
                     </div>
-                    {onCambiarEstado && (
+                    {onEnviarAvisos && (
                       <div
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const colores = ["gris", "verde", "amarillo", "rojo"];
-                          const idx = colores.indexOf(estadoActual);
-                          const siguiente = colores[(idx + 1) % colores.length];
-                          onCambiarEstado(cli.code, siguiente);
-                        }}
-                        style={{
-                          marginTop: 12,
-                          height: 10,
-                          borderRadius: "0 0 10px 10px",
-                          background: estadoActual === "verde" ? "#22c55e" : estadoActual === "amarillo" ? "#eab308" : estadoActual === "rojo" ? "#ef4444" : "#d1d5db",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                        }}
-                        title="Click para cambiar estado"
-                      />
+                        onClick={(e) => { e.stopPropagation(); onEnviarAvisos(cli.code); }}
+                        title="Mandar ahora el recordatorio o aviso de incumplimiento que corresponda, si hay alguno pendiente"
+                        style={{ marginTop: 8, paddingTop: 7, borderTop: "1px solid " + T.n100, fontSize: 11, fontWeight: 600, color: enviandoAvisosDe === cli.code ? T.n400 : T.primary, cursor: enviandoAvisosDe === cli.code ? "default" : "pointer" }}
+                      >
+                        {enviandoAvisosDe === cli.code ? "Enviando…" : "✉️ Enviar avisos pendientes"}
+                      </div>
                     )}
-
                   </div>
                 );
               })}
@@ -2548,23 +2516,6 @@ function AdminPortal({ session, onLogout }) {
   };
 
   const [enviandoAvisosDe, setEnviandoAvisosDe] = useState(null); // código del cliente en curso
-
-  const [estadoCliente, setEstadoCliente] = useState({});
-  const [mostrarCargaSucursales, setMostrarCargaSucursales] = useState(false); // {code: "gris"|"verde"|"amarillo"|"rojo"}
-
-  const cambiarEstadoCliente = async (code, nuevoEstado) => {
-    setEstadoCliente((prev) => ({ ...prev, [code]: nuevoEstado }));
-    try {
-      await api("setEstadoCliente", { sessionCode: sc, code, estado: nuevoEstado, who: session.who });
-    } catch (e) {
-      flash("Error al guardar estado: " + e.message);
-      setEstadoCliente((prev) => {
-        const copy = { ...prev };
-        delete copy[code];
-        return copy;
-      });
-    }
-  };
   const enviarAvisosPendientes = async (code) => {
     setEnviandoAvisosDe(code);
     try {
@@ -3330,7 +3281,6 @@ function AdminPortal({ session, onLogout }) {
                 <div style={{ display: "grid", gap: 10 }}>
                   {clientesVisibles.map((cli) => {
                     const alertas = detectarAlertas(cli.relevamiento);
-                const estadoActual = estadoCliente[cli.code] || "gris";
                     const pendRv = !cli.relevamientoEnviado;
                     const pct = Math.round((cli.completados / cli.totalPasos) * 100);
                     return (
@@ -3397,7 +3347,7 @@ function AdminPortal({ session, onLogout }) {
                 </select>
                 {(busqueda || filtroImpl) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); }}>Limpiar filtros</Btn>}
               </div>
-              <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} onEnviarAvisos={enviarAvisosPendientes} enviandoAvisosDe={enviandoAvisosDe} estadoCliente={estadoCliente} onCambiarEstado={cambiarEstadoCliente} />
+              <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} onEnviarAvisos={enviarAvisosPendientes} enviandoAvisosDe={enviandoAvisosDe} />
         {/* Panel lateral rápido del tablero: se abre al hacer clic en una tarjeta */}
         {panelCliente && (
           <div onClick={() => setPanelCliente(null)} style={{ position: "fixed", inset: 0, background: "rgba(13,17,32,0.4)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
@@ -3794,13 +3744,5 @@ function AdminPrueba({ etapa, titulo, prueba, onSave }) {
         <Btn size="sm" variant="secondary" onClick={() => onSave(etapa, status, notas)}>Guardar status</Btn>
       </div>
     </Card>
-
-      {mostrarModalCarga && (
-        <CargaSucursales
-          cliente={data}
-          onClose={() => setMostrarModalCarga(false)}
-          onGuardar={guardarSucursalesMasivas}
-        />
-      )}
   );
 }
