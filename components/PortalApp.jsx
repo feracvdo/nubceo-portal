@@ -1995,7 +1995,38 @@ function TabSucursales({ data, meta, persist, act, saving }) {
 function TabConexion({ data, persist, session, setAll }) {
   const rv = data.relevamiento || {};
   const via = rv.d1 === "api" || rv.d1 === "csv" || rv.d1 === "ambos" ? rv.d1 : null;
-  const elegir = (v) => v !== via && persist({ relevamiento: { ...rv, d1: v } }, "Definió la vía de conexión: " + (v === "ambos" ? "AMBOS (un PDV por API y otro por CSV)" : v.toUpperCase()));
+  
+  // CORREGIDA: Usar saveTipoConexion directamente en lugar de persist/saveClient
+  // Esto evita la validación restrictiva "relevamiento ya enviado"
+  const elegir = async (v) => {
+    if (v === via) return; // No hacer nada si es el mismo
+    
+    try {
+      const res = await fetch("/api/portal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "saveTipoConexion",
+          code: data.codigo,
+          sessionCode: session?.codigo,
+          tipoConexion: v,
+        }),
+      });
+
+      if (!res.ok) {
+        const json = await res.json();
+        console.error("Error al cambiar tipo de conexión:", json.error);
+        alert("Error: " + json.error);
+        return;
+      }
+
+      // Refrescar datos del cliente
+      setAll({});
+    } catch (err) {
+      console.error("Error de conexión:", err.message);
+      alert("Error al cambiar tipo de conexión: " + err.message);
+    }
+  };
 
   const OPCIONES = [
     ["api", "Por API", "Tus sistemas envían las ventas automáticamente. Requiere un desarrollo (tuyo, de tu proveedor de PDV o cotizado con Nubceo), pero después no hay tarea manual."],
