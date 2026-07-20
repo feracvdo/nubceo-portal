@@ -3,6 +3,7 @@ import { CONECTORES, ESTADOS_PROCESADORA, DOCS, COLUMNAS_OBLIGATORIAS, TEMPLATE_
 import { validarVentas, validarTabla, exportarNubceo } from "../lib/validadorVentas";
 import { convertirSucursales, exportarTemplateSucursales } from "../lib/sucursalesTemplate";
 import MailsCard from "./MailsCard";
+import CargaSucursales from "./CargaSucursales";
 
 // ─── Tokens de marca Nubceo (tema C — Soft, portal de usuario) ───
 const T = {
@@ -2332,6 +2333,7 @@ function AdminPortal({ session, onLogout }) {
   const [tableroFull, setTableroFull] = useState(false);
   const [panelCliente, setPanelCliente] = useState(null); // código del cliente en el panel lateral del tablero
   const [panelData, setPanelData] = useState(null);
+  const [mostrarCargaSucursales, setMostrarCargaSucursales] = useState(false);
   const tableroRef = useRef(null);
   const sc = session.code;
 
