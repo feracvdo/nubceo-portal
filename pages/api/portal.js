@@ -292,6 +292,45 @@ export default async function handler(req, res) {
       return res.json(await assemble(cli));
     }
 
+    if (action === "saveTipoConexion") {
+      // Handler ESPECIAL para cambiar solo d1 (tipo de conexión: api/csv/ambos)
+      // Permite cambiar la vía incluso después de haber enviado el relevamiento
+      // porque d1 es un dato que se puede modificar sin afectar el rest del relevamiento
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      
+      const tipoConexion = req.body.tipoConexion; // "api" | "csv" | "ambos"
+      if (!["api", "csv", "ambos"].includes(tipoConexion)) {
+        return res.status(400).json({ error: "Tipo de conexión inválido" });
+      }
+
+      // Obtener el relevamiento actual
+      const { data: relevActual } = await db.from("relevamientos")
+        .select("respuestas")
+        .eq("cliente_id", cli.id)
+        .maybeSingle();
+
+      // Actualizar solo d1 dentro del JSON respuestas
+      const respuestasActualizadas = relevActual?.respuestas || {};
+      respuestasActualizadas.d1 = tipoConexion;
+
+      // Guardar sin validación restrictiva de "relevamiento ya enviado"
+      await db.from("relevamientos").upsert(
+        {
+          cliente_id: cli.id,
+          respuestas: respuestasActualizadas,
+          actualizado_at: new Date().toISOString(),
+        },
+        { onConflict: "cliente_id" }
+      );
+
+      // Log de auditoría
+      const nombreTipo = tipoConexion === "ambos" ? "AMBOS (API + CSV)" : tipoConexion.toUpperCase();
+      await addHistory(cli.id, who || "Cliente", `Definió la vía de conexión: ${nombreTipo}`);
+
+      return res.json(await assemble(cli));
+    }
+
     if (action === "saveClient") {
       const cli = await getCliente(cc);
       if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });

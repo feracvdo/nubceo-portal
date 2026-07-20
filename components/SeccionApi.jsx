@@ -51,13 +51,11 @@ const fmtDate = (iso) => {
 };
 
 /**
- * SeccionApi Mejorada
+ * SeccionApi Mejorada - CORREGIDA
  * 
- * Flujo:
- * 1. Si NO hay credenciales (o son placeholder) → mostrar guía paso a paso
- * 2. Si SÍ hay credenciales válidas → mostrar credenciales + opción de cambiar
- * 3. Validación client-side básica (must start with "nub_sbx_", secret min 40 chars)
- * 4. Backend guarda y audita
+ * Ahora usa el handler "saveTipoConexion" para cambiar d1
+ * (tipo de conexión) sin pasar por la validación restrictiva
+ * de "relevamiento ya enviado"
  */
 function SeccionApi({ data, session, setAll, titulo }) {
   const [copied, setCopied] = useState("");
@@ -118,6 +116,7 @@ function SeccionApi({ data, session, setAll, titulo }) {
           clienteId: data.id,
           key: apiKeyInput.trim(),
           secret: apiSecretInput.trim(),
+          sessionCode: session?.codigo,
         }),
       });
 
@@ -213,14 +212,10 @@ function SeccionApi({ data, session, setAll, titulo }) {
                 </a>
               </li>
               <li>
-                Andá a <b>Configuración</b> (icono de engranaje arriba a la derecha)
+                Andá a <b>Mi negocio</b> → <b>API Keys</b>
               </li>
               <li>
-                Buscá la sección <b>Integraciones</b> o <b>API Keys</b>
-              </li>
-              <li>
-                Hacé click en <b>+ Crear nueva API Key</b> (elegí{" "}
-                <u>sandbox</u> para pruebas)
+                Hacé click en <b>+ Crear API key</b>
               </li>
               <li>
                 Dale un nombre descriptivo, ej: <i>"Portal de Implementación"</i>
@@ -378,7 +373,7 @@ function SeccionApi({ data, session, setAll, titulo }) {
             {c && (
               <Badge tone={c.origen === "usuario" ? "info" : "green"}>
                 {c.origen === "usuario"
-                  ? `Ingresadas ${fmtDate(c.ingresado_at)}`
+                  ? `Ingresadas ${fmtDate(c.ingresadoAt)}`
                   : `Generadas ${fmtDate(c.createdAt)}`}
               </Badge>
             )}
