@@ -1237,8 +1237,20 @@ function TabMiEmpresa({ data, meta, act, persist, saving }) {
     setTimeout(() => setInvMsg(""), 2500);
   };
 
-  return (
-    <div style={{ display: "grid", gap: SP.lg }}>
+ return (
+    <div style={{ display: "grid", gap: 16 }}>
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>✨ Cargá sucursales desde archivo</h2>
+            <p style={{ fontSize: 13.5, color: T.n600, margin: 0 }}>Tutorial con validación automática</p>
+          </div>
+          <button onClick={() => setMostrarCargaSucursales(true)} style={{ background: T.primary, color: "#fff", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>📤 Cargar</button>
+        </div>
+      </Card>
+
+      {mostrarCargaSucursales && <CargaSucursales cliente={data} onClose={() => setMostrarCargaSucursales(false)} onGuardar={(sucursales) => { fetch("/api/portal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "guardarSucursalesMasivo", sessionCode: meta.sessionCode, code: data.codigo, sucursales, who: "Cliente" }) }).then(r => r.json()).then(j => { alert(j.mensaje); setMostrarCargaSucursales(false); }).catch(e => alert("Error: " + e.message)); } } />}
+
       <Card>
         <SectionHeader title="Datos de la empresa" subtitle="Podés editar todo lo de acá abajo salvo el tenant, que es un dato técnico fijo de tu cuenta y no se puede cambiar desde el portal." />
         <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 18, flexWrap: "wrap" }}>
@@ -1504,6 +1516,18 @@ function TabSucursales({ data, meta, persist, act, saving }) {
       </Card>
 
       {mostrarModalCarga && <CargaSucursales cliente={data} onClose={() => setMostrarModalCarga(false)} onGuardar={guardarSucursalesMasivas} />}
+
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <div style={{ flex: 1 }}>
+            <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>✨ Cargá sucursales desde archivo</h2>
+            <p style={{ fontSize: 13.5, color: T.n600, margin: 0 }}>Tutorial con validación automática</p>
+          </div>
+          <button onClick={() => setMostrarCargaSucursales(true)} style={{ background: T.primary, color: "#fff", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>📤 Cargar</button>
+        </div>
+      </Card>
+
+      {mostrarCargaSucursales && <CargaSucursales cliente={data} onClose={() => setMostrarCargaSucursales(false)} onGuardar={(sucursales) => { fetch("/api/portal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "guardarSucursalesMasivo", sessionCode: meta.sessionCode, code: data.codigo, sucursales, who: "Cliente" }) }).then(r => r.json()).then(j => { alert(j.mensaje); setMostrarCargaSucursales(false); }).catch(e => alert("Error: " + e.message)); } } />}
 
       <Card>
         <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>Cargá tu listado interno de sucursales</h2>
