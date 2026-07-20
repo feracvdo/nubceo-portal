@@ -2007,8 +2007,8 @@ function TabConexion({ data, persist, session, setAll }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "saveTipoConexion",
-          code: data.codigo,
-          sessionCode: session?.codigo,
+          code: data.code,
+          sessionCode: session?.sessionCode,
           tipoConexion: v,
         }),
       });
