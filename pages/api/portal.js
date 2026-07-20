@@ -38,26 +38,9 @@ async function getCalendarConnection(responsable) {
   }
 }
 
-// Genera credenciales de API: si hay endpoint de Nubceo configurado lo consume;
-// si no, genera placeholders sandbox (se reemplazan cuando devs exponga el generador).
-async function generarCredenciales(cliente) {
-  const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "nubceo").maybeSingle();
-  const keygenUrl = process.env.NUBCEO_KEYGEN_URL || cfgRow?.valor?.keygenUrl;
-  if (keygenUrl) {
-    try {
-      const res = await fetch(keygenUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(process.env.NUBCEO_KEYGEN_TOKEN ? { Authorization: "Bearer " + process.env.NUBCEO_KEYGEN_TOKEN } : {}) },
-        body: JSON.stringify({ cliente: cliente.nombre, tenant: cliente.tenant_productivo, entorno: "sandbox" }),
-      });
-      if (res.ok) {
-        const j = await res.json();
-        if (j.key && j.secret) return { api_key: j.key, api_secret: j.secret, origen: "nubceo" };
-      }
-    } catch (e) { /* cae al placeholder */ }
-  }
-  return { api_key: "nub_sbx_" + rnd(24), api_secret: rnd(48), origen: "placeholder" };
-}
+// DEPRECATED: generarCredenciales() removida
+// Las credenciales ahora se ingresan manualmente por el usuario desde su cuenta Nubceo
+// Ver handler "guardarCredenciales" más abajo para cómo se persisten
 
 
 function codigoEquipoValido(codigo) {
@@ -1068,14 +1051,11 @@ export default async function handler(req, res) {
     }
 
     if (action === "regenCreds") {
-      const cli = await getCliente(cc);
-      const creds = await generarCredenciales(cli);
-      await db.from("credenciales_api").upsert(
-        { cliente_id: cli.id, entorno: "sandbox", api_key: creds.api_key, api_secret: creds.api_secret, generado_at: new Date().toISOString() },
-        { onConflict: "cliente_id,entorno" }
-      );
-      await addHistory(cli.id, who || "Equipo", "Regeneró las credenciales de API sandbox del cliente");
-      return res.json(await assemble(cli));
+      // DEPRECATED: Ya no se regeneran credenciales desde el portal
+      // El usuario debe generar nuevas en su cuenta Nubceo e ingresarlas con "guardarCredenciales"
+      return res.status(400).json({ 
+        error: "Este botón ya no está disponible. Para generar nuevas credenciales: 1) Abrí app.nubceo.com 2) Mi negocio → API keys 3) Creá una nueva 4) Pegála en el portal" 
+      });
     }
 
 
@@ -1162,6 +1142,166 @@ export default async function handler(req, res) {
       }
     }
 
+
+    if (action === "guardarCredenciales") {
+      try {
+        // ──── 1. VALIDAR AUTENTICACIÓN ────
+        const { sessionCode } = req.body;
+        if (!sessionCode) {
+          return res.status(401).json({ error: "Usuario no autenticado" });
+        }
+
+        // Obtener datos del usuario logueado
+        const { data: usuario, error: usuarioErr } = await db
+          .from("equipo")
+          .select("id, nombre, email, es_superadmin")
+          .eq("codigo", sessionCode)
+          .maybeSingle();
+
+        if (!usuario) {
+          return res.status(401).json({ error: "Usuario no encontrado" });
+        }
+
+        // ──── 2. VALIDAR INPUTS ────
+        const { clienteId, key, secret } = req.body;
+
+        if (!clienteId) {
+          return res.status(400).json({ error: "clienteId es requerido" });
+        }
+
+        if (!key || typeof key !== "string") {
+          return res.status(400).json({ error: "API Key no puede estar vacía" });
+        }
+
+        if (!secret || typeof secret !== "string") {
+          return res.status(400).json({ error: "Secret no puede estar vacío" });
+        }
+
+        // Validaciones de formato
+        const keyTrimmed = key.trim();
+        const secretTrimmed = secret.trim();
+
+        if (!keyTrimmed.startsWith("nub_sbx_")) {
+          return res.status(400).json({
+            error: "API Key debe empezar con 'nub_sbx_'",
+            hint: "Asegurate de copiar la completa desde Nubceo",
+          });
+        }
+
+        if (keyTrimmed.length < 25) {
+          return res.status(400).json({
+            error: "API Key parece incompleta",
+            hint: "Probá copiar nuevamente desde Nubceo",
+          });
+        }
+
+        if (secretTrimmed.length < 40) {
+          return res.status(400).json({
+            error: "Secret parece muy corto (mínimo 40 caracteres)",
+            hint: "Probá copiar nuevamente desde Nubceo",
+          });
+        }
+
+        // ──── 3. VALIDAR CLIENTE ────
+        const { data: cliente, error: clienteErr } = await db
+          .from("clientes")
+          .select("id, nombre, implementador_id")
+          .eq("id", clienteId)
+          .maybeSingle();
+
+        if (!cliente) {
+          return res.status(404).json({ error: "Cliente no encontrado" });
+        }
+
+        // Validar permisos
+        const esImplementador = cliente.implementador_id === usuario.id;
+        const esSuperadmin = usuario.es_superadmin === true;
+
+        if (!esImplementador && !esSuperadmin) {
+          return res.status(403).json({
+            error: "No tenés permiso para modificar las credenciales de este cliente",
+          });
+        }
+
+        // ──── 4. GUARDAR CREDENCIALES ────
+        const ahora = new Date().toISOString();
+
+        const { data: credsData, error: credsErr } = await db
+          .from("credenciales_api")
+          .upsert(
+            {
+              cliente_id: clienteId,
+              entorno: "sandbox",
+              api_key: keyTrimmed,
+              api_secret: secretTrimmed,
+              origen: "usuario",
+              ingresado_por: usuario.id,
+              ingresado_at: ahora,
+              actualizado_at: ahora,
+            },
+            {
+              onConflict: "cliente_id,entorno",
+            }
+          );
+
+        if (credsErr) {
+          console.error("Error al upsert credenciales:", credsErr);
+          return res.status(500).json({
+            error: "Error al guardar credenciales en la BD",
+            detail: credsErr.message,
+          });
+        }
+
+        // ──── 5. REGISTRAR ACTIVIDAD ────
+        await db.from("historial").insert({
+          cliente_id: clienteId,
+          quien: usuario.id,
+          texto: `Ingresó credenciales API sandbox (${keyTrimmed.substring(0, 15)}...)`,
+          creado_at: ahora,
+        });
+
+        // ──── 6. REGISTRAR AUDITORÍA (OPCIONAL) ────
+        try {
+          await db.from("auditoria_credenciales").insert({
+            cliente_id: clienteId,
+            usuario_id: usuario.id,
+            accion: "ingresar_credenciales",
+            detalles: {
+              api_key_inicio: keyTrimmed.substring(0, 15) + "...",
+              api_key_longitud: keyTrimmed.length,
+              secret_longitud: secretTrimmed.length,
+              ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress,
+              user_agent: req.headers["user-agent"],
+              timestamp: ahora,
+            },
+            creado_at: ahora,
+          });
+        } catch (auditErr) {
+          console.warn("Auditoría no disponible:", auditErr.message);
+        }
+
+        // ──── 7. RESPONDER ────
+        return res.json({
+          ok: true,
+          message: "Credenciales guardadas correctamente",
+          data: {
+            clienteId,
+            cliente: cliente.nombre,
+            entorno: "sandbox",
+            ingresadoEn: ahora,
+            ingresadoPor: usuario.nombre,
+            origen: "usuario",
+          },
+        });
+
+      } catch (err) {
+        console.error("Error en guardarCredenciales:", err);
+        return res.status(500).json({
+          error: "Error al procesar tu solicitud",
+          detail: process.env.NODE_ENV === "development" ? err.message : undefined,
+        });
+      }
+    }
 
     return res.status(400).json({ error: "Acción desconocida: " + action });
   } catch (e) {
