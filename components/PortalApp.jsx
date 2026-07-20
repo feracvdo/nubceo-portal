@@ -1451,6 +1451,7 @@ const EJEMPLO_SUC = [
 ];
 
 function TabSucursales({ data, meta, persist, act, saving }) {
+  const [mostrarCargaSucursales, setMostrarCargaSucursales] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [cuitUnico, setCuitUnico] = useState("");
   const [fileMsg, setFileMsg] = useState("");
