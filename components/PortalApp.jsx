@@ -3,7 +3,6 @@ import { CONECTORES, ESTADOS_PROCESADORA, DOCS, COLUMNAS_OBLIGATORIAS, TEMPLATE_
 import { validarVentas, validarTabla, exportarNubceo } from "../lib/validadorVentas";
 import { convertirSucursales, exportarTemplateSucursales } from "../lib/sucursalesTemplate";
 import MailsCard from "./MailsCard";
-import CargaSucursales from "./CargaSucursales";
 
 // ─── Tokens de marca Nubceo (tema C — Soft, portal de usuario) ───
 const T = {
@@ -1237,20 +1236,8 @@ function TabMiEmpresa({ data, meta, act, persist, saving }) {
     setTimeout(() => setInvMsg(""), 2500);
   };
 
- return (
-    <div style={{ display: "grid", gap: 16 }}>
-      <Card>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-          <div style={{ flex: 1 }}>
-            <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>✨ Cargá sucursales desde archivo</h2>
-            <p style={{ fontSize: 13.5, color: T.n600, margin: 0 }}>Tutorial con validación automática</p>
-          </div>
-          <button onClick={() => setMostrarCargaSucursales(true)} style={{ background: T.primary, color: "#fff", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>📤 Cargar</button>
-        </div>
-      </Card>
-
-      {mostrarCargaSucursales && <CargaSucursales cliente={data} onClose={() => setMostrarCargaSucursales(false)} onGuardar={(sucursales) => { fetch("/api/portal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "guardarSucursalesMasivo", sessionCode: meta.sessionCode, code: data.codigo, sucursales, who: "Cliente" }) }).then(r => r.json()).then(j => { alert(j.mensaje); setMostrarCargaSucursales(false); }).catch(e => alert("Error: " + e.message)); } } />}
-
+  return (
+    <div style={{ display: "grid", gap: SP.lg }}>
       <Card>
         <SectionHeader title="Datos de la empresa" subtitle="Podés editar todo lo de acá abajo salvo el tenant, que es un dato técnico fijo de tu cuenta y no se puede cambiar desde el portal." />
         <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 18, flexWrap: "wrap" }}>
@@ -1451,34 +1438,109 @@ const EJEMPLO_SUC = [
 ];
 
 function TabSucursales({ data, meta, persist, act, saving }) {
-  const [mostrarCargaSucursales, setMostrarCargaSucursales] = useState(false);
-  const [resultado, setResultado] = useState(null);
-  const [cuitUnico, setCuitUnico] = useState("");
-  const [fileMsg, setFileMsg] = useState("");
-  const [mostrarModalCarga, setMostrarModalCarga] = useState(false);
-  const [cargandoSucursales, setCargandoSucursales] = useState(false);
-  const arch = data.sucursalesArchivo;
+  const [opcionSeleccionada, setOpcionSeleccionada] = useState(null); // "vinculada", "sin_vincular", "manual"
+  const [mostrarUpload, setMostrarUpload] = useState(false);
+  const [archivo, setArchivo] = useState(null);
+  const [errores, setErrores] = useState([]);
+  const [datosValidos, setDatosValidos] = useState([]);
+  const [cargando, setCargando] = useState(false);
 
-  const onFile = (e) => {
-    const f = e.target.files && e.target.files[0];
-    if (!f) return;
-    if (!/\.(csv|txt)$/i.test(f.name)) { setFileMsg("Subí el archivo como CSV o TXT (desde Excel: Guardar como → CSV). Si solo tenés Excel, avisale a tu implementador."); return; }
-    const r = new FileReader();
-    r.onerror = () => setFileMsg("No pudimos leer el archivo. Probá de nuevo.");
-    r.onload = () => { setFileMsg(""); setResultado(convertirSucursales(r.result, cuitUnico.trim())); };
-    r.readAsText(f);
+  const COLUMNAS_REQUERIDAS = [
+    "Nombre de la empresa",
+    "CUIT/RUT de la empresa",
+    "Código de sucursal PDV",
+    "Nombre de sucursal",
+    "Número de comercio",
+    "Nombre de comercio",
+    "Código de plataforma"
+  ];
+
+  const PLATAFORMAS_VALIDAS = [
+    "accor_ar", "amex_ar", "bilsantafe_ar", "cabal_ar", "firstdata_ar", "getnet_ar", "gocuotas_ar",
+    "italcred_ar", "mercadopago_ar", "naranja_ar", "pedidosya_ar", "prisma_ar", "rappi_ar", "tiendanube_ar",
+    "citi_co", "colpatria_co", "didi_co", "diners_co", "mercadopago_co", "rappi_co",
+    "amex_uy", "anda_uy", "cabal_uy", "cdirectos_uy", "creditel_uy", "dlocal_uy", "edenred_uy",
+    "firstdata_uy", "mercadopago_uy", "oca_uy", "passcard_uy", "pedidosya_uy", "rappi_uy", "visanet_uy"
+  ];
+
+  const validarArchivo = async (file) => {
+    if (!file) return;
+    setCargando(true);
+    setErrores([]);
+    setDatosValidos([]);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const datos = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+
+      if (datos.length === 0) {
+        setErrores([{ general: "El archivo está vacío" }]);
+        setCargando(false);
+        return;
+      }
+
+      const erroresDetectados = [];
+      const datosValidos_ = [];
+      const codigosPDVVistos = new Set();
+
+      datos.forEach((fila, idx) => {
+        const nroFila = idx + 2;
+        const erroresFila = [];
+
+        COLUMNAS_REQUERIDAS.forEach(col => {
+          const valor = (fila[col] || "").toString().trim();
+
+          if (!valor) {
+            erroresFila.push({ columna: col, error: "Celda vacía", fila: nroFila });
+            return;
+          }
+
+          if (col === "Código de sucursal PDV") {
+            if (codigosPDVVistos.has(valor)) {
+              erroresFila.push({ columna: col, error: "Código PDV duplicado", fila: nroFila });
+            } else {
+              codigosPDVVistos.add(valor);
+            }
+          }
+
+          if (col === "Código de plataforma") {
+            if (!PLATAFORMAS_VALIDAS.includes(valor.toLowerCase())) {
+              erroresFila.push({ columna: col, error: "Plataforma inválida", fila: nroFila });
+            }
+          }
+        });
+
+        if (erroresFila.length === 0) {
+          datosValidos_.push({
+            empresa: (fila["Nombre de la empresa"] || "").toString().trim(),
+            cuit: (fila["CUIT/RUT de la empresa"] || "").toString().trim(),
+            codigopdv: (fila["Código de sucursal PDV"] || "").toString().trim(),
+            nombre: (fila["Nombre de sucursal"] || "").toString().trim(),
+            numercomercio: (fila["Número de comercio"] || "").toString().trim(),
+            nombrecomercio: (fila["Nombre de comercio"] || "").toString().trim(),
+            plataforma: (fila["Código de plataforma"] || "").toString().trim().toLowerCase(),
+          });
+        } else {
+          erroresDetectados.push(...erroresFila);
+        }
+      });
+
+      if (erroresDetectados.length > 0) {
+        setErrores(erroresDetectados);
+      } else {
+        setDatosValidos(datosValidos_);
+      }
+    } catch (e) {
+      setErrores([{ general: "Error al leer archivo: " + e.message }]);
+    } finally {
+      setCargando(false);
+    }
   };
 
-  const confirmar = () => {
-    const contenido = exportarTemplateSucursales(resultado.salida);
-    descargar("sucursales-cabecera-nubceo.csv", contenido);
-    persist({
-      sucursalesArchivo: { name: "sucursales-cabecera-nubceo.csv", size: contenido.length, ts: now(), dataUrl: aDataUrl(contenido), validacion: { ok: true, items: [{ tipo: "ok", txt: resultado.salida.length + " sucursales en formato template" + (resultado.noIdentificadas ? " · " + resultado.noIdentificadas + " como 'No identificada'" : "") }] } },
-      sucursales: resultado.salida.map((s) => ({ nombre: s.name, direccion: "", localidad: "", comercio: s.platformBranchReference })),
-    }, "Generó el template de sucursales validado (" + resultado.salida.length + " filas" + (resultado.noIdentificadas ? ", " + resultado.noIdentificadas + " no identificadas" : "") + ")");
-  };
-  const guardarSucursalesMasivas = async (sucursales) => {
-    setCargandoSucursales(true);
+  const guardarSucursales = async () => {
+    setCargando(true);
     try {
       const resp = await fetch("/api/portal", {
         method: "POST",
@@ -1487,135 +1549,449 @@ function TabSucursales({ data, meta, persist, act, saving }) {
           action: "guardarSucursalesMasivo",
           sessionCode: meta.sessionCode,
           code: data.codigo,
-          sucursales: sucursales,
+          sucursales: datosValidos,
           who: "Cliente"
         }),
       });
       const json = await resp.json();
       if (!resp.ok) throw new Error(json.error);
       alert(json.mensaje || "Sucursales guardadas correctamente");
-      setMostrarModalCarga(false);
-      if (act) act("reloadCliente");
+      setOpcionSeleccionada(null);
+      setMostrarUpload(false);
+      setArchivo(null);
+      setDatosValidos([]);
     } catch (e) {
-      alert("Error al guardar sucursales: " + e.message);
+      alert("Error: " + e.message);
     } finally {
-      setCargandoSucursales(false);
+      setCargando(false);
     }
   };
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
       
+      {/* INTRODUCCIÓN */}
       <Card>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-          <div style={{ flex: 1 }}>
-            <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>✨ Cargá sucursales desde archivo</h2>
-            <p style={{ fontSize: 13.5, color: T.n600, margin: 0, lineHeight: 1.55 }}>Tutorial con validación automática</p>
-          </div>
-          <button onClick={() => setMostrarModalCarga(true)} style={{ background: T.primary, color: "#fff", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>📤 Cargar</button>
-        </div>
-      </Card>
-
-      {mostrarModalCarga && <CargaSucursales cliente={data} onClose={() => setMostrarModalCarga(false)} onGuardar={guardarSucursalesMasivas} />}
-
-      <Card>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-          <div style={{ flex: 1 }}>
-            <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>✨ Cargá sucursales desde archivo</h2>
-            <p style={{ fontSize: 13.5, color: T.n600, margin: 0 }}>Tutorial con validación automática</p>
-          </div>
-          <button onClick={() => setMostrarCargaSucursales(true)} style={{ background: T.primary, color: "#fff", border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>📤 Cargar</button>
-        </div>
-      </Card>
-
-      {mostrarCargaSucursales && <CargaSucursales cliente={data} onClose={() => setMostrarCargaSucursales(false)} onGuardar={(sucursales) => { fetch("/api/portal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "guardarSucursalesMasivo", sessionCode: meta.sessionCode, code: data.codigo, sucursales, who: "Cliente" }) }).then(r => r.json()).then(j => { alert(j.mensaje); setMostrarCargaSucursales(false); }).catch(e => alert("Error: " + e.message)); } } />}
-
-      <Card>
-        <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>Cargá tu listado interno de sucursales</h2>
-        <p style={{ fontSize: 13.5, color: T.n600, lineHeight: 1.55, margin: "0 0 14px" }}>
-          No hace falta que armes el template de Nubceo a mano: subí el listado como lo tengas internamente y el portal lo convierte y valida. Tu archivo tiene que tener estas columnas (los nombres pueden variar, las detectamos solas): <b>número de comercio</b> (el que asigna cada procesadora), <b>procesadora</b>, <b>identificador del punto de venta</b> (tu código interno de PDV), <b>nombre de la sucursal</b> y, si tenés más de un CUIT, <b>a qué empresa corresponde</b>.
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: T.n900, margin: "0 0 12px 0" }}>📚 Contexto: Carga de Sucursales</h2>
+        <p style={{ margin: "0 0 14px 0", fontSize: 13.5, color: T.n600, lineHeight: 1.6 }}>
+          La carga de sucursales en Nubceo cumple dos funciones importantes:
         </p>
-        <div style={{ overflowX: "auto", marginBottom: 14 }}>
-          <table style={{ borderCollapse: "collapse", fontSize: 12.5, minWidth: 560 }}>
-            <tbody>
-              {EJEMPLO_SUC.map((fila, i) => (
-                <tr key={i}>
-                  {fila.map((c, j) => (
-                    <td key={j} style={{ border: "1px solid " + T.n200, padding: "6px 10px", background: i === 0 ? T.primary50 : "#fff", fontWeight: i === 0 ? 700 : 400, color: i === 0 ? T.primary900 : T.n800 }}>{c}</td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <ul style={{ margin: "0 0 14px 20px", fontSize: 13.5, color: T.n600, lineHeight: 1.8 }}>
+          <li>Administrar y visualizar tus sucursales en reportes y pantallas del portal</li>
+          <li>Realizar una conciliación correcta entre tus ventas y liquidaciones de procesadoras</li>
+        </ul>
+        
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "16px 0 10px 0" }}>El Desafío: Dos Sistemas de Identificación Diferentes</h3>
+        
+        <div style={{ background: "#eef4ff", padding: 12, borderRadius: 6, marginBottom: 14 }}>
+          <p style={{ margin: "0 0 8px 0", fontWeight: 600, fontSize: 13, color: T.primary }}>Sistema de Procesadoras de Pago</p>
+          <p style={{ margin: 0, fontSize: 12.5, color: T.n600, lineHeight: 1.6 }}>
+            Identifican cada venta por número de comercio, asignando uno distinto para cada plataforma. Ej: 0000001 en Prisma, 0000002 en Mercado Pago
+          </p>
         </div>
-        <div style={{ fontSize: 13, color: T.n600, lineHeight: 1.55, background: T.primary50, border: "1px solid " + T.primary100, borderRadius: 8, padding: "10px 12px", marginBottom: 14 }}>
-          Fijate en el ejemplo: una misma sucursal (Casa Central) aparece una vez <b>por cada procesadora</b> con la que cobra, siempre con el mismo PDV. Las reglas que validamos: <b>sin celdas vacías</b>, <b>los códigos de PDV no pueden repetirse entre sucursales distintas</b>, <b>sin filas duplicadas</b>, y si hay números de comercio cuya procesadora no se identifica, van a una sucursal temporaria llamada <b>"No identificada"</b> para revisar con tu implementador.
+
+        <div style={{ background: "#f0fdf4", padding: 12, borderRadius: 6, marginBottom: 14 }}>
+          <p style={{ margin: "0 0 8px 0", fontWeight: 600, fontSize: 13, color: "#16a34a" }}>Sistema del Punto de Venta (PDV)</p>
+          <p style={{ margin: 0, fontSize: 12.5, color: T.n600, lineHeight: 1.6 }}>
+            Identifica cada venta con CUIT de la empresa + código de sucursal (tu código interno)
+          </p>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, alignItems: "end", marginBottom: 4 }}>
-          <div>
-            <Label>Si toda tu operación es de un solo CUIT, cargalo acá (opcional)</Label>
-            <Input placeholder="Ej: 30-11111111-1 — se completa en todas las filas" value={cuitUnico} onChange={(e) => setCuitUnico(e.target.value)} />
-          </div>
-          <label style={{ display: "inline-block" }}>
-            <input type="file" accept=".csv,.txt" onChange={onFile} style={{ display: "none" }} />
-            <span style={{ display: "inline-block", background: T.primary, color: "#fff", padding: "10px 20px", borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: "pointer" }}>Subir mi listado</span>
-          </label>
-        </div>
-        {fileMsg && <div style={{ marginTop: 10, background: T.errBg, color: T.errTx, fontSize: 13, padding: "9px 12px", borderRadius: 8 }}>{fileMsg}</div>}
+
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "16px 0 10px 0" }}>El Problema</h3>
+        <p style={{ margin: "0 0 14px 0", fontSize: 13.5, color: T.n600, lineHeight: 1.6 }}>
+          ¿Cómo sabe Nubceo en qué sucursal se realizó cada venta si las procesadoras y el PDV usan identificadores completamente diferentes?
+        </p>
+        <p style={{ margin: "0 0 14px 0", fontSize: 13.5, color: T.n600, lineHeight: 1.6, fontWeight: 600 }}>
+          Aquí entra la carga de sucursales cabecera. Es el mecanismo que vincula ambos sistemas.
+        </p>
+
+        <a 
+          href="https://docs.google.com/document/d/1kkFBEYqiOX66KgfjvxGXvzLdDtkbaAS7tWzK1PMjHcg/edit?tab=t.0"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-block",
+            background: T.primary,
+            color: "#fff",
+            padding: "10px 16px",
+            borderRadius: 6,
+            textDecoration: "none",
+            fontWeight: 600,
+            fontSize: 13,
+            marginTop: 8
+          }}
+        >
+          📖 Ver manual de carga completo
+        </a>
+        <p style={{ margin: "12px 0 0 0", fontSize: 12, color: T.n400, fontStyle: "italic" }}>
+          (Este paso se puede omitir si ya consultaste el manual)
+        </p>
       </Card>
 
-      {resultado && (
+      {/* TRES OPCIONES */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 12 }}>
+        
+        {/* OPCIÓN 1 */}
+        <div
+          onClick={() => setOpcionSeleccionada("vinculada")}
+          style={{
+            border: opcionSeleccionada === "vinculada" ? "2px solid " + T.primary : "1px solid " + T.n200,
+            borderRadius: 8,
+            padding: 16,
+            cursor: "pointer",
+            background: opcionSeleccionada === "vinculada" ? "#eef4ff" : "#fff",
+            transition: "all 0.2s"
+          }}
+        >
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: T.primary, margin: "0 0 8px 0" }}>✅ Opción 1: Plataformas VINCULADAS</h3>
+          <p style={{ fontSize: 12.5, color: T.n600, margin: "0 0 12px 0", lineHeight: 1.6 }}>
+            Ya vinculaste tus procesadoras
+          </p>
+          
+          {opcionSeleccionada === "vinculada" && (
+            <div style={{ background: "#fff", padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
+              <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}>📍 Ruta en Nubceo:</p>
+              <p style={{ margin: "0 0 12px 0", fontFamily: "monospace", color: T.n600, fontSize: 11 }}>
+                Dashboard → Mi negocio → Sucursales cabecera → Crear masivamente
+              </p>
+              
+              <p style={{ margin: "0 0 8px 0", fontWeight: 600, color: T.n900 }}>📄 Cómo funciona:</p>
+              <p style={{ margin: "0 0 12px 0", color: T.n600, lineHeight: 1.5 }}>
+                Descargá la plantilla con sucursales huérfanas (tiene los números de comercio, código de procesadora, nombre de empresa y CUIT, solo debes completar código de PDV y nombre de sucursal)
+              </p>
+
+              <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse", marginBottom: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f3f4f6" }}>
+                    <th style={{ padding: 6, border: "1px solid " + T.n200, textAlign: "left" }}>Empresa</th>
+                    <th style={{ padding: 6, border: "1px solid " + T.n200, textAlign: "left" }}>CUIT</th>
+                    <th style={{ padding: 6, border: "1px solid " + T.n200, textAlign: "left" }}>Código PDV</th>
+                    <th style={{ padding: 6, border: "1px solid " + T.n200, textAlign: "left" }}>Sucursal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: 6, border: "1px solid " + T.n200 }}>Empresa 1</td>
+                    <td style={{ padding: 6, border: "1px solid " + T.n200 }}>30123456789</td>
+                    <td style={{ padding: 6, border: "1px solid " + T.n200, color: T.primary, fontWeight: 600 }}>(COMPLETA)</td>
+                    <td style={{ padding: 6, border: "1px solid " + T.n200, color: T.primary, fontWeight: 600 }}>(COMPLETA)</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {!mostrarUpload && (
+                <button
+                  onClick={() => setMostrarUpload(true)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 16px",
+                    background: T.primary,
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    fontSize: 13
+                  }}
+                >
+                  📤 Usar esta opción
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* OPCIÓN 2 */}
+        <div
+          onClick={() => setOpcionSeleccionada("sin_vincular")}
+          style={{
+            border: opcionSeleccionada === "sin_vincular" ? "2px solid " + T.primary : "1px solid " + T.n200,
+            borderRadius: 8,
+            padding: 16,
+            cursor: "pointer",
+            background: opcionSeleccionada === "sin_vincular" ? "#eef4ff" : "#fff",
+            transition: "all 0.2s"
+          }}
+        >
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#dc2626", margin: "0 0 8px 0" }}>❌ Opción 2: SIN Plataformas</h3>
+          <p style={{ fontSize: 12.5, color: T.n600, margin: "0 0 12px 0", lineHeight: 1.6 }}>
+            Aún no vinculaste procesadoras
+          </p>
+          
+          {opcionSeleccionada === "sin_vincular" && (
+            <div style={{ background: "#fff", padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
+              <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}>📍 Ruta en Nubceo:</p>
+              <p style={{ margin: "0 0 12px 0", fontFamily: "monospace", color: T.n600, fontSize: 11 }}>
+                Dashboard → Mi negocio → Sucursales cabecera → Crear masivamente
+              </p>
+              
+              <p style={{ margin: "0 0 8px 0", fontWeight: 600, color: T.n900 }}>📄 Cómo funciona:</p>
+              <p style={{ margin: "0 0 12px 0", color: T.n600, lineHeight: 1.5 }}>
+                Descargá la plantilla vacía (todas las 7 columnas vacías) y completá CON TODA tu información manualmente
+              </p>
+
+              <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse", marginBottom: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f3f4f6" }}>
+                    <th style={{ padding: 6, border: "1px solid " + T.n200, textAlign: "left" }}>Empresa</th>
+                    <th style={{ padding: 6, border: "1px solid " + T.n200, textAlign: "left" }}>CUIT</th>
+                    <th style={{ padding: 6, border: "1px solid " + T.n200, textAlign: "left" }}>PDV</th>
+                    <th style={{ padding: 6, border: "1px solid " + T.n200, textAlign: "left" }}>Comercio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: 6, border: "1px solid " + T.n200, color: T.primary, fontWeight: 600 }}>(COMPLETA)</td>
+                    <td style={{ padding: 6, border: "1px solid " + T.n200, color: T.primary, fontWeight: 600 }}>(COMPLETA)</td>
+                    <td style={{ padding: 6, border: "1px solid " + T.n200, color: T.primary, fontWeight: 600 }}>(COMPLETA)</td>
+                    <td style={{ padding: 6, border: "1px solid " + T.n200, color: T.primary, fontWeight: 600 }}>(COMPLETA)</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {!mostrarUpload && (
+                <button
+                  onClick={() => setMostrarUpload(true)}
+                  style={{
+                    width: "100%",
+                    padding: "10px 16px",
+                    background: T.primary,
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    fontWeight: 600,
+                    fontSize: 13
+                  }}
+                >
+                  📤 Usar esta opción
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* OPCIÓN 3 */}
+        <div
+          onClick={() => setOpcionSeleccionada("manual")}
+          style={{
+            border: opcionSeleccionada === "manual" ? "2px solid " + T.primary : "1px solid " + T.n200,
+            borderRadius: 8,
+            padding: 16,
+            cursor: "pointer",
+            background: opcionSeleccionada === "manual" ? "#eef4ff" : "#fff",
+            transition: "all 0.2s"
+          }}
+        >
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#059669", margin: "0 0 8px 0" }}>🎯 Opción 3: Carga MANUAL</h3>
+          <p style={{ fontSize: 12.5, color: T.n600, margin: "0 0 12px 0", lineHeight: 1.6 }}>
+            Una sucursal a la vez en Nubceo
+          </p>
+          
+          {opcionSeleccionada === "manual" && (
+            <div style={{ background: "#fff", padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
+              <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}>📍 Ruta en Nubceo:</p>
+              <p style={{ margin: "0 0 12px 0", fontFamily: "monospace", color: T.n600, fontSize: 11 }}>
+                Dashboard → Mi negocio → Sucursales cabecera → Crear sucursal cabecera
+              </p>
+              
+              <p style={{ margin: "0 0 8px 0", fontWeight: 600, color: T.n900 }}>📄 Cómo funciona:</p>
+              <p style={{ margin: "0 0 12px 0", color: T.n600, lineHeight: 1.5 }}>
+                Ingresás a Nubceo directamente, clickeás "Crear sucursal cabecera", completás formulario con datos y asignás números de comercio manualmente. Repetís para cada sucursal.
+              </p>
+
+              <p style={{ margin: "0 0 12px 0", fontSize: 12, color: "#059669", fontWeight: 600 }}>
+                ✓ Ventaja: No necesitas Excel. Útil si tienes pocas sucursales.
+              </p>
+
+              <a
+                href="https://cash.nubceo.com/header-branches/create"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "inline-block",
+                  width: "100%",
+                  padding: "10px 16px",
+                  background: T.primary,
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  textDecoration: "none",
+                  textAlign: "center"
+                }}
+              >
+                🔗 Ir a Nubceo
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* UPLOAD CUANDO SELECCIONA OPCIÓN 1 O 2 */}
+      {mostrarUpload && (opcionSeleccionada === "vinculada" || opcionSeleccionada === "sin_vincular") && (
         <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 10px" }}>Resultado de la conversión</h3>
-          {resultado.errores.map((e, i) => <div key={i} style={{ fontSize: 13, color: T.errTx, background: T.errBg, padding: "7px 10px", borderRadius: 8, marginBottom: 6 }}>✕ {e}</div>)}
-          {resultado.avisos.map((a, i) => <div key={i} style={{ fontSize: 13, color: T.warnTx, background: T.warnBg, padding: "7px 10px", borderRadius: 8, marginBottom: 6 }}>! {a}</div>)}
-          {resultado.ok && (
-            <>
-              <div style={{ fontSize: 13, color: T.okTx, background: T.okBg, padding: "7px 10px", borderRadius: 8, marginBottom: 12 }}>✓ {resultado.salida.length} sucursales convertidas al template oficial ({TEMPLATE_SUCURSALES.join(", ")}).</div>
-              <div style={{ overflowX: "auto", marginBottom: 14 }}>
-                <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 620 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 16px 0" }}>📤 Subir archivo Excel</h3>
+          
+          <div
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const f = e.dataTransfer.files[0];
+              if (f && (f.type === "application/vnd.ms-excel" || f.name.endsWith(".xls"))) {
+                setArchivo(f);
+                validarArchivo(f);
+              } else {
+                alert("Por favor sube un archivo .xls válido");
+              }
+            }}
+            style={{
+              border: "2px dashed " + T.primary,
+              borderRadius: 8,
+              padding: 40,
+              textAlign: "center",
+              background: "#eef4ff",
+              cursor: "pointer",
+              marginBottom: 20
+            }}
+          >
+            <p style={{ margin: "0 0 8px 0", fontSize: 16, fontWeight: 600, color: T.primary }}>📁 Arrastra tu archivo aquí</p>
+            <p style={{ margin: 0, fontSize: 13, color: T.n400 }}>o haz click para seleccionar</p>
+            <input
+              type="file"
+              accept=".xls"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) {
+                  setArchivo(f);
+                  validarArchivo(f);
+                }
+              }}
+              style={{ position: "absolute", opacity: 0, width: "100%", height: "100%", cursor: "pointer" }}
+            />
+          </div>
+
+          {archivo && (
+            <div style={{ padding: 12, background: "#dcfce7", border: "1px solid #86efac", borderRadius: 6, marginBottom: 20, fontSize: 13 }}>
+              ✓ Archivo: <strong>{archivo.name}</strong>
+            </div>
+          )}
+
+          {cargando && <p style={{ color: T.n400 }}>Validando archivo...</p>}
+
+          {errores.length > 0 && !cargando && (
+            <div style={{ marginBottom: 20 }}>
+              <h4 style={{ color: "#dc2626", marginBottom: 12, fontSize: 13 }}>❌ Errores detectados:</h4>
+              <div style={{ overflowX: "auto", border: "1px solid " + T.n200, borderRadius: 6 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ background: "#f3f4f6", borderBottom: "2px solid " + T.n200 }}>
+                      <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>Fila</th>
+                      <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>Columna</th>
+                      <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>Error</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    <tr>{TEMPLATE_SUCURSALES.map((c) => <td key={c} style={{ border: "1px solid " + T.n200, padding: "5px 8px", background: T.primary50, fontWeight: 700, color: T.primary900 }}>{c}</td>)}</tr>
-                    {resultado.salida.slice(0, 6).map((s, i) => (
-                      <tr key={i}>{TEMPLATE_SUCURSALES.map((c) => <td key={c} style={{ border: "1px solid " + T.n200, padding: "5px 8px", color: T.n800 }}>{s[c]}</td>)}</tr>
+                    {errores.map((err, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid " + T.n100 }}>
+                        <td style={{ padding: 8 }}>{err.fila}</td>
+                        <td style={{ padding: 8 }}>{err.columna || "General"}</td>
+                        <td style={{ padding: 8, color: "#dc2626" }}>{err.error || err.general}</td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
-                {resultado.salida.length > 6 && <div style={{ fontSize: 12, color: T.n400, marginTop: 4 }}>… y {resultado.salida.length - 6} filas más.</div>}
               </div>
-              <Btn onClick={confirmar} disabled={saving}>Descargar template validado y completar el paso</Btn>
-            </>
-          )}
-          {!resultado.ok && <div style={{ fontSize: 13, color: T.n600, marginTop: 6 }}>Corregí los puntos marcados con ✕ en tu archivo y volvé a subirlo.</div>}
-        </Card>
-      )}
-
-      {arch && (
-        <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 10px" }}>📄 Tu template está listo — último paso en Nubceo</h3>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 10, background: T.okBg, border: "1px solid #bbe8c9", marginBottom: 12 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, color: T.okTx }}>{arch.name}</div>
-              <div style={{ fontSize: 12, color: T.okTx, opacity: 0.8 }}>Generado el {fmtDate(arch.ts)}</div>
             </div>
-            {arch.dataUrl && <a href={arch.dataUrl} download={arch.name} style={{ fontSize: 13, fontWeight: 600, color: T.okTx }}>Volver a descargar</a>}
-          </div>
-          <div style={{ fontSize: 13.5, color: T.n800, lineHeight: 1.65, background: T.primary50, border: "1px solid " + T.primary100, borderRadius: 8, padding: "12px 14px" }}>
-            Para completar la carga, entrá a Nubceo y andá a <b>Mi negocio → Sucursales cabecera → Crear masivamente</b>, y subí ahí este archivo. Si te aparece algún error o algo no coincide, <b>contactá a tu implementador</b> — para eso estamos.
+          )}
+
+          {datosValidos.length > 0 && !errores.length && (
+            <div style={{ marginBottom: 20 }}>
+              <h4 style={{ color: "#059669", marginBottom: 12, fontSize: 13 }}>✓ Vista previa:</h4>
+              <p style={{ fontSize: 12, color: T.n600, marginBottom: 12 }}>Se guardaron <strong>{datosValidos.length} sucursal(es)</strong> válida(s)</p>
+              <div style={{ overflowX: "auto", border: "1px solid " + T.n200, borderRadius: 6 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                  <thead>
+                    <tr style={{ background: "#f3f4f6", borderBottom: "2px solid " + T.n200 }}>
+                      <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>Empresa</th>
+                      <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>Sucursal</th>
+                      <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>Código PDV</th>
+                      <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>Plataforma</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {datosValidos.map((d, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid " + T.n100 }}>
+                        <td style={{ padding: 8 }}>{d.empresa}</td>
+                        <td style={{ padding: 8 }}>{d.nombre}</td>
+                        <td style={{ padding: 8, fontWeight: 600, color: T.primary }}>{d.codigopdv}</td>
+                        <td style={{ padding: 8 }}>{d.plataforma}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+            <button
+              onClick={() => { setMostrarUpload(false); setArchivo(null); setErrores([]); setDatosValidos([]); }}
+              style={{
+                padding: "10px 20px",
+                background: "#fff",
+                border: "1px solid " + T.n200,
+                borderRadius: 6,
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: 13
+              }}
+            >
+              ← Atrás
+            </button>
+            <button
+              onClick={() => setOpcionSeleccionada(null)}
+              style={{
+                padding: "10px 20px",
+                background: "#fff",
+                border: "1px solid " + T.n200,
+                borderRadius: 6,
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: 13
+              }}
+            >
+              Cerrar
+            </button>
+            {datosValidos.length > 0 && !errores.length && (
+              <button
+                onClick={guardarSucursales}
+                disabled={cargando}
+                style={{
+                  padding: "10px 20px",
+                  background: cargando ? "#ccc" : "#22c55e",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 6,
+                  cursor: cargando ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                  fontSize: 13
+                }}
+              >
+                {cargando ? "Guardando..." : "✓ Guardar sucursales"}
+              </button>
+            )}
           </div>
         </Card>
-      )}
-
-      {!arch && !meta.sucursalesOmitido && (
-        <div style={{ textAlign: "right" }}>
-          <Btn variant="ghost" size="sm" onClick={() => act("omitirSucursales")}>Omitir este paso por ahora →</Btn>
-        </div>
       )}
     </div>
   );
 }
 
-// ── Paso 5: Conexión API o CSV ──
+// ═══════════════════════════════════════════════════════════════════════════════
+
 function TabConexion({ data, persist, session, setAll }) {
   const rv = data.relevamiento || {};
   const via = rv.d1 === "api" || rv.d1 === "csv" || rv.d1 === "ambos" ? rv.d1 : null;
@@ -2358,7 +2734,6 @@ function AdminPortal({ session, onLogout }) {
   const [tableroFull, setTableroFull] = useState(false);
   const [panelCliente, setPanelCliente] = useState(null); // código del cliente en el panel lateral del tablero
   const [panelData, setPanelData] = useState(null);
-  const [mostrarCargaSucursales, setMostrarCargaSucursales] = useState(false);
   const tableroRef = useRef(null);
   const sc = session.code;
 
