@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.17.0";
+const APP_VERSION = "1.17.1";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -2448,7 +2448,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
               <span style={{ fontSize: 12.5, fontWeight: 700, color: T.n800 }}>{faseIdx + 1} · {faseNombre}</span>
               <span style={{ fontSize: 11.5, color: T.n400, fontWeight: 700 }}>{items.length}</span>
             </div>
-            <div style={{ display: "grid", gap: 8, minHeight: 0, flex: 1, overflowY: "auto", padding: "0 10px 10px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, flex: 1, overflowY: "auto", padding: "0 10px 10px" }}>
               {items.map((cli) => {
                 const pct = Math.round((cli.completados / cli.totalPasos) * 100);
                 const alertas = detectarAlertas(cli.relevamiento);
@@ -2460,7 +2460,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
                     onDragEnd={() => setArrastrando(null)}
                     onClick={() => onAbrir(cli.code)}
                     style={{
-                      background: "#fff",
+                      background: "#fff", flexShrink: 0,
                       border: "1px solid " + (colorSeg(cli.estadoSeguimiento) || T.n200),
                       borderRadius: 10, padding: 10, cursor: "grab", overflow: "hidden",
                       opacity: arrastrando === cli.code ? 0.4 : 1, boxShadow: "0 1px 2px rgba(13,17,32,0.04)",
