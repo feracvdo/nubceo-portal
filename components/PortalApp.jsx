@@ -2448,7 +2448,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
               <span style={{ fontSize: 12.5, fontWeight: 700, color: T.n800 }}>{faseIdx + 1} · {faseNombre}</span>
               <span style={{ fontSize: 11.5, color: T.n400, fontWeight: 700 }}>{items.length}</span>
             </div>
-            <div style={{ display: "grid", gap: 8, minHeight: 40, overflowY: "auto", padding: "0 10px 10px" }}>
+            <div style={{ display: "grid", gap: 8, minHeight: 0, flex: 1, overflowY: "auto", padding: "0 10px 10px" }}>
               {items.map((cli) => {
                 const pct = Math.round((cli.completados / cli.totalPasos) * 100);
                 const alertas = detectarAlertas(cli.relevamiento);
