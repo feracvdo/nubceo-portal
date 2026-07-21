@@ -160,6 +160,7 @@ async function assemble(cliente) {
   }
   return {
     meta: {
+      id: cliente.id, codigo: cliente.codigo,
       implementadorId: implementador?.id || null, implementadorNombre: implementador?.nombre || null, implementadorEmail: implementador?.email || null,
       desarrolladorId: desarrollador?.id || null, desarrolladorNombre: desarrollador?.nombre || null, desarrolladorEmail: desarrollador?.email || null,
       name: cliente.nombre, razonSocial: cliente.razon_social || null, cuits: cliente.cuits || [], logo: cliente.logo || null,
