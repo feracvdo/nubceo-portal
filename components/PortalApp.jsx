@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.19.0";
+const APP_VERSION = "1.20.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -3629,7 +3629,14 @@ function AdminPortal({ session, onLogout }) {
           </div>
 
           <Card style={{ marginTop: 16 }}>
-            <MailsCard cliente={selData} />
+            <MailsCard
+              clienteId={selMeta.id}
+              clienteNombre={selMeta.name}
+              codigoAcceso={selMeta.codigo}
+              involucradosIniciales={selData.involucrados || []}
+              implementador={{ nombre: selMeta.implementadorNombre, email: selMeta.implementadorEmail }}
+              desarrollador={{ nombre: selMeta.desarrolladorNombre, email: selMeta.desarrolladorEmail }}
+            />
           </Card>
 
           <Card style={{ marginTop: 16 }}>
