@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.18.1";
+const APP_VERSION = "1.19.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -767,7 +767,7 @@ function ClientPortal({ session, onLogout }) {
     introduccion: !!meta.introLeida,
     relevamiento: !!data.relevamientoEnviado,
     sucursales: !!data.sucursalesArchivo,
-    conexion: rv.d1 === "api" ? !!data.apiCreds : rv.d1 === "csv" ? csvOk : rv.d1 === "ambos" ? (!!data.apiCreds && csvOk) : false,
+    conexion: rv.conexionLeida ? true : (rv.d1 === "api" ? !!data.apiCreds : rv.d1 === "csv" ? csvOk : rv.d1 === "ambos" ? (!!data.apiCreds && csvOk) : false),
     capacitacion: tieneEvento("capacitacion_conciliador") || tieneEvento("capacitacion_cash"),
     sandbox: tieneEvento("resultados_sandbox", true),
     golive: tieneEvento("golive", true),
@@ -2037,36 +2037,53 @@ function TabConexion({ data, persist, session, setAll }) {
       </Card>
       {(via === "api" || via === "ambos") && <SeccionApi data={data} session={session} setAll={setAll} titulo={via === "ambos" ? "Parte 1 — El PDV que va por API" : null} />}
       {(via === "csv" || via === "ambos") && <SeccionCsv data={data} persist={persist} titulo={via === "ambos" ? "Parte 2 — El PDV que va por CSV" : null} />}
+
+      {via && <ConexionLeida data={data} session={session} setAll={setAll} />}
     </div>
   );
 }
 
-function SeccionApi({ data, session, setAll, titulo }) {
-  const [copied, setCopied] = useState("");
-  const [showCreds, setShowCreds] = useState(false);
-  const [soyDev, setSoyDev] = useState(false);
-  const [nombreKey, setNombreKey] = useState("");
-  const [key, setKey] = useState("");
-  const [secret, setSecret] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
-  const copy = async (label, val) => { try { await navigator.clipboard.writeText(val); setCopied(label); setTimeout(() => setCopied(""), 2000); } catch (e) { } };
-  const reunion = (data.eventos || []).find((e) => e.tipo === "reunion_tecnica" && e.estado !== "cancelado");
-  const c = data.apiCreds;
-  const involucrados = (data.involucrados || []).filter((p) => (p.nombre || "").trim() && (p.email || "").trim());
+// Botón para marcar el paso de conexión como leído y poder avanzar en cualquier vía.
+function ConexionLeida({ data, session, setAll }) {
+  const [guardando, setGuardando] = useState(false);
+  const leido = !!(data.relevamiento || {}).conexionLeida;
 
-  const guardar = async () => {
-    setErr("");
-    if (!key.trim()) { setErr("Pegá la API Key."); return; }
-    if (!secret.trim()) { setErr("Pegá la API Secret."); return; }
-    setSaving(true);
+  const marcar = async (valor) => {
+    setGuardando(true);
     try {
-      const r = await api("guardarCredenciales", { sessionCode: session.code, code: session.code, who: session.who || "Cliente", key: key.trim(), secret: secret.trim(), nombreKey: nombreKey.trim() });
+      const r = await api("setConexionLeida", { sessionCode: session.code, code: session.code, who: session.who || "Cliente", leido: valor });
       setAll(r);
-      setKey(""); setSecret(""); setNombreKey("");
-    } catch (e) { setErr(e.message || "No se pudo guardar. Reintentá."); }
-    finally { setSaving(false); }
+    } catch (e) {
+      alert("No se pudo guardar: " + (e.message || "reintentá"));
+    } finally { setGuardando(false); }
   };
+
+  if (leido) {
+    return (
+      <Card>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, fontWeight: 600, color: T.okTx }}>
+            <span style={{ width: 22, height: 22, borderRadius: "50%", background: T.okBg, display: "flex", alignItems: "center", justifyContent: "center" }}>✓</span>
+            Marcaste este paso como leído — ya podés avanzar.
+          </div>
+          <Btn variant="ghost" size="sm" onClick={() => marcar(false)} disabled={guardando}>Desmarcar</Btn>
+        </div>
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <p style={{ fontSize: 13.5, color: T.n600, lineHeight: 1.55, margin: "0 0 12px" }}>
+        Cuando hayas revisado este paso, marcalo como leído para avanzar al siguiente.
+      </p>
+      <Btn onClick={() => marcar(true)} disabled={guardando}>{guardando ? "Guardando…" : "Leí este paso"}</Btn>
+    </Card>
+  );
+}
+
+function SeccionApi({ data, session, setAll, titulo }) {
+  const reunion = (data.eventos || []).find((e) => e.tipo === "reunion_tecnica" && e.estado !== "cancelado");
+  const involucrados = (data.involucrados || []).filter((p) => (p.nombre || "").trim() && (p.email || "").trim());
 
   const PASO = { display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 };
   const NUM = { width: 22, height: 22, borderRadius: "50%", flexShrink: 0, background: T.primary, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 };
@@ -2075,30 +2092,11 @@ function SeccionApi({ data, session, setAll, titulo }) {
     <>
       {titulo && <div style={{ fontSize: 13, fontWeight: 700, color: T.primary, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: -6 }}>{titulo}</div>}
 
-      {/* Credenciales ya cargadas */}
-      {c && (
-        <Card>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-            <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: 0 }}>Credenciales de API cargadas — entorno sandbox</h2>
-            <Badge tone="green">Cargadas el {fmtDate(c.createdAt)}</Badge>
-          </div>
-          <p style={{ fontSize: 13.5, color: T.n600, lineHeight: 1.55, margin: "8px 0 16px" }}>
-            Estas son las credenciales que tu equipo generó en Nubceo. <b>Pasáselas a tu desarrollador junto con la documentación de la API</b> (link abajo). Tratalas como una contraseña.
-          </p>
-          <CredRow label="API Key" value={c.key} show={showCreds} copied={copied === "key"} onCopy={() => copy("key", c.key)} />
-          <CredRow label="API Secret" value={c.secret} show={showCreds} copied={copied === "secret"} onCopy={() => copy("secret", c.secret)} />
-          <Btn variant="ghost" size="sm" onClick={() => setShowCreds(!showCreds)}>{showCreds ? "Ocultar valores" : "Mostrar valores"}</Btn>
-          <div style={{ marginTop: 16 }}>
-            <a href={DOCS.apiVentas} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 14, fontWeight: 600, color: T.primary }}>📘 Documentación de la API de ventas →</a>
-          </div>
-        </Card>
-      )}
-
-      {/* Guía para generar credenciales reales en Nubceo */}
+      {/* Guía para generar credenciales en Nubceo (no se ingresan en el portal) */}
       <Card>
-        <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>{c ? "¿Necesitás regenerar las credenciales?" : "Generá tus credenciales de API en Nubceo"}</h2>
+        <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>Generá tus credenciales de API en Nubceo</h2>
         <p style={{ fontSize: 13.5, color: T.n600, lineHeight: 1.55, margin: "0 0 14px" }}>
-          Las credenciales se crean en tu cuenta de Nubceo y las pegás acá. Este paso lo tiene que hacer <b>quien va a desarrollar la integración</b>.
+          Las credenciales se crean en tu propia cuenta de Nubceo. Este paso lo hace <b>quien va a desarrollar la integración</b>, y las claves se comparten directamente con esa persona — <b>no se cargan en este portal</b>.
         </p>
 
         <Alert tone="warning" style={{ marginBottom: 16 }}>
@@ -2111,43 +2109,8 @@ function SeccionApi({ data, session, setAll, titulo }) {
           <div style={PASO}><span style={NUM}>3</span><div style={{ fontSize: 13.5, color: T.n800, lineHeight: 1.5 }}>Poné un <b>nombre</b> para identificar la conexión (por ejemplo, “Integración ventas”).</div></div>
           <div style={PASO}><span style={NUM}>4</span><div style={{ fontSize: 13.5, color: T.n800, lineHeight: 1.5 }}>Vas a ver una advertencia naranja: <i>“Solo podrás ver la clave secreta de la API key una (1) vez, justo después de crearla”</i>. Tenela presente.</div></div>
           <div style={PASO}><span style={NUM}>5</span><div style={{ fontSize: 13.5, color: T.n800, lineHeight: 1.5 }}>Hacé clic en <b>“Crear”</b>.</div></div>
-          <div style={PASO}><span style={NUM}>6</span><div style={{ fontSize: 13.5, color: T.n800, lineHeight: 1.5 }}>Copiá la <b>API Key</b> y la <b>API Secret</b> en el momento (la Secret no se vuelve a mostrar) y pegalas abajo.</div></div>
+          <div style={PASO}><span style={NUM}>6</span><div style={{ fontSize: 13.5, color: T.n800, lineHeight: 1.5 }}>Copiá la <b>API Key</b> y la <b>API Secret</b> en el momento (la Secret no se vuelve a mostrar) y compartilas de forma segura con quien va a integrar.</div></div>
         </div>
-
-        {/* Candado para no-desarrolladores */}
-        {!soyDev ? (
-          <div style={{ marginTop: 10, padding: 14, borderRadius: 10, background: T.n50, border: "1px solid " + T.n200 }}>
-            <div style={{ fontSize: 13.5, color: T.n800, marginBottom: 10 }}>
-              Para evitar pisar una credencial en uso, el formulario está bloqueado. Destrabalo solo si <b>vos sos quien desarrolla la integración</b>.
-            </div>
-            <div onClick={() => setSoyDev(true)} style={{ display: "inline-flex", alignItems: "center", gap: 9, cursor: "pointer", fontSize: 13.5, fontWeight: 600, color: T.primary }}>
-              <span style={{ width: 18, height: 18, borderRadius: 5, border: "2px solid " + T.primary, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 }}>🔓</span>
-              Soy quien desarrolla — habilitar el formulario
-            </div>
-          </div>
-        ) : (
-          <div style={{ marginTop: 10, padding: 14, borderRadius: 10, background: T.primary50, border: "1px solid " + T.primary100 }}>
-            <div style={{ display: "grid", gap: 10 }}>
-              <div>
-                <Label>Nombre de la API key (opcional, como referencia)</Label>
-                <Input value={nombreKey} onChange={(e) => setNombreKey(e.target.value)} placeholder="Ej: Integración ventas" />
-              </div>
-              <div>
-                <Label>API Key</Label>
-                <Input value={key} onChange={(e) => setKey(e.target.value)} placeholder="Pegá la API Key" />
-              </div>
-              <div>
-                <Label>API Secret</Label>
-                <Input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="Pegá la API Secret (se ve una sola vez en Nubceo)" />
-              </div>
-              {err && <Alert tone="error">{err}</Alert>}
-              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                <Btn onClick={guardar} disabled={saving}>{saving ? "Guardando…" : (c ? "Reemplazar credenciales" : "Guardar credenciales")}</Btn>
-                <Btn variant="ghost" size="sm" onClick={() => { setSoyDev(false); setErr(""); }}>Cancelar</Btn>
-              </div>
-            </div>
-          </div>
-        )}
 
         <div style={{ marginTop: 16 }}>
           <a href={DOCS.apiVentas} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 14, fontWeight: 600, color: T.primary }}>📘 Documentación de la API de ventas →</a>
