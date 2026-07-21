@@ -292,6 +292,32 @@ export default async function handler(req, res) {
       return res.json(await assemble(cli));
     }
 
+    if (action === "setConexionLeida") {
+      // Marca el paso "Conexión API / CSV" como leído/confirmado por el cliente.
+      // Sirve para avanzar en cualquier vía (API, CSV o Ambos) sin depender de
+      // credenciales o CSV. No pasa por la validación de "relevamiento ya enviado"
+      // porque solo toca una marca dentro de respuestas, no el relevamiento en sí.
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+
+      const leido = req.body.leido !== false; // default true
+      const { data: relevActual } = await db.from("relevamientos")
+        .select("respuestas").eq("cliente_id", cli.id).maybeSingle();
+      const respuestas = relevActual?.respuestas || {};
+      respuestas.conexionLeida = leido;
+
+      const { error: upErr } = await db.from("relevamientos").upsert(
+        { cliente_id: cli.id, respuestas, actualizado_at: new Date().toISOString() },
+        { onConflict: "cliente_id" }
+      );
+      if (upErr) {
+        console.error("Error al guardar conexionLeida:", upErr.message);
+        return res.status(500).json({ error: upErr.message });
+      }
+      await addHistory(cli.id, who || "Cliente", leido ? "Marcó el paso de Conexión como leído" : "Desmarcó el paso de Conexión");
+      return res.json(await assemble(cli));
+    }
+
     if (action === "saveTipoConexion") {
       // Handler ESPECIAL para cambiar solo d1 (tipo de conexión: api/csv/ambos)
       // Permite cambiar la vía incluso después de haber enviado el relevamiento
