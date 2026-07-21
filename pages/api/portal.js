@@ -377,12 +377,9 @@ export default async function handler(req, res) {
           // Continúa sin Redmine por ahora — se puede reintentar después con "retryRedmine"
           await addHistory(cli.id, "Portal (automático)", "No se pudo conectar con Redmine en este momento — se puede reintentar después");
         }
-        const creds = await generarCredenciales(cli);
-        await db.from("credenciales_api").upsert(
-          { cliente_id: cli.id, entorno: "sandbox", api_key: creds.api_key, api_secret: creds.api_secret, generado_at: new Date().toISOString() },
-          { onConflict: "cliente_id,entorno" }
-        );
-        await addHistory(cli.id, "Portal (automático)", "Se generaron las credenciales de API sandbox del cliente");
+        // Las credenciales de API ya NO se generan automáticamente.
+        // El desarrollador del cliente las crea en Nubceo (Mi negocio → API Keys)
+        // y las ingresa en el portal mediante la acción "guardarCredenciales".
       }
       return res.json(await assemble(cli));
     }
@@ -1185,162 +1182,47 @@ export default async function handler(req, res) {
 
 
     if (action === "guardarCredenciales") {
+      // El desarrollador del cliente (o el equipo) ingresa las credenciales REALES
+      // generadas en Nubceo (Mi negocio -> API Keys). El portal ya no genera claves.
+      // El permiso ya está validado arriba por puedeVerCliente (team || sc === cc).
       try {
-        // ──── 1. VALIDAR AUTENTICACIÓN ────
-        const { sessionCode } = req.body;
-        if (!sessionCode) {
-          return res.status(401).json({ error: "Usuario no autenticado" });
-        }
+        const cli = await getCliente(cc);
+        if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
 
-        // Obtener datos del usuario logueado
-        const { data: usuario, error: usuarioErr } = await db
-          .from("equipo")
-          .select("id, nombre, email, es_superadmin")
-          .eq("codigo", sessionCode)
-          .maybeSingle();
+        const key = (req.body.key || "").trim();
+        const secret = (req.body.secret || "").trim();
+        const nombreKey = (req.body.nombreKey || "").trim();
 
-        if (!usuario) {
-          return res.status(401).json({ error: "Usuario no encontrado" });
-        }
+        if (!key) return res.status(400).json({ error: "La API Key no puede estar vacía" });
+        if (!secret) return res.status(400).json({ error: "La API Secret no puede estar vacía" });
+        // Sin validar prefijo/longitud: el formato real de Nubceo puede variar y no queremos
+        // rechazar una credencial válida. Solo chequeamos que no vengan vacías.
 
-        // ──── 2. VALIDAR INPUTS ────
-        const { clienteId, key, secret } = req.body;
-
-        if (!clienteId) {
-          return res.status(400).json({ error: "clienteId es requerido" });
-        }
-
-        if (!key || typeof key !== "string") {
-          return res.status(400).json({ error: "API Key no puede estar vacía" });
-        }
-
-        if (!secret || typeof secret !== "string") {
-          return res.status(400).json({ error: "Secret no puede estar vacío" });
-        }
-
-        // Validaciones de formato
-        const keyTrimmed = key.trim();
-        const secretTrimmed = secret.trim();
-
-        if (!keyTrimmed.startsWith("nub_sbx_")) {
-          return res.status(400).json({
-            error: "API Key debe empezar con 'nub_sbx_'",
-            hint: "Asegurate de copiar la completa desde Nubceo",
-          });
-        }
-
-        if (keyTrimmed.length < 25) {
-          return res.status(400).json({
-            error: "API Key parece incompleta",
-            hint: "Probá copiar nuevamente desde Nubceo",
-          });
-        }
-
-        if (secretTrimmed.length < 40) {
-          return res.status(400).json({
-            error: "Secret parece muy corto (mínimo 40 caracteres)",
-            hint: "Probá copiar nuevamente desde Nubceo",
-          });
-        }
-
-        // ──── 3. VALIDAR CLIENTE ────
-        const { data: cliente, error: clienteErr } = await db
-          .from("clientes")
-          .select("id, nombre, implementador_id")
-          .eq("id", clienteId)
-          .maybeSingle();
-
-        if (!cliente) {
-          return res.status(404).json({ error: "Cliente no encontrado" });
-        }
-
-        // Validar permisos
-        const esImplementador = cliente.implementador_id === usuario.id;
-        const esSuperadmin = usuario.es_superadmin === true;
-
-        if (!esImplementador && !esSuperadmin) {
-          return res.status(403).json({
-            error: "No tenés permiso para modificar las credenciales de este cliente",
-          });
-        }
-
-        // ──── 4. GUARDAR CREDENCIALES ────
-        const ahora = new Date().toISOString();
-
-        const { data: credsData, error: credsErr } = await db
-          .from("credenciales_api")
-          .upsert(
-            {
-              cliente_id: clienteId,
-              entorno: "sandbox",
-              api_key: keyTrimmed,
-              api_secret: secretTrimmed,
-              origen: "usuario",
-              ingresado_por: usuario.id,
-              ingresado_at: ahora,
-              actualizado_at: ahora,
-            },
-            {
-              onConflict: "cliente_id,entorno",
-            }
-          );
-
-        if (credsErr) {
-          console.error("Error al upsert credenciales:", credsErr);
-          return res.status(500).json({
-            error: "Error al guardar credenciales en la BD",
-            detail: credsErr.message,
-          });
-        }
-
-        // ──── 5. REGISTRAR ACTIVIDAD ────
-        await db.from("historial").insert({
-          cliente_id: clienteId,
-          quien: usuario.id,
-          texto: `Ingresó credenciales API sandbox (${keyTrimmed.substring(0, 15)}...)`,
-          creado_at: ahora,
-        });
-
-        // ──── 6. REGISTRAR AUDITORÍA (OPCIONAL) ────
-        try {
-          await db.from("auditoria_credenciales").insert({
-            cliente_id: clienteId,
-            usuario_id: usuario.id,
-            accion: "ingresar_credenciales",
-            detalles: {
-              api_key_inicio: keyTrimmed.substring(0, 15) + "...",
-              api_key_longitud: keyTrimmed.length,
-              secret_longitud: secretTrimmed.length,
-              ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress,
-              user_agent: req.headers["user-agent"],
-              timestamp: ahora,
-            },
-            creado_at: ahora,
-          });
-        } catch (auditErr) {
-          console.warn("Auditoría no disponible:", auditErr.message);
-        }
-
-        // ──── 7. RESPONDER ────
-        return res.json({
-          ok: true,
-          message: "Credenciales guardadas correctamente",
-          data: {
-            clienteId,
-            cliente: cliente.nombre,
+        const { error: credsErr } = await db.from("credenciales_api").upsert(
+          {
+            cliente_id: cli.id,
             entorno: "sandbox",
-            ingresadoEn: ahora,
-            ingresadoPor: usuario.nombre,
-            origen: "usuario",
+            api_key: key,
+            api_secret: secret,
+            generado_at: new Date().toISOString(),
           },
-        });
+          { onConflict: "cliente_id,entorno" }
+        );
+        if (credsErr) {
+          console.error("Error al guardar credenciales:", credsErr.message);
+          return res.status(500).json({ error: credsErr.message });
+        }
 
+        await addHistory(
+          cli.id,
+          who || (team ? "Equipo Nubceo" : "Cliente"),
+          "Cargó las credenciales de API sandbox generadas en Nubceo" + (nombreKey ? ' (key: "' + nombreKey + '")' : "")
+        );
+
+        return res.json(await assemble(cli));
       } catch (err) {
-        console.error("Error en guardarCredenciales:", err);
-        return res.status(500).json({
-          error: "Error al procesar tu solicitud",
-          detail: process.env.NODE_ENV === "development" ? err.message : undefined,
-        });
+        console.error("Error en guardarCredenciales:", err.message);
+        return res.status(500).json({ error: err.message });
       }
     }
 
