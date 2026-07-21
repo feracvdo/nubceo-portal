@@ -1995,38 +1995,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
 function TabConexion({ data, persist, session, setAll }) {
   const rv = data.relevamiento || {};
   const via = rv.d1 === "api" || rv.d1 === "csv" || rv.d1 === "ambos" ? rv.d1 : null;
-  
-  // CORREGIDA: Usar saveTipoConexion directamente en lugar de persist/saveClient
-  // Esto evita la validación restrictiva "relevamiento ya enviado"
-  const elegir = async (v) => {
-    if (v === via) return; // No hacer nada si es el mismo
-    
-    try {
-      const res = await fetch("/api/portal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "saveTipoConexion",
-          code: data.code,
-          sessionCode: session?.sessionCode,
-          tipoConexion: v,
-        }),
-      });
-
-      if (!res.ok) {
-        const json = await res.json();
-        console.error("Error al cambiar tipo de conexión:", json.error);
-        alert("Error: " + json.error);
-        return;
-      }
-
-      // Refrescar datos del cliente
-      setAll({});
-    } catch (err) {
-      console.error("Error de conexión:", err.message);
-      alert("Error al cambiar tipo de conexión: " + err.message);
-    }
-  };
+  const elegir = (v) => v !== via && persist({ relevamiento: { ...rv, d1: v } }, "Definió la vía de conexión: " + (v === "ambos" ? "AMBOS (un PDV por API y otro por CSV)" : v.toUpperCase()));
 
   const OPCIONES = [
     ["api", "Por API", "Tus sistemas envían las ventas automáticamente. Requiere un desarrollo (tuyo, de tu proveedor de PDV o cotizado con Nubceo), pero después no hay tarea manual."],
@@ -2442,6 +2411,21 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
   const [sobreCol, setSobreCol] = useState(null);
   const scrollRef = useRef(null);
   const desplazar = (dir) => scrollRef.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
+  
+  // Cambiar color del cliente: gris → verde → amarillo → rojo → gris
+  const changeClientColor = async (code) => {
+    const cli = clientes.find((c) => c.code === code);
+    if (!cli) return;
+    
+    const colorCiclo = { gris: "verde", verde: "amarillo", amarillo: "rojo", rojo: "gris", null: "verde", undefined: "verde" };
+    const nuevoColor = colorCiclo[cli.estado_seguimiento] || "verde";
+    
+    try {
+      await api("setEstadoCliente", { code, estado_seguimiento: nuevoColor });
+    } catch (e) {
+      console.error("Error al cambiar color:", e.message);
+    }
+  };
 
   return (
     <div style={{ position: "relative" }}>
@@ -2487,8 +2471,15 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                     onDragEnd={() => setArrastrando(null)}
                     onClick={() => onAbrir(cli.code)}
                     style={{
-                      background: "#fff", border: "1px solid " + T.n200, borderRadius: 10, padding: 10, cursor: "grab",
-                      opacity: arrastrando === cli.code ? 0.4 : 1, boxShadow: "0 1px 2px rgba(13,17,32,0.04)",
+                      background: "#fff", 
+                      border: "2px solid " + (cli.estado_seguimiento === "verde" ? "#22c55e" : cli.estado_seguimiento === "amarillo" ? "#f59e0b" : cli.estado_seguimiento === "rojo" ? "#ef4444" : T.n200), 
+                      borderRadius: 10, 
+                      padding: 10, 
+                      cursor: "grab",
+                      opacity: arrastrando === cli.code ? 0.4 : 1, 
+                      boxShadow: "0 1px 2px rgba(13,17,32,0.04)",
+                      position: "relative",
+                      overflow: "hidden",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -2510,15 +2501,21 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                       {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
                       {cli.notasCount > 0 && <Badge tone="gray">📝 {cli.notasCount}</Badge>}
                     </div>
-                    {onEnviarAvisos && (
-                      <div
-                        onClick={(e) => { e.stopPropagation(); onEnviarAvisos(cli.code); }}
-                        title="Mandar ahora el recordatorio o aviso de incumplimiento que corresponda, si hay alguno pendiente"
-                        style={{ marginTop: 8, paddingTop: 7, borderTop: "1px solid " + T.n100, fontSize: 11, fontWeight: 600, color: enviandoAvisosDe === cli.code ? T.n400 : T.primary, cursor: enviandoAvisosDe === cli.code ? "default" : "pointer" }}
-                      >
-                        {enviandoAvisosDe === cli.code ? "Enviando…" : "✉️ Enviar avisos pendientes"}
-                      </div>
-                    )}
+                    {/* Barra de color clickeable en la base */}
+                    <div
+                      onClick={(e) => { e.stopPropagation(); changeClientColor(cli.code); }}
+                      title="Clickea para cambiar el estado: Gris → Verde → Amarillo → Rojo"
+                      style={{
+                        marginTop: 8,
+                        marginLeft: -10,
+                        marginRight: -10,
+                        marginBottom: -10,
+                        height: 8,
+                        background: cli.estado_seguimiento === "verde" ? "#22c55e" : cli.estado_seguimiento === "amarillo" ? "#f59e0b" : cli.estado_seguimiento === "rojo" ? "#ef4444" : T.n200,
+                        borderRadius: "0 0 8px 8px",
+                        cursor: "pointer",
+                      }}
+                    />
                   </div>
                 );
               })}
