@@ -725,6 +725,7 @@ export default async function handler(req, res) {
           completados: Object.values(pasos).filter(Boolean).length,
           totalPasos: 8,
           ultimaActividad: cli.ultima_actividad || null,
+          estadoSeguimiento: cli.estado_seguimiento || "gris",
         });
       }
       if (actualizacionesFase.length) await Promise.all(actualizacionesFase);
