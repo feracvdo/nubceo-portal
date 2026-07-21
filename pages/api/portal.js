@@ -1109,13 +1109,14 @@ export default async function handler(req, res) {
       
       try {
         const cli = await getCliente(code);
-        await db
+        const { error: updErr } = await db
           .from("clientes")
-          .update({ 
-            estado_seguimiento: estado, 
-            updated_at: new Date().toISOString() 
-          })
+          .update({ estado_seguimiento: estado })
           .eq("id", cli.id);
+        if (updErr) {
+          console.error("Error al guardar estado_seguimiento:", updErr.message);
+          return res.status(500).json({ error: updErr.message });
+        }
 
         await addHistory(cli.id, who || "Equipo", `Cambió estado a ${estado}`);
         return res.json({ success: true, estado });
