@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.18.0";
+const APP_VERSION = "1.18.1";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -1995,7 +1995,17 @@ function TabSucursales({ data, meta, persist, act, saving }) {
 function TabConexion({ data, persist, session, setAll }) {
   const rv = data.relevamiento || {};
   const via = rv.d1 === "api" || rv.d1 === "csv" || rv.d1 === "ambos" ? rv.d1 : null;
-  const elegir = (v) => v !== via && persist({ relevamiento: { ...rv, d1: v } }, "Definió la vía de conexión: " + (v === "ambos" ? "AMBOS (un PDV por API y otro por CSV)" : v.toUpperCase()));
+  // Cambiar la vía no pasa por saveClient (que bloquea si el relevamiento ya fue enviado):
+  // usa saveTipoConexion, que actualiza solo d1 y deja intacto el resto del relevamiento.
+  const elegir = async (v) => {
+    if (v === via) return;
+    try {
+      const r = await api("saveTipoConexion", { sessionCode: session.code, code: session.code, who: session.who || "Cliente", tipoConexion: v });
+      setAll(r);
+    } catch (e) {
+      alert("No se pudo cambiar la vía: " + (e.message || "reintentá"));
+    }
+  };
 
   const OPCIONES = [
     ["api", "Por API", "Tus sistemas envían las ventas automáticamente. Requiere un desarrollo (tuyo, de tu proveedor de PDV o cotizado con Nubceo), pero después no hay tarea manual."],
