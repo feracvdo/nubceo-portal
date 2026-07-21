@@ -2406,26 +2406,15 @@ const ImageUpload = ({ value, onChange, label, round }) => {
 };
 
 // ─── Tablero tipo agile: columnas = fases del proyecto, tarjetas arrastrables ───
-function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoAvisosDe }) {
+// Color del semáforo de seguimiento (gris = sin marcar).
+const COLOR_SEG = { verde: "#22c55e", amarillo: "#f59e0b", rojo: "#ef4444" };
+const colorSeg = (estado) => COLOR_SEG[estado] || null;
+
+function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarAvisos, enviandoAvisosDe }) {
   const [arrastrando, setArrastrando] = useState(null); // código del cliente en drag
   const [sobreCol, setSobreCol] = useState(null);
   const scrollRef = useRef(null);
   const desplazar = (dir) => scrollRef.current?.scrollBy({ left: dir * 280, behavior: "smooth" });
-  
-  // Cambiar color del cliente: gris → verde → amarillo → rojo → gris
-  const changeClientColor = async (code) => {
-    const cli = clientes.find((c) => c.code === code);
-    if (!cli) return;
-    
-    const colorCiclo = { gris: "verde", verde: "amarillo", amarillo: "rojo", rojo: "gris", null: "verde", undefined: "verde" };
-    const nuevoColor = colorCiclo[cli.estado_seguimiento] || "verde";
-    
-    try {
-      await api("setEstadoCliente", { code, estado_seguimiento: nuevoColor });
-    } catch (e) {
-      console.error("Error al cambiar color:", e.message);
-    }
-  };
 
   return (
     <div style={{ position: "relative" }}>
@@ -2471,15 +2460,10 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                     onDragEnd={() => setArrastrando(null)}
                     onClick={() => onAbrir(cli.code)}
                     style={{
-                      background: "#fff", 
-                      border: "2px solid " + (cli.estado_seguimiento === "verde" ? "#22c55e" : cli.estado_seguimiento === "amarillo" ? "#f59e0b" : cli.estado_seguimiento === "rojo" ? "#ef4444" : T.n200), 
-                      borderRadius: 10, 
-                      padding: 10, 
-                      cursor: "grab",
-                      opacity: arrastrando === cli.code ? 0.4 : 1, 
-                      boxShadow: "0 1px 2px rgba(13,17,32,0.04)",
-                      position: "relative",
-                      overflow: "hidden",
+                      background: "#fff",
+                      border: "1px solid " + (colorSeg(cli.estadoSeguimiento) || T.n200),
+                      borderRadius: 10, padding: 10, cursor: "grab", overflow: "hidden",
+                      opacity: arrastrando === cli.code ? 0.4 : 1, boxShadow: "0 1px 2px rgba(13,17,32,0.04)",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -2501,18 +2485,14 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                       {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
                       {cli.notasCount > 0 && <Badge tone="gray">📝 {cli.notasCount}</Badge>}
                     </div>
-                    {/* Barra de color clickeable en la base */}
+                    {/* Semáforo de seguimiento: clic para ciclar gris → verde → amarillo → rojo. */}
                     <div
-                      onClick={(e) => { e.stopPropagation(); changeClientColor(cli.code); }}
-                      title="Clickea para cambiar el estado: Gris → Verde → Amarillo → Rojo"
+                      onClick={(e) => { e.stopPropagation(); onCambiarColor && onCambiarColor(cli.code); }}
+                      onDragStart={(e) => e.preventDefault()}
+                      title="Estado de seguimiento — clic para cambiar (gris → verde → amarillo → rojo)"
                       style={{
-                        marginTop: 8,
-                        marginLeft: -10,
-                        marginRight: -10,
-                        marginBottom: -10,
-                        height: 8,
-                        background: cli.estado_seguimiento === "verde" ? "#22c55e" : cli.estado_seguimiento === "amarillo" ? "#f59e0b" : cli.estado_seguimiento === "rojo" ? "#ef4444" : T.n200,
-                        borderRadius: "0 0 8px 8px",
+                        marginTop: 10, marginLeft: -10, marginRight: -10, marginBottom: -10,
+                        height: 10, background: colorSeg(cli.estadoSeguimiento) || T.n200,
                         cursor: "pointer",
                       }}
                     />
@@ -3025,6 +3005,21 @@ function AdminPortal({ session, onLogout }) {
       if (sel === code) { setSelMeta(r.meta); setSelData(r.data); }
       cargarListado();
     } catch (e) { flash(e.message); }
+  };
+
+  // Cambia el color de seguimiento del cliente en el tablero: gris → verde → amarillo → rojo → gris.
+  const cambiarColor = async (code) => {
+    const ciclo = { gris: "verde", verde: "amarillo", amarillo: "rojo", rojo: "gris" };
+    const actual = (clients || []).find((c) => c.code === code)?.estadoSeguimiento || "gris";
+    const nuevo = ciclo[actual] || "verde";
+    // Optimista: el color cambia al instante sin esperar al servidor.
+    setClients((prev) => (prev ? prev.map((c) => (c.code === code ? { ...c, estadoSeguimiento: nuevo } : c)) : prev));
+    try {
+      await api("setEstadoCliente", { sessionCode: sc, code, estado: nuevo, who: session.who });
+    } catch (e) {
+      flash(e.message);
+      cargarListado(); // si falló, recargamos para no dejar el tablero desincronizado
+    }
   };
 
   const cambiarMiCodigo = async () => {
@@ -3777,7 +3772,7 @@ function AdminPortal({ session, onLogout }) {
                 </select>
                 {(busqueda || filtroImpl) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); }}>Limpiar filtros</Btn>}
               </div>
-              <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} onEnviarAvisos={enviarAvisosPendientes} enviandoAvisosDe={enviandoAvisosDe} />
+              <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} onCambiarColor={cambiarColor} onEnviarAvisos={enviarAvisosPendientes} enviandoAvisosDe={enviandoAvisosDe} />
         {/* Panel lateral rápido del tablero: se abre al hacer clic en una tarjeta */}
         {panelCliente && (
           <div onClick={() => setPanelCliente(null)} style={{ position: "fixed", inset: 0, background: "rgba(13,17,32,0.4)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
