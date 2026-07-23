@@ -32,7 +32,10 @@ async function getCalendarConnection(responsable) {
   if (!data) return null;
   try {
     const tok = await gcal.refreshAccessToken(data.refresh_token);
-    return { access_token: tok.access_token, calendarId: data.google_email };
+    // Usamos "primary": Google lo resuelve al calendario principal de la cuenta dueña
+    // del token, sin depender de google_email (que puede quedar null si el permiso de
+    // email no fue otorgado, y provocaba un 404 "Not Found" al crear el evento).
+    return { access_token: tok.access_token, calendarId: "primary", googleEmail: data.google_email || null };
   } catch (e) {
     return null; // token revocado o vencido: se trata como "no conectado" (cae a la disponibilidad estática)
   }
