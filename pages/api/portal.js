@@ -166,7 +166,7 @@ async function assemble(cliente) {
       id: cliente.id, codigo: cliente.codigo,
       implementadorId: implementador?.id || null, implementadorNombre: implementador?.nombre || null, implementadorEmail: implementador?.email || null,
       desarrolladorId: desarrollador?.id || null, desarrolladorNombre: desarrollador?.nombre || null, desarrolladorEmail: desarrollador?.email || null,
-      name: cliente.nombre, razonSocial: cliente.razon_social || null, cuits: cliente.cuits || [], logo: cliente.logo || null,
+      name: cliente.nombre, razonSocial: cliente.razon_social || null, cuits: cliente.cuits || [], erpPdv: cliente.erp_pdv || [], logo: cliente.logo || null,
       comercial: cliente.comercial || null,
       goLiveEstimado: cliente.go_live_estimado || null,
       tenant: cliente.tenant_productivo, phase: faseActual, createdAt: cliente.creado_at, introLeida: cliente.intro_leida, sucursalesOmitido: cliente.sucursales_omitido,
@@ -379,6 +379,7 @@ export default async function handler(req, res) {
       const upd = {};
       if (req.body.razonSocial !== undefined) upd.razon_social = (req.body.razonSocial || "").trim() || null;
       if (req.body.cuits !== undefined) upd.cuits = Array.isArray(req.body.cuits) ? req.body.cuits.map((c) => String(c).trim()).filter(Boolean) : [];
+      if (req.body.erpPdv !== undefined) upd.erp_pdv = Array.isArray(req.body.erpPdv) ? req.body.erpPdv.map((x) => String(x).trim()).filter(Boolean) : [];
       if (req.body.logo !== undefined) upd.logo = req.body.logo || null;
       // El tenant NUNCA se edita desde acá — es un dato técnico, no de la empresa.
       if (Object.keys(upd).length) await db.from("clientes").update(upd).eq("id", cli.id);
@@ -484,10 +485,10 @@ export default async function handler(req, res) {
       if (!dispRows || !dispRows.length) {
         if (conn) {
           // Con el calendario conectado no hace falta cargar nada a mano: se ofrece un
-          // horario comercial estándar (lun a vie, 10 a 17) y se descarta automáticamente
+          // horario comercial estándar (lun a vie, 09 a 18) y se descarta automáticamente
           // todo lo que el calendario real ya tenga ocupado.
           dispRows = [];
-          for (let dia = 1; dia <= 5; dia++) for (let hh = 10; hh <= 17; hh++) dispRows.push({ dia_semana: dia, hora: String(hh).padStart(2, "0") + ":00" });
+          for (let dia = 1; dia <= 5; dia++) for (let hh = 9; hh <= 17; hh++) dispRows.push({ dia_semana: dia, hora: String(hh).padStart(2, "0") + ":00" });
         } else {
           return res.status(400).json({ error: persona.nombre + " todavía no conectó su Google Calendar — puede hacerlo desde Mi perfil para que el portal ofrezca sus horarios libres automáticamente." });
         }
@@ -839,7 +840,7 @@ export default async function handler(req, res) {
       const cuits = Array.isArray(req.body.cuits) ? req.body.cuits.map((c) => String(c).trim()).filter(Boolean) : [];
       const { data: nuevoCliente, error: errIns } = await db.from("clientes").insert({
         codigo: nuevo, nombre: req.body.nombre.trim(), tenant_productivo: (req.body.tenant || "").trim() || null,
-        razon_social: (req.body.razonSocial || "").trim() || null, cuits, logo: req.body.logo || null,
+        razon_social: (req.body.razonSocial || "").trim() || null, cuits, erp_pdv: Array.isArray(req.body.erpPdv) ? req.body.erpPdv.map((x) => String(x).trim()).filter(Boolean) : [], logo: req.body.logo || null,
         comercial: (req.body.comercial || "").trim() || null,
         go_live_estimado: req.body.goLiveEstimado || null,
       }).select().single();
@@ -860,6 +861,7 @@ export default async function handler(req, res) {
       const upd = {};
       if (req.body.razonSocial !== undefined) upd.razon_social = (req.body.razonSocial || "").trim() || null;
       if (req.body.cuits !== undefined) upd.cuits = Array.isArray(req.body.cuits) ? req.body.cuits.map((c) => String(c).trim()).filter(Boolean) : [];
+      if (req.body.erpPdv !== undefined) upd.erp_pdv = Array.isArray(req.body.erpPdv) ? req.body.erpPdv.map((x) => String(x).trim()).filter(Boolean) : [];
       if (req.body.logo !== undefined) upd.logo = req.body.logo || null;
       if (req.body.goLiveEstimado !== undefined) upd.go_live_estimado = req.body.goLiveEstimado || null;
       if (Object.keys(upd).length) await db.from("clientes").update(upd).eq("id", cli.id);
