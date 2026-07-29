@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.20.4";
+const APP_VERSION = "1.21.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -2754,6 +2754,8 @@ function AdminPortal({ session, onLogout }) {
   const [newRazonSocial, setNewRazonSocial] = useState("");
   const [newCuits, setNewCuits] = useState([]);
   const [newCuitInput, setNewCuitInput] = useState("");
+  const [newErpPdv, setNewErpPdv] = useState([]);
+  const [newErpPdvInput, setNewErpPdvInput] = useState("");
   const [newLogo, setNewLogo] = useState(null);
   const [newImplName, setNewImplName] = useState("");
   const [newImplCode, setNewImplCode] = useState("");
@@ -2779,6 +2781,8 @@ function AdminPortal({ session, onLogout }) {
   const [editRazonSocial, setEditRazonSocial] = useState("");
   const [editCuits, setEditCuits] = useState([]);
   const [editCuitInput, setEditCuitInput] = useState("");
+  const [editErpPdv, setEditErpPdv] = useState([]);
+  const [editErpPdvInput, setEditErpPdvInput] = useState("");
   const [editLogo, setEditLogo] = useState(null);
   const [editGoLive, setEditGoLive] = useState("");
   const [editandoFinanzas, setEditandoFinanzas] = useState(false);
@@ -3024,11 +3028,11 @@ function AdminPortal({ session, onLogout }) {
     try {
       await api("createClient", {
         sessionCode: sc, nombre: newName, codigo: newCode, tenant: newTenant, razonSocial: newRazonSocial, cuits: newCuits, logo: newLogo,
-        comercial: newComercial, goLiveEstimado: newGoLive, contactos: newContactos.filter((c) => c.nombre.trim()),
+        comercial: newComercial, goLiveEstimado: newGoLive, erpPdv: newErpPdv, contactos: newContactos.filter((c) => c.nombre.trim()),
       });
       flash("Cliente creado. Compartile el código " + newCode.trim().toUpperCase() + ". Al primer login se dispara el alta en Redmine y sus credenciales de API.", 5000);
       setNewName(""); setNewCode(""); setNewTenant(""); setNewRazonSocial(""); setNewCuits([]); setNewCuitInput(""); setNewLogo(null);
-      setNewComercial(""); setNewGoLive(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
+      setNewComercial(""); setNewGoLive(""); setNewErpPdv([]); setNewErpPdvInput(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
       cargarListado();
     } catch (e) { flash(e.message); }
   };
@@ -3259,6 +3263,11 @@ function AdminPortal({ session, onLogout }) {
                       {(meta.cuits || []).length > 0 && "CUIT: " + meta.cuits.join(", ")}
                     </div>
                   )}
+                  {(meta.erpPdv || []).length > 0 && (
+                    <div style={{ fontSize: 12.5, color: T.n400, marginTop: 2 }}>
+                      ERP/PDV: {meta.erpPdv.join(", ")}
+                    </div>
+                  )}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -3287,7 +3296,7 @@ function AdminPortal({ session, onLogout }) {
             <div style={{ marginTop: 18 }}><Stepper fase={meta.phase} /></div>
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid " + T.n100 }}>
               {!editandoInfo ? (
-                <span onClick={() => { setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
+                <span onClick={() => { setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditErpPdv(meta.erpPdv || []); setEditErpPdvInput(""); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
                   ✎ Editar razón social / CUITs / logo / fecha de go-live
                 </span>
               ) : (
@@ -3318,11 +3327,29 @@ function AdminPortal({ session, onLogout }) {
                     <Input type="date" value={editGoLive} onChange={(e) => setEditGoLive(e.target.value)} />
                     <div style={{ fontSize: 11.5, color: T.n400, marginTop: 4 }}>Alimenta el semáforo 🎯 del tablero.</div>
                   </div>
+                  <div>
+                    <Label>ERP / PDV</Label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Input value={editErpPdvInput} onChange={(e) => setEditErpPdvInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (editErpPdvInput.trim()) { setEditErpPdv([...editErpPdv, editErpPdvInput.trim()]); setEditErpPdvInput(""); } } }}
+                        placeholder="Ej: Zetti, SAP, Tango — Enter para agregar" />
+                      <Btn variant="secondary" size="sm" onClick={() => { if (editErpPdvInput.trim()) { setEditErpPdv([...editErpPdv, editErpPdvInput.trim()]); setEditErpPdvInput(""); } }}>+</Btn>
+                    </div>
+                    {editErpPdv.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                        {editErpPdv.map((x, i) => (
+                          <span key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, background: T.primary50, color: T.primary800, border: "1px solid " + T.primary100, borderRadius: 100, padding: "4px 10px" }}>
+                            {x} <span onClick={() => setEditErpPdv(editErpPdv.filter((_, idx) => idx !== i))} style={{ cursor: "pointer" }}>✕</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                     <ImageUpload value={editLogo} onChange={setEditLogo} label="logo" />
                     <div style={{ display: "flex", gap: 8 }}>
                       <Btn variant="ghost" size="sm" onClick={() => setEditandoInfo(false)}>Cancelar</Btn>
-                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, razonSocial: editRazonSocial, cuits: editCuits, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); setEditandoInfo(false); } catch (e) { flash(e.message); } }}>Guardar</Btn>
+                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, razonSocial: editRazonSocial, cuits: editCuits, erpPdv: editErpPdv, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); setEditandoInfo(false); } catch (e) { flash(e.message); } }}>Guardar</Btn>
                     </div>
                   </div>
                 </div>
@@ -3694,6 +3721,25 @@ function AdminPortal({ session, onLogout }) {
                     )}
                   </div>
                   <div><Label>Comercial de la cuenta</Label><Input value={newComercial} onChange={(e) => setNewComercial(e.target.value)} placeholder="Nombre del ejecutivo" /></div>
+                </div>
+
+                <div style={{ marginBottom: 14 }}>
+                  <Label>ERP / PDV (opcional)</Label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Input value={newErpPdvInput} onChange={(e) => setNewErpPdvInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); if (newErpPdvInput.trim()) { setNewErpPdv([...newErpPdv, newErpPdvInput.trim()]); setNewErpPdvInput(""); } } }}
+                      placeholder="Ej: Zetti, SAP, Tango — Enter para agregar" />
+                    <Btn variant="secondary" size="sm" onClick={() => { if (newErpPdvInput.trim()) { setNewErpPdv([...newErpPdv, newErpPdvInput.trim()]); setNewErpPdvInput(""); } }}>+</Btn>
+                  </div>
+                  {newErpPdv.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                      {newErpPdv.map((x, i) => (
+                        <span key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, background: T.primary50, color: T.primary800, border: "1px solid " + T.primary100, borderRadius: 100, padding: "4px 10px" }}>
+                          {x} <span onClick={() => setNewErpPdv(newErpPdv.filter((_, idx) => idx !== i))} style={{ cursor: "pointer" }}>✕</span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
