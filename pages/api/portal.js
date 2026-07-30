@@ -166,7 +166,7 @@ async function assemble(cliente) {
       id: cliente.id, codigo: cliente.codigo,
       implementadorId: implementador?.id || null, implementadorNombre: implementador?.nombre || null, implementadorEmail: implementador?.email || null,
       desarrolladorId: desarrollador?.id || null, desarrolladorNombre: desarrollador?.nombre || null, desarrolladorEmail: desarrollador?.email || null,
-      name: cliente.nombre, razonSocial: cliente.razon_social || null, cuits: cliente.cuits || [], erpPdv: cliente.erp_pdv || [], logo: cliente.logo || null,
+      name: cliente.nombre, razonSocial: cliente.razon_social || null, cuits: cliente.cuits || [], erpPdv: cliente.erp_pdv || [], estadoContrato: cliente.estado_contrato || "sin_firmar", logo: cliente.logo || null,
       comercial: cliente.comercial || null,
       goLiveEstimado: cliente.go_live_estimado || null,
       tenant: cliente.tenant_productivo, phase: faseActual, createdAt: cliente.creado_at, introLeida: cliente.intro_leida, sucursalesOmitido: cliente.sucursales_omitido,
@@ -743,6 +743,7 @@ export default async function handler(req, res) {
           desarrolladorNombre: cli.desarrollador_id ? (nombreImpl[cli.desarrollador_id] || null) : null,
           estadoPago: cli.estado_pago || "al_dia",
           deudaDesde: cli.deuda_desde || null,
+          estadoContrato: cli.estado_contrato || "sin_firmar",
           goLiveEstimado: cli.go_live_estimado || null,
           relevamiento: respuestas, relevamientoEnviado: pasos.relevamiento,
           sucursalesCount: (sucPorCliente.get(cli.id) || []).length,
@@ -1127,6 +1128,25 @@ export default async function handler(req, res) {
       });
     }
 
+
+    if (action === "setEstadoContrato") {
+      // Estado del contrato del cliente. Editable por cualquier miembro del equipo
+      // (implementador, desarrollador o finanzas). Es informativo: no bloquea el avance.
+      const { estadoContrato } = req.body || {};
+      if (!["firmado", "sin_firmar", "pago_habilita"].includes(estadoContrato)) {
+        return res.status(400).json({ error: "Estado de contrato inválido" });
+      }
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      const { error: updErr } = await db.from("clientes").update({ estado_contrato: estadoContrato }).eq("id", cli.id);
+      if (updErr) {
+        console.error("Error al guardar estado_contrato:", updErr.message);
+        return res.status(500).json({ error: updErr.message });
+      }
+      const lbl = { firmado: "Contrato firmado", sin_firmar: "Sin contrato firmado", pago_habilita: "Pago habilita avance" }[estadoContrato];
+      await addHistory(cli.id, who || "Equipo", "Cambió el estado de contrato a: " + lbl);
+      return res.json(await assemble(cli));
+    }
 
     if (action === "setEstadoCliente") {
       // Guardar estado visual del cliente (gris, verde, amarillo, rojo)
