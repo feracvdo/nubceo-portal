@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.21.0";
+const APP_VERSION = "1.22.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -2463,6 +2463,14 @@ const ImageUpload = ({ value, onChange, label, round }) => {
 };
 
 // ─── Tablero tipo agile: columnas = fases del proyecto, tarjetas arrastrables ───
+// Estado del contrato del cliente (informativo, editable por el equipo).
+const CONTRATO = {
+  firmado:       { lbl: "Contrato firmado",      chip: "✓ Contrato",     tone: "green" },
+  sin_firmar:    { lbl: "Sin contrato firmado",  chip: "Sin contrato",   tone: "amber" },
+  pago_habilita: { lbl: "Pago habilita avance",  chip: "Pago habilita",  tone: "blue" },
+};
+const contratoInfo = (v) => CONTRATO[v] || CONTRATO.sin_firmar;
+
 // Color del semáforo de seguimiento (gris = sin marcar).
 const COLOR_SEG = { verde: "#22c55e", amarillo: "#f59e0b", rojo: "#ef4444" };
 const colorSeg = (estado) => COLOR_SEG[estado] || null;
@@ -2537,6 +2545,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
                     </div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {(() => { const sg = semaforoGoLive(cli.goLiveEstimado); return sg ? <Badge tone={sg.tone}>🎯 {sg.txt}</Badge> : null; })()}
+                      {(() => { const ci = contratoInfo(cli.estadoContrato); return <Badge tone={ci.tone}>📄 {ci.chip}</Badge>; })()}
                       {!cli.implementadorId && <Badge tone="amber">Sin asignar</Badge>}
                       {cli.estadoPago === "con_deuda" && <Badge tone="red">💰 Deuda {diasDesde(cli.deudaDesde)}d</Badge>}
                       {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
@@ -3268,6 +3277,25 @@ function AdminPortal({ session, onLogout }) {
                       ERP/PDV: {meta.erpPdv.join(", ")}
                     </div>
                   )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                    <Badge tone={contratoInfo(meta.estadoContrato).tone}>📄 {contratoInfo(meta.estadoContrato).lbl}</Badge>
+                    <select
+                      value={meta.estadoContrato || "sin_firmar"}
+                      onChange={async (e) => {
+                        const val = e.target.value;
+                        try {
+                          const r = await api("setEstadoContrato", { sessionCode: sc, code: sel, estadoContrato: val, who: session.who });
+                          setSelMeta(r.meta); setSelData(r.data);
+                          flash("Estado de contrato actualizado ✓", 2000);
+                        } catch (err) { flash(err.message); }
+                      }}
+                      style={{ height: 30, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 12.5, fontFamily: "inherit", color: T.n800, cursor: "pointer" }}
+                    >
+                      <option value="firmado">Contrato firmado</option>
+                      <option value="sin_firmar">Sin contrato firmado</option>
+                      <option value="pago_habilita">Pago habilita avance</option>
+                    </select>
+                  </div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
