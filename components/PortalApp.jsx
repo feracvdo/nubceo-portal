@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.22.1";
+const APP_VERSION = "1.23.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -2579,11 +2579,12 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
 const NAV_ITEMS = [
   ["clientes", "🗂", "Clientes"],
   ["tablero", "▦", "Tablero"],
+  ["notificaciones", "🔔", "Notificaciones"],
   ["equipo", "👥", "Equipo"],
   ["config", "⚙", "Configuración"],
   ["perfil", "🙂", "Mi perfil"],
 ];
-function Sidebar({ activo, onCambiar }) {
+function Sidebar({ activo, onCambiar, noLeidas = 0 }) {
   return (
     <div style={{ width: 200, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
       <div style={{ display: "grid", gap: 3 }}>
@@ -2594,6 +2595,9 @@ function Sidebar({ activo, onCambiar }) {
             background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
           }}>
             <span style={{ fontSize: 15 }}>{icon}</span>{lbl}
+            {id === "notificaciones" && noLeidas > 0 && (
+              <span style={{ marginLeft: "auto", background: "#ef4444", color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: 100, padding: "1px 7px", minWidth: 18, textAlign: "center" }}>{noLeidas > 99 ? "99+" : noLeidas}</span>
+            )}
           </div>
         ))}
       </div>
@@ -2804,6 +2808,8 @@ function AdminPortal({ session, onLogout }) {
   const [busqueda, setBusqueda] = useState("");
   const [filtroImpl, setFiltroImpl] = useState("");
   const [filtroDev, setFiltroDev] = useState("");
+  const [notifs, setNotifs] = useState([]);
+  const [notifNoLeidas, setNotifNoLeidas] = useState(0);
   const [newContactos, setNewContactos] = useState([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
   const [newComercial, setNewComercial] = useState("");
   const [newGoLive, setNewGoLive] = useState(""); // formato YYYY-MM-DD
@@ -2887,6 +2893,30 @@ function AdminPortal({ session, onLogout }) {
   }, [sc]);
 
   useEffect(() => { cargarListado(); }, [cargarListado]);
+
+  const cargarNotificaciones = useCallback(async () => {
+    try {
+      const r = await api("listNotificaciones", { sessionCode: sc });
+      setNotifs(r.notificaciones || []);
+      setNotifNoLeidas(r.noLeidas || 0);
+    } catch (e) { /* opcional */ }
+  }, [sc]);
+  useEffect(() => {
+    cargarNotificaciones();
+    const t = setInterval(cargarNotificaciones, 60000); // refresca cada 60s
+    return () => clearInterval(t);
+  }, [cargarNotificaciones]);
+
+  const marcarNotifLeida = async (id) => {
+    setNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, leida: true } : n)));
+    setNotifNoLeidas((prev) => Math.max(0, prev - 1));
+    try { await api("marcarNotificacionLeida", { sessionCode: sc, id }); } catch (e) { cargarNotificaciones(); }
+  };
+  const marcarTodasNotifLeidas = async () => {
+    setNotifs((prev) => prev.map((n) => ({ ...n, leida: true })));
+    setNotifNoLeidas(0);
+    try { await api("marcarNotificacionesLeidas", { sessionCode: sc }); } catch (e) { cargarNotificaciones(); }
+  };
 
   useEffect(() => {
     if (!session.teamId || !team.length) return;
@@ -3714,7 +3744,7 @@ function AdminPortal({ session, onLogout }) {
     <div>
       <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin />
       <div style={{ display: "flex" }}>
-        <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); }} />
+        <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); if (m === "notificaciones") cargarNotificaciones(); }} noLeidas={notifNoLeidas} />
         <div style={{ flex: 1, minWidth: 0, padding: "26px 24px 60px", maxWidth: 1180, margin: "0 auto" }}>
           {msg && <Alert tone="success" style={{ marginBottom: 16 }}>{msg}</Alert>}
 
@@ -3969,6 +3999,47 @@ function AdminPortal({ session, onLogout }) {
           </div>
         )}
             </div>
+          )}
+
+          {/* ══════════ MÓDULO: NOTIFICACIONES ══════════ */}
+          {modulo === "notificaciones" && (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+                <div>
+                  <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: 0 }}>Notificaciones{notifNoLeidas > 0 ? " (" + notifNoLeidas + " sin leer)" : ""}</h2>
+                  <p style={{ fontSize: 12.5, color: T.n400, margin: "4px 0 0" }}>Te avisamos cuando un cliente completa un paso de la implementación.</p>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Btn variant="ghost" size="sm" onClick={cargarNotificaciones}>Actualizar</Btn>
+                  {notifNoLeidas > 0 && <Btn variant="secondary" size="sm" onClick={marcarTodasNotifLeidas}>Marcar todas como leídas</Btn>}
+                </div>
+              </div>
+              {notifs.length === 0 ? (
+                <Card><div style={{ color: T.n400, fontSize: 14, textAlign: "center", padding: 20 }}>No tenés notificaciones todavía.</div></Card>
+              ) : (
+                <div style={{ display: "grid", gap: 8 }}>
+                  {notifs.map((n) => (
+                    <Card key={n.id} style={{ background: n.leida ? "#fff" : T.primary50, borderColor: n.leida ? T.n200 : T.primary100 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                        <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                          {!n.leida && <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.primary, marginTop: 6, flexShrink: 0 }} />}
+                          <div>
+                            <div style={{ fontSize: 14, color: T.n900, fontWeight: n.leida ? 500 : 700 }}>{n.texto}</div>
+                            <div style={{ fontSize: 12, color: T.n400, marginTop: 3 }}>
+                              {n.code ? n.code + " · " : ""}{fmtDate(n.creadoAt)}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                          {n.code && <Btn variant="ghost" size="sm" onClick={() => { setModulo("clientes"); abrir(n.code); }}>Ver cliente</Btn>}
+                          {!n.leida && <Btn variant="ghost" size="sm" onClick={() => marcarNotifLeida(n.id)}>Marcar leída</Btn>}
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </>
           )}
 
           {/* ══════════ MÓDULO: EQUIPO ══════════ */}
