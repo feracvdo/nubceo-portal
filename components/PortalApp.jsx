@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.22.0";
+const APP_VERSION = "1.22.1";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -3826,10 +3826,10 @@ function AdminPortal({ session, onLogout }) {
                 {clients && clients.length > 0 && (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 16 }}>
                     {[
-                      ["Clientes", clients.length],
-                      ["Sin asignar", clients.filter((c) => !c.implementadorId).length],
-                      ["Avance promedio", Math.round(clients.reduce((a, c) => a + c.completados / c.totalPasos, 0) / clients.length * 100) + "%"],
-                      ["Con deuda", clients.filter((c) => c.estadoPago === "con_deuda").length],
+                      ["Clientes", clientesVisibles.length],
+                      ["Sin asignar", clientesVisibles.filter((c) => !c.implementadorId).length],
+                      ["Avance promedio", clientesVisibles.length ? Math.round(clientesVisibles.reduce((a, c) => a + c.completados / c.totalPasos, 0) / clientesVisibles.length * 100) + "%" : "—"],
+                      ["Con deuda", clientesVisibles.filter((c) => c.estadoPago === "con_deuda").length],
                     ].map(([lbl, val]) => (
                       <div key={lbl} style={{ background: T.primary50, border: "1px solid " + T.primary100, borderRadius: 10, padding: "10px 14px" }}>
                         <div style={{ fontSize: 22, fontWeight: 700, color: T.primary800 }}>{val}</div>
@@ -3897,7 +3897,7 @@ function AdminPortal({ session, onLogout }) {
             <div ref={tableroRef} style={{ background: tableroFull ? "#fff" : "transparent", padding: tableroFull ? 20 : 0, height: tableroFull ? "100vh" : "auto", overflowY: tableroFull ? "auto" : "visible" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
                 <div>
-                  <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: 0 }}>Tablero de implementación</h2>
+                  <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: 0 }}>Tablero de implementación{clients ? " (" + clientesVisibles.length + " de " + clients.length + ")" : ""}</h2>
                   <p style={{ fontSize: 12.5, color: T.n400, margin: "4px 0 0" }}>La fase avanza sola a medida que se completan los pasos — arrastrá una tarjeta para pisarlo a mano.</p>
                 </div>
                 <Btn variant="secondary" size="sm" onClick={toggleFullscreen}>{tableroFull ? "✕ Salir de pantalla completa" : "⛶ Pantalla completa (para reuniones)"}</Btn>
