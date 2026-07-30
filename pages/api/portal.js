@@ -9,7 +9,7 @@ import {
 } from "../../lib/redmine";
 import { buildDiagrama } from "../../lib/diagrama";
 import * as gcal from "../../lib/googleCalendar";
-import { calcularPasos, computarPasos, faseSugerida } from "../../lib/pasos";
+import { calcularPasos, computarPasos, faseSugerida, NOMBRE_PASO } from "../../lib/pasos";
 import { hitosPara, calcularHitos, NOMBRE_HITO_GENERICO } from "../../lib/hitos";
 import { procesarAvisoPlazo, enviarAvisosPendientesDeCliente } from "../../lib/avisosPlazos";
 import crypto from "crypto";
@@ -146,6 +146,8 @@ async function assemble(cliente) {
     await db.from("clientes").update({ fase: faseSug }).eq("id", cid);
     faseActual = faseSug;
   }
+  // Notifica al implementador y a la líder si algún paso pasó a completo (idempotente).
+  await procesarNotificacionesDePasos(cliente, pasosCompletos);
   const archivos = arch.data || [];
   const fArch = (tipo) => {
     const a = archivos.find((x) => x.tipo === tipo);
@@ -256,6 +258,53 @@ async function decompose(cliente, data, esTeam) {
 // Inserta en el historial Y mantiene clientes.ultima_actividad al día — así el
 // listado (listClients) no necesita ir a buscar el último registro de historial
 // por cada cliente, solo lee la columna que ya viene en la fila del cliente.
+const LIDER_EMAIL = "silvana.mascitelli@nubceo.com";
+
+// Detecta pasos que pasaron a completos y genera notificaciones para el implementador
+// asignado + la líder (Silvana). Idempotente: usa clientes.pasos_notificados como "foto"
+// de lo ya avisado. En clientes que ya existían, la primera vez inicializa la foto SIN
+// notificar (para no mandar una avalancha de pasos viejos). Nunca rompe el flujo principal.
+async function procesarNotificacionesDePasos(cliente, pasosCompletos) {
+  try {
+    if (!cliente || !cliente.id || !pasosCompletos) return;
+    const completosAhora = Object.keys(pasosCompletos).filter((k) => pasosCompletos[k]);
+    const yaNotificados = cliente.pasos_notificados; // null/undefined => nunca inicializado
+
+    if (yaNotificados == null) {
+      await db.from("clientes").update({ pasos_notificados: completosAhora }).eq("id", cliente.id);
+      return;
+    }
+
+    const nuevos = completosAhora.filter((k) => !yaNotificados.includes(k));
+    if (!nuevos.length) return;
+
+    // Destinatarios: implementador asignado + líder (Silvana), sin duplicar.
+    const destinatarios = new Set();
+    if (cliente.implementador_id) destinatarios.add(cliente.implementador_id);
+    const { data: lider } = await db.from("equipo").select("id").eq("email", LIDER_EMAIL).maybeSingle();
+    if (lider && lider.id) destinatarios.add(lider.id);
+
+    if (destinatarios.size) {
+      const filas = [];
+      for (const paso of nuevos) {
+        const nombrePaso = NOMBRE_PASO[paso] || paso;
+        for (const destinatario_id of destinatarios) {
+          filas.push({
+            destinatario_id, cliente_id: cliente.id, tipo: "paso_completado", paso,
+            texto: cliente.nombre + " completó el paso «" + nombrePaso + "»",
+          });
+        }
+      }
+      if (filas.length) await db.from("notificaciones").insert(filas);
+    }
+
+    const union = Array.from(new Set([...yaNotificados, ...nuevos]));
+    await db.from("clientes").update({ pasos_notificados: union }).eq("id", cliente.id);
+  } catch (e) {
+    console.error("procesarNotificacionesDePasos:", e.message);
+  }
+}
+
 const addHistory = (cid, quien, texto) => {
   const ahora = new Date().toISOString();
   return Promise.all([
@@ -734,6 +783,7 @@ export default async function handler(req, res) {
         const faseSug = faseSugerida(pasos, hitos);
         let fase = cli.fase;
         if (faseSug > fase) { actualizacionesFase.push(db.from("clientes").update({ fase: faseSug }).eq("id", cli.id)); fase = faseSug; }
+        await procesarNotificacionesDePasos(cli, pasos);
         out.push({
           code: cli.codigo, name: cli.nombre, tenant: cli.tenant_productivo, phase: fase, createdAt: cli.creado_at,
           logo: cli.logo || null, razonSocial: cli.razon_social || null,
@@ -1128,6 +1178,40 @@ export default async function handler(req, res) {
       });
     }
 
+
+    if (action === "listNotificaciones") {
+      const { data: yo } = await db.from("equipo").select("id").eq("codigo", sc).maybeSingle();
+      if (!yo) return res.status(401).json({ error: "Solo el equipo tiene notificaciones" });
+      const { data } = await db.from("notificaciones")
+        .select("id, cliente_id, paso, texto, leida, creado_at, clientes(nombre, codigo)")
+        .eq("destinatario_id", yo.id)
+        .order("creado_at", { ascending: false })
+        .limit(100);
+      const notificaciones = (data || []).map((n) => ({
+        id: n.id, texto: n.texto, paso: n.paso, leida: n.leida, creadoAt: n.creado_at,
+        cliente: n.clientes?.nombre || null, code: n.clientes?.codigo || null,
+      }));
+      const noLeidas = notificaciones.filter((n) => !n.leida).length;
+      return res.json({ notificaciones, noLeidas });
+    }
+
+    if (action === "marcarNotificacionLeida") {
+      const { data: yo } = await db.from("equipo").select("id").eq("codigo", sc).maybeSingle();
+      if (!yo) return res.status(401).json({ error: "No autorizado" });
+      const { error } = await db.from("notificaciones").update({ leida: true })
+        .eq("id", req.body.id).eq("destinatario_id", yo.id);
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ ok: true });
+    }
+
+    if (action === "marcarNotificacionesLeidas") {
+      const { data: yo } = await db.from("equipo").select("id").eq("codigo", sc).maybeSingle();
+      if (!yo) return res.status(401).json({ error: "No autorizado" });
+      const { error } = await db.from("notificaciones").update({ leida: true })
+        .eq("destinatario_id", yo.id).eq("leida", false);
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ ok: true });
+    }
 
     if (action === "setEstadoContrato") {
       // Estado del contrato del cliente. Editable por cualquier miembro del equipo
