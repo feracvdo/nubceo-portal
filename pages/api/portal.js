@@ -9,6 +9,7 @@ import {
 } from "../../lib/redmine";
 import { buildDiagrama } from "../../lib/diagrama";
 import * as gcal from "../../lib/googleCalendar";
+import { generarPlantilla } from "../../lib/plantillasMail";
 import { calcularPasos, computarPasos, faseSugerida, NOMBRE_PASO } from "../../lib/pasos";
 import { hitosPara, calcularHitos, NOMBRE_HITO_GENERICO } from "../../lib/hitos";
 import { procesarAvisoPlazo, enviarAvisosPendientesDeCliente } from "../../lib/avisosPlazos";
@@ -1262,6 +1263,32 @@ export default async function handler(req, res) {
       const { error: delErr } = await db.from("clientes").delete().eq("id", cli.id);
       if (delErr) return res.status(500).json({ error: "No se pudo eliminar: " + delErr.message });
       return res.json({ ok: true, eliminado: cli.codigo });
+    }
+
+    if (action === "crearBorradorGmail") {
+      if (!team) return res.status(403).json({ error: "Solo el equipo puede preparar mails." });
+      const miNombre = await nombreDeSesion(sc);
+      if (!miNombre) return res.status(400).json({ error: "Necesitás tu usuario personal (no el código maestro) para preparar mails desde tu Gmail. Crealo en Equipo e ingresá con tu código." });
+
+      const conn = await getCalendarConnection(miNombre);
+      if (!conn) return res.status(400).json({ error: "Conectá tu cuenta de Google en Mi perfil para poder preparar el mail en tu Gmail." });
+
+      const { plantilla, datos, destinatarios } = req.body;
+      const generado = generarPlantilla(plantilla, datos || {});
+      if (!generado) return res.status(400).json({ error: "Plantilla no válida" });
+      const to = Array.isArray(destinatarios) ? destinatarios.filter(Boolean) : [];
+
+      try {
+        await gcal.createGmailDraft(conn.access_token, { to, subject: generado.subject, html: generado.html });
+      } catch (e) {
+        if (e.message === "SCOPE_GMAIL") {
+          return res.status(400).json({ error: "Tu conexión de Google todavía no tiene permiso de Gmail. Andá a Mi perfil, desconectá y volvé a conectar tu Google para habilitarlo." });
+        }
+        return res.status(500).json({ error: e.message });
+      }
+      // No hay deep-link confiable a un borrador puntual; abrimos la bandeja de Borradores.
+      const draftUrl = "https://mail.google.com/mail/u/0/#drafts";
+      return res.json({ ok: true, draftUrl, googleEmail: conn.googleEmail || null });
     }
 
     if (action === "setEstadoContrato") {
