@@ -168,7 +168,7 @@ async function assemble(cliente) {
       id: cliente.id, codigo: cliente.codigo,
       implementadorId: implementador?.id || null, implementadorNombre: implementador?.nombre || null, implementadorEmail: implementador?.email || null,
       desarrolladorId: desarrollador?.id || null, desarrolladorNombre: desarrollador?.nombre || null, desarrolladorEmail: desarrollador?.email || null,
-      name: cliente.nombre, razonSocial: cliente.razon_social || null, cuits: cliente.cuits || [], erpPdv: cliente.erp_pdv || [], estadoContrato: cliente.estado_contrato || "sin_firmar", logo: cliente.logo || null,
+      name: cliente.nombre, razonSocial: cliente.razon_social || null, cuits: cliente.cuits || [], erpPdv: cliente.erp_pdv || [], estadoContrato: cliente.estado_contrato || "sin_firmar", fechaIngreso: cliente.fecha_ingreso || null, comercial: cliente.comercial || null, tenant: cliente.tenant_productivo || null, logo: cliente.logo || null,
       comercial: cliente.comercial || null,
       goLiveEstimado: cliente.go_live_estimado || null,
       tenant: cliente.tenant_productivo, phase: faseActual, createdAt: cliente.creado_at, introLeida: cliente.intro_leida, sucursalesOmitido: cliente.sucursales_omitido,
@@ -208,8 +208,13 @@ async function assemble(cliente) {
 async function decompose(cliente, data, esTeam) {
   const cid = cliente.id;
   if (data.involucrados !== undefined) {
-    await db.from("involucrados").delete().eq("cliente_id", cid);
-    const filas = data.involucrados.filter((p) => (p.nombre || "").trim() && (p.email || "").trim());
+    // FUSIÓN: no borramos los contactos ya cargados (p. ej. los del alta). Sumamos los
+    // nuevos del relevamiento y evitamos duplicados por email (sin distinguir mayúsculas).
+    const { data: yaCargados } = await db.from("involucrados").select("email").eq("cliente_id", cid);
+    const emailsExistentes = new Set((yaCargados || []).map((p) => (p.email || "").trim().toLowerCase()).filter(Boolean));
+    const filas = data.involucrados
+      .filter((p) => (p.nombre || "").trim() && (p.email || "").trim())
+      .filter((p) => !emailsExistentes.has(p.email.trim().toLowerCase()));
     if (filas.length) {
       await db.from("involucrados").insert(filas.map((p) => ({
         cliente_id: cid, nombre: p.nombre.trim(), cargo: (p.cargo || "").trim() || null,
@@ -329,7 +334,10 @@ export default async function handler(req, res) {
         return res.json({ role: "team", name: impl.nombre, teamId: impl.id, teamRol: impl.rol, tipoUsuario: tu, superadmin: tu === "superuser" });
       }
       const cli = await getCliente(sc);
-      if (cli) return res.json({ role: "client", name: cli.nombre });
+      if (cli) {
+        if (cli.archivado_at) return res.status(403).json({ error: "Este acceso fue archivado. Si es un cliente nuevo con el mismo código, pedile al Superuser que elimine el archivado." });
+        return res.json({ role: "client", name: cli.nombre });
+      }
       return res.status(404).json({ error: "Código no encontrado" });
     }
 
@@ -794,6 +802,7 @@ export default async function handler(req, res) {
           estadoPago: cli.estado_pago || "al_dia",
           deudaDesde: cli.deuda_desde || null,
           estadoContrato: cli.estado_contrato || "sin_firmar",
+          fechaIngreso: cli.fecha_ingreso || null,
           goLiveEstimado: cli.go_live_estimado || null,
           relevamiento: respuestas, relevamientoEnviado: pasos.relevamiento,
           sucursalesCount: (sucPorCliente.get(cli.id) || []).length,
@@ -887,13 +896,18 @@ export default async function handler(req, res) {
 
       const nuevo = (req.body.codigo || "").trim().toUpperCase();
       if (!nuevo || !req.body.nombre) return res.status(400).json({ error: "Faltan nombre o código" });
-      if (nuevo === ADMIN_CODE || (await isTeam(nuevo)) || (await getCliente(nuevo))) return res.status(409).json({ error: "Ese código ya está en uso" });
+      if (nuevo === ADMIN_CODE || (await isTeam(nuevo))) return res.status(409).json({ error: "Ese código ya está en uso por el equipo" });
+      {
+        const yaCliente = await getCliente(nuevo);
+        if (yaCliente) return res.status(409).json({ error: yaCliente.archivado_at ? "Ese código pertenece a un cliente ARCHIVADO. Pedile al Superuser que lo elimine para poder reutilizarlo." : "Ese código ya lo usa otro cliente" });
+      }
       const cuits = Array.isArray(req.body.cuits) ? req.body.cuits.map((c) => String(c).trim()).filter(Boolean) : [];
       const { data: nuevoCliente, error: errIns } = await db.from("clientes").insert({
         codigo: nuevo, nombre: req.body.nombre.trim(), tenant_productivo: (req.body.tenant || "").trim() || null,
         razon_social: (req.body.razonSocial || "").trim() || null, cuits, erp_pdv: Array.isArray(req.body.erpPdv) ? req.body.erpPdv.map((x) => String(x).trim()).filter(Boolean) : [], logo: req.body.logo || null,
         comercial: (req.body.comercial || "").trim() || null,
         go_live_estimado: req.body.goLiveEstimado || null,
+        fecha_ingreso: req.body.fechaIngreso || null,
       }).select().single();
       if (errIns) return res.status(500).json({ error: "No se pudo crear el cliente: " + errIns.message });
       const contactos = Array.isArray(req.body.contactos) ? req.body.contactos.filter((c) => (c.nombre || "").trim()) : [];
@@ -910,14 +924,34 @@ export default async function handler(req, res) {
       const cli = await getCliente(cc);
       if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
       const upd = {};
+      // Cambio de CÓDIGO de acceso (credencial de login): validamos que no choque con
+      // el código maestro, con un miembro del equipo ni con otro cliente.
+      let nuevoCodigo = null;
+      if (req.body.codigo !== undefined) {
+        nuevoCodigo = (req.body.codigo || "").trim().toUpperCase();
+        if (!nuevoCodigo) return res.status(400).json({ error: "El código no puede quedar vacío" });
+        if (nuevoCodigo !== cli.codigo) {
+          if (nuevoCodigo === ADMIN_CODE || (await isTeam(nuevoCodigo))) return res.status(409).json({ error: "Ese código ya está en uso" });
+          const otro = await getCliente(nuevoCodigo);
+          if (otro && otro.id !== cli.id) return res.status(409).json({ error: "Ese código ya lo usa otro cliente" + (otro.archivado_at ? " (archivado — eliminalo primero)" : "") });
+          upd.codigo = nuevoCodigo;
+        }
+      }
+      if (req.body.nombre !== undefined && (req.body.nombre || "").trim()) upd.nombre = req.body.nombre.trim();
+      if (req.body.tenant !== undefined) upd.tenant_productivo = (req.body.tenant || "").trim() || null;
+      if (req.body.comercial !== undefined) upd.comercial = (req.body.comercial || "").trim() || null;
+      if (req.body.fechaIngreso !== undefined) upd.fecha_ingreso = req.body.fechaIngreso || null;
       if (req.body.razonSocial !== undefined) upd.razon_social = (req.body.razonSocial || "").trim() || null;
       if (req.body.cuits !== undefined) upd.cuits = Array.isArray(req.body.cuits) ? req.body.cuits.map((c) => String(c).trim()).filter(Boolean) : [];
       if (req.body.erpPdv !== undefined) upd.erp_pdv = Array.isArray(req.body.erpPdv) ? req.body.erpPdv.map((x) => String(x).trim()).filter(Boolean) : [];
       if (req.body.logo !== undefined) upd.logo = req.body.logo || null;
       if (req.body.goLiveEstimado !== undefined) upd.go_live_estimado = req.body.goLiveEstimado || null;
       if (Object.keys(upd).length) await db.from("clientes").update(upd).eq("id", cli.id);
-      await addHistory(cli.id, who || "Equipo", "Actualizó los datos del cliente (razón social / CUITs / logo / go-live estimado)");
-      return res.json(await assemble(cli));
+      await addHistory(cli.id, who || "Equipo", "Actualizó los datos del cliente");
+      const cliAct = await getCliente(nuevoCodigo && upd.codigo ? nuevoCodigo : cli.codigo);
+      const r = await assemble(cliAct);
+      if (upd.codigo) r.meta.codigoNuevo = upd.codigo; // el front re-apunta la sesión al nuevo código
+      return res.json(r);
     }
 
     if (action === "setFinanzas") {
@@ -1211,6 +1245,23 @@ export default async function handler(req, res) {
         .eq("destinatario_id", yo.id).eq("leida", false);
       if (error) return res.status(500).json({ error: error.message });
       return res.json({ ok: true });
+    }
+
+    if (action === "deleteClient") {
+      const tu = await tipoUsuario(sc);
+      if (tu !== "superuser") return res.status(403).json({ error: "Solo el Superuser puede eliminar clientes." });
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      if (!cli.archivado_at) return res.status(400).json({ error: "Primero archivá el cliente; solo se pueden eliminar clientes archivados." });
+      // Borrado en cascada manual: primero los hijos, después el cliente, para no
+      // depender de que cada foreign key tenga ON DELETE CASCADE en la base.
+      const hijas = ["notificaciones", "mailsEnviados", "involucrados", "relevamientos", "archivos", "eventos", "credenciales_api", "pruebas", "procesadoras_cliente", "historial", "sucursales"];
+      for (const t of hijas) {
+        try { await db.from(t).delete().eq("cliente_id", cli.id); } catch (e) { /* la tabla puede no existir en este entorno */ }
+      }
+      const { error: delErr } = await db.from("clientes").delete().eq("id", cli.id);
+      if (delErr) return res.status(500).json({ error: "No se pudo eliminar: " + delErr.message });
+      return res.json({ ok: true, eliminado: cli.codigo });
     }
 
     if (action === "setEstadoContrato") {
