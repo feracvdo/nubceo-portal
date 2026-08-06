@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.23.0";
+const APP_VERSION = "1.24.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -2543,6 +2543,11 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
                     <div style={{ fontSize: 10.5, color: T.n400, marginBottom: 6 }}>
                       {cli.implementadorNombre || "Sin implementador/a"}{cli.desarrolladorNombre ? " · " + cli.desarrolladorNombre + " (dev)" : ""}
                     </div>
+                    {(cli.fechaIngreso || cli.createdAt) && (
+                      <div style={{ fontSize: 10.5, color: T.n400, marginBottom: 6 }}>
+                        Ingreso: {cli.fechaIngreso ? fmtDateSolo(cli.fechaIngreso) : fmtDate(cli.createdAt)}
+                      </div>
+                    )}
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {(() => { const sg = semaforoGoLive(cli.goLiveEstimado); return sg ? <Badge tone={sg.tone}>🎯 {sg.txt}</Badge> : null; })()}
                       {(() => { const ci = contratoInfo(cli.estadoContrato); return <Badge tone={ci.tone}>📄 {ci.chip}</Badge>; })()}
@@ -2798,6 +2803,11 @@ function AdminPortal({ session, onLogout }) {
   const [editErpPdvInput, setEditErpPdvInput] = useState("");
   const [editLogo, setEditLogo] = useState(null);
   const [editGoLive, setEditGoLive] = useState("");
+  const [editNombre, setEditNombre] = useState("");
+  const [editCodigo, setEditCodigo] = useState("");
+  const [editTenant, setEditTenant] = useState("");
+  const [editComercial, setEditComercial] = useState("");
+  const [editFechaIngreso, setEditFechaIngreso] = useState("");
   const [editandoFinanzas, setEditandoFinanzas] = useState(false);
   const [finFee, setFinFee] = useState("");
   const [finMoneda, setFinMoneda] = useState("ARS");
@@ -2813,6 +2823,7 @@ function AdminPortal({ session, onLogout }) {
   const [newContactos, setNewContactos] = useState([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
   const [newComercial, setNewComercial] = useState("");
   const [newGoLive, setNewGoLive] = useState(""); // formato YYYY-MM-DD
+  const [newFechaIngreso, setNewFechaIngreso] = useState(""); // fecha de trato ganado / ingreso
   const [miNombre, setMiNombre] = useState("");
   const [miRedmineKey, setMiRedmineKey] = useState("");
   const [tableroFull, setTableroFull] = useState(false);
@@ -2959,6 +2970,17 @@ function AdminPortal({ session, onLogout }) {
     } catch (e) { flash(e.message); }
   };
 
+  const eliminarCliente = async (code, nombre) => {
+    if (!window.confirm("¿ELIMINAR definitivamente a " + nombre + " (código " + code + ")?\n\nEsto borra el cliente y TODOS sus datos (contactos, relevamiento, archivos, reuniones, tickets, notificaciones). Es IRREVERSIBLE y libera el código para reutilizarlo.")) return;
+    if (!window.confirm("Confirmá una vez más: se elimina " + nombre + " sin vuelta atrás.")) return;
+    try {
+      await api("deleteClient", { sessionCode: sc, code, who: session.who });
+      flash(nombre + " fue eliminado. El código " + code + " quedó libre.");
+      cargarArchivados();
+      cargarListado();
+    } catch (e) { flash(e.message); }
+  };
+
   const cargarArchivados = useCallback(async () => {
     if (session.tipoUsuario !== "superuser") return;
     try {
@@ -3067,11 +3089,11 @@ function AdminPortal({ session, onLogout }) {
     try {
       await api("createClient", {
         sessionCode: sc, nombre: newName, codigo: newCode, tenant: newTenant, razonSocial: newRazonSocial, cuits: newCuits, logo: newLogo,
-        comercial: newComercial, goLiveEstimado: newGoLive, erpPdv: newErpPdv, contactos: newContactos.filter((c) => c.nombre.trim()),
+        comercial: newComercial, goLiveEstimado: newGoLive, fechaIngreso: newFechaIngreso || null, erpPdv: newErpPdv, contactos: newContactos.filter((c) => c.nombre.trim()),
       });
       flash("Cliente creado. Compartile el código " + newCode.trim().toUpperCase() + ". Al primer login se dispara el alta en Redmine y sus credenciales de API.", 5000);
       setNewName(""); setNewCode(""); setNewTenant(""); setNewRazonSocial(""); setNewCuits([]); setNewCuitInput(""); setNewLogo(null);
-      setNewComercial(""); setNewGoLive(""); setNewErpPdv([]); setNewErpPdvInput(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
+      setNewComercial(""); setNewGoLive(""); setNewFechaIngreso(""); setNewErpPdv([]); setNewErpPdvInput(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
       cargarListado();
     } catch (e) { flash(e.message); }
   };
@@ -3354,11 +3376,24 @@ function AdminPortal({ session, onLogout }) {
             <div style={{ marginTop: 18 }}><Stepper fase={meta.phase} /></div>
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid " + T.n100 }}>
               {!editandoInfo ? (
-                <span onClick={() => { setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditErpPdv(meta.erpPdv || []); setEditErpPdvInput(""); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
-                  ✎ Editar razón social / CUITs / logo / fecha de go-live
+                <span onClick={() => { setEditNombre(meta.name || ""); setEditCodigo(meta.codigo || ""); setEditTenant(meta.tenant || ""); setEditComercial(meta.comercial || ""); setEditFechaIngreso(meta.fechaIngreso || ""); setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditErpPdv(meta.erpPdv || []); setEditErpPdvInput(""); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
+                  ✎ Editar datos del cliente
                 </span>
               ) : (
                 <div style={{ display: "grid", gap: 10 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
+                    <div><Label>Nombre del cliente</Label><Input value={editNombre} onChange={(e) => setEditNombre(e.target.value)} /></div>
+                    <div>
+                      <Label>Código de acceso</Label>
+                      <Input value={editCodigo} onChange={(e) => setEditCodigo(e.target.value.toUpperCase())} />
+                      <div style={{ fontSize: 11.5, color: "#b45309", marginTop: 4 }}>⚠ Es la credencial de login del cliente. Si lo cambiás, avisale el nuevo código.</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                    <div><Label>Tenant productivo</Label><Input value={editTenant} onChange={(e) => setEditTenant(e.target.value)} /></div>
+                    <div><Label>Comercial de la cuenta</Label><Input value={editComercial} onChange={(e) => setEditComercial(e.target.value)} /></div>
+                    <div><Label>Fecha de ingreso (trato ganado)</Label><Input type="date" value={editFechaIngreso} onChange={(e) => setEditFechaIngreso(e.target.value)} /></div>
+                  </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1.4fr 2fr", gap: 10 }}>
                     <div><Label>Razón social</Label><Input value={editRazonSocial} onChange={(e) => setEditRazonSocial(e.target.value)} /></div>
                     <div>
@@ -3407,7 +3442,7 @@ function AdminPortal({ session, onLogout }) {
                     <ImageUpload value={editLogo} onChange={setEditLogo} label="logo" />
                     <div style={{ display: "flex", gap: 8 }}>
                       <Btn variant="ghost" size="sm" onClick={() => setEditandoInfo(false)}>Cancelar</Btn>
-                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, razonSocial: editRazonSocial, cuits: editCuits, erpPdv: editErpPdv, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); setEditandoInfo(false); } catch (e) { flash(e.message); } }}>Guardar</Btn>
+                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, nombre: editNombre, codigo: editCodigo, tenant: editTenant, comercial: editComercial, fechaIngreso: editFechaIngreso || null, razonSocial: editRazonSocial, cuits: editCuits, erpPdv: editErpPdv, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); if (r.meta && r.meta.codigoNuevo) setSel(r.meta.codigoNuevo); setEditandoInfo(false); cargarListado(); flash("Datos actualizados ✓", 2000); } catch (e) { flash(e.message); } }}>Guardar</Btn>
                     </div>
                   </div>
                 </div>
@@ -3804,6 +3839,10 @@ function AdminPortal({ session, onLogout }) {
                   <div>
                     <Label>Fecha estimada de go-live (opcional)</Label>
                     <Input type="date" value={newGoLive} onChange={(e) => setNewGoLive(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Fecha de ingreso (trato ganado, opcional)</Label>
+                    <Input type="date" value={newFechaIngreso} onChange={(e) => setNewFechaIngreso(e.target.value)} />
                     <div style={{ fontSize: 11.5, color: T.n400, marginTop: 4, lineHeight: 1.4 }}>
                       Es la que se acuerda con el cliente en la reunión de vinculación (típicamente ~2 meses después del alta). Con ella el tablero muestra un semáforo y prioriza los clientes por proximidad.
                     </div>
@@ -4109,6 +4148,9 @@ function AdminPortal({ session, onLogout }) {
                             <div style={{ fontSize: 12, color: T.n400 }}>Código {c.codigo} · Archivado el {fmtDate(c.archivado_at)}</div>
                           </div>
                           <Btn variant="ghost" size="sm" onClick={() => restaurarCliente(c.codigo, c.nombre)}>↩ Restaurar</Btn>
+                          {session.tipoUsuario === "superuser" && (
+                            <Btn variant="ghost" size="sm" style={{ color: "#b91c1c" }} onClick={() => eliminarCliente(c.codigo, c.nombre)}>🗑 Eliminar</Btn>
+                          )}
                         </div>
                       ))}
                     </div>
