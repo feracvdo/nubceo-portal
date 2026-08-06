@@ -4,6 +4,7 @@ import ModalAgregarContacto from "./ModalAgregarContacto";
 // Recibe datos del cliente por props (el detalle del cliente ya los tiene cargados):
 //   clienteId, clienteNombre, codigoAcceso, involucradosIniciales, implementador, desarrollador, lider
 export default function MailsCard({
+  sessionCode,
   clienteId,
   clienteNombre,
   codigoAcceso,
@@ -77,6 +78,8 @@ export default function MailsCard({
     }
   };
 
+  // Prepara el mail como BORRADOR en tu Gmail (con el HTML del template y los
+  // destinatarios) y te abre Gmail para revisarlo y enviarlo a mano. No envía nada solo.
   const handleEnviarMail = async () => {
     if (selectedContacts.length === 0) { setError("Seleccioná al menos un destinatario"); return; }
     try {
@@ -91,22 +94,19 @@ export default function MailsCard({
 
       if (destinatarios.length === 0) { setError("Los contactos seleccionados no tienen email"); return; }
 
-      const respSend = await fetch("/api/send-mail", {
+      const resp = await fetch("/api/portal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cliente_id: clienteId, plantilla, datos: datosPlantilla(), destinatarios }),
+        body: JSON.stringify({ action: "crearBorradorGmail", sessionCode, code: codigoAcceso, plantilla, datos: datosPlantilla(), destinatarios }),
       });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || `Error ${resp.status}`);
 
-      if (!respSend.ok) {
-        const errData = await respSend.json();
-        throw new Error(errData.error || `Error ${respSend.status}`);
-      }
-
-      setOkMsg("Mail enviado a " + destinatarios.length + " destinatario(s).");
+      setOkMsg("Borrador creado en tu Gmail para " + destinatarios.length + " destinatario(s). Te abrimos Gmail para revisarlo y enviarlo.");
       setPreviewHtml(null);
-      await cargarDatos();
+      if (data.draftUrl) window.open(data.draftUrl, "_blank");
     } catch (e) {
-      setError("Error enviando mail: " + e.message);
+      setError("No se pudo preparar el mail: " + e.message);
     } finally {
       setEnviando(false);
     }
@@ -209,7 +209,7 @@ export default function MailsCard({
           </button>
           <button onClick={handleEnviarMail} disabled={enviando || selectedContacts.length === 0}
             style={{ flex: 1, padding: 10, backgroundColor: enviando || selectedContacts.length === 0 ? "#ccc" : "#0a6bf4", color: "#fff", border: "none", borderRadius: 4, cursor: enviando || selectedContacts.length === 0 ? "not-allowed" : "pointer", fontWeight: 600, fontSize: 14 }}>
-            {enviando ? "Enviando…" : "✓ Enviar mail"}
+            {enviando ? "Preparando…" : "✉ Preparar en Gmail"}
           </button>
         </div>
       </div>
