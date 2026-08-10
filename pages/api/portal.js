@@ -169,7 +169,7 @@ async function assemble(cliente) {
       id: cliente.id, codigo: cliente.codigo,
       implementadorId: implementador?.id || null, implementadorNombre: implementador?.nombre || null, implementadorEmail: implementador?.email || null,
       desarrolladorId: desarrollador?.id || null, desarrolladorNombre: desarrollador?.nombre || null, desarrolladorEmail: desarrollador?.email || null,
-      name: cliente.nombre, razonSocial: cliente.razon_social || null, cuits: cliente.cuits || [], erpPdv: cliente.erp_pdv || [], estadoContrato: cliente.estado_contrato || "sin_firmar", fechaIngreso: cliente.fecha_ingreso || null, comercial: cliente.comercial || null, tenant: cliente.tenant_productivo || null, logo: cliente.logo || null,
+      name: cliente.nombre, razonSocial: cliente.razon_social || null, cuits: cliente.cuits || [], erpPdv: cliente.erp_pdv || [], estadoContrato: cliente.estado_contrato || "sin_firmar", fechaIngreso: cliente.fecha_ingreso || null, comercial: cliente.comercial || null, comerciales: cliente.comerciales || [], tenant: cliente.tenant_productivo || null, logo: cliente.logo || null,
       comercial: cliente.comercial || null,
       goLiveEstimado: cliente.go_live_estimado || null,
       tenant: cliente.tenant_productivo, phase: faseActual, createdAt: cliente.creado_at, introLeida: cliente.intro_leida, sucursalesOmitido: cliente.sucursales_omitido,
@@ -325,7 +325,20 @@ export default async function handler(req, res) {
   const sc = (sessionCode || "").trim().toUpperCase();
   const cc = (code || sc || "").trim().toUpperCase();
 
+  // Los usuarios de tipo "comercial" (vendedores) tienen acceso SOLO DE LECTURA: pueden
+  // ver todo pero no ejecutar ninguna acción de escritura. Se controla en un solo lugar.
+  const ACCIONES_LECTURA = new Set([
+    "login", "listClients", "getClient", "listTeam", "listNotificaciones",
+    "getMyProfile", "getMyAvailability", "getSlots",
+  ]);
+
   try {
+    if (action && action !== "login") {
+      const tuGate = await tipoUsuario(sc);
+      if (tuGate === "comercial" && !ACCIONES_LECTURA.has(action)) {
+        return res.status(403).json({ error: "Tu usuario es Comercial (solo lectura): podés ver todo, pero no editar." });
+      }
+    }
     // ── Login ──
     if (action === "login") {
       if (sc === ADMIN_CODE) return res.json({ role: "team", name: who || "Equipo Nubceo", superadmin: true });
@@ -804,6 +817,7 @@ export default async function handler(req, res) {
           deudaDesde: cli.deuda_desde || null,
           estadoContrato: cli.estado_contrato || "sin_firmar",
           fechaIngreso: cli.fecha_ingreso || null,
+          comerciales: cli.comerciales || [],
           goLiveEstimado: cli.go_live_estimado || null,
           relevamiento: respuestas, relevamientoEnviado: pasos.relevamiento,
           sucursalesCount: (sucPorCliente.get(cli.id) || []).length,
@@ -907,6 +921,7 @@ export default async function handler(req, res) {
         codigo: nuevo, nombre: req.body.nombre.trim(), tenant_productivo: (req.body.tenant || "").trim() || null,
         razon_social: (req.body.razonSocial || "").trim() || null, cuits, erp_pdv: Array.isArray(req.body.erpPdv) ? req.body.erpPdv.map((x) => String(x).trim()).filter(Boolean) : [], logo: req.body.logo || null,
         comercial: (req.body.comercial || "").trim() || null,
+        comerciales: Array.isArray(req.body.comerciales) ? req.body.comerciales : [],
         go_live_estimado: req.body.goLiveEstimado || null,
         fecha_ingreso: req.body.fechaIngreso || null,
       }).select().single();
@@ -941,6 +956,7 @@ export default async function handler(req, res) {
       if (req.body.nombre !== undefined && (req.body.nombre || "").trim()) upd.nombre = req.body.nombre.trim();
       if (req.body.tenant !== undefined) upd.tenant_productivo = (req.body.tenant || "").trim() || null;
       if (req.body.comercial !== undefined) upd.comercial = (req.body.comercial || "").trim() || null;
+      if (req.body.comerciales !== undefined) upd.comerciales = Array.isArray(req.body.comerciales) ? req.body.comerciales : [];
       if (req.body.fechaIngreso !== undefined) upd.fecha_ingreso = req.body.fechaIngreso || null;
       if (req.body.razonSocial !== undefined) upd.razon_social = (req.body.razonSocial || "").trim() || null;
       if (req.body.cuits !== undefined) upd.cuits = Array.isArray(req.body.cuits) ? req.body.cuits.map((c) => String(c).trim()).filter(Boolean) : [];
@@ -1032,7 +1048,7 @@ export default async function handler(req, res) {
     if (action === "setTipoUsuario") {
       if ((await tipoUsuario(sc)) !== "superuser") return res.status(403).json({ error: "Solo el Superuser puede cambiar tipos de usuario" });
       const nuevoTipo = req.body.tipo;
-      if (!["superuser", "admin", "colaborador"].includes(nuevoTipo)) return res.status(400).json({ error: "Tipo de usuario inválido" });
+      if (!["superuser", "admin", "colaborador", "comercial"].includes(nuevoTipo)) return res.status(400).json({ error: "Tipo de usuario inválido" });
       // Chequeo de seguridad: no dejar el sistema sin ningún superuser
       if (nuevoTipo !== "superuser") {
         const { data: yo } = await db.from("equipo").select("id").eq("codigo", sc).maybeSingle();
