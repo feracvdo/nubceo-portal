@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.25.0";
+const APP_VERSION = "1.26.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -2581,6 +2581,28 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
 }
 
 // ─── Menú lateral del panel de equipo ───
+// Multiselect de vendedores (chips): elegís uno o varios de los usuarios tipo Comercial.
+function SelectorVendedores({ vendedores, seleccion, onChange }) {
+  const toggle = (id) => onChange(seleccion.includes(id) ? seleccion.filter((x) => x !== id) : [...seleccion, id]);
+  if (!vendedores.length) {
+    return <div style={{ fontSize: 12.5, color: T.n400 }}>No hay vendedores cargados. Creá usuarios de tipo "Comercial" en el módulo Equipo.</div>;
+  }
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {vendedores.map((v) => {
+        const on = seleccion.includes(v.id);
+        return (
+          <span key={v.id} onClick={() => toggle(v.id)} style={{
+            cursor: "pointer", fontSize: 12.5, borderRadius: 100, padding: "5px 12px",
+            border: "1px solid " + (on ? T.primary : T.n200),
+            background: on ? T.primary50 : "#fff", color: on ? T.primary800 : T.n600, fontWeight: on ? 600 : 500,
+          }}>{on ? "✓ " : ""}{v.nombre}</span>
+        );
+      })}
+    </div>
+  );
+}
+
 const NAV_ITEMS = [
   ["clientes", "🗂", "Clientes"],
   ["tablero", "▦", "Tablero"],
@@ -2717,9 +2739,9 @@ function TicketsRedmineCard({ sel, sc, session, tieneFeature }) {
 
 function EquipoLista({ miembros, esSuperuser, onEliminar, onSetTipoUsuario, miCodigo }) {
   if (!miembros.length) return <div style={{ fontSize: 13, color: T.n400 }}>Todavía no hay nadie en este equipo.</div>;
-  const etiquetaTipo = (t) => t === "superuser" ? "Superuser" : t === "admin" ? "Admin" : "Colaborador";
-  const colorTipo = (t) => t === "superuser" ? T.primary800 : t === "admin" ? T.okTx : T.n600;
-  const bgTipo = (t) => t === "superuser" ? T.primary50 : t === "admin" ? T.okBg : T.n100;
+  const etiquetaTipo = (t) => t === "superuser" ? "Superuser" : t === "admin" ? "Admin" : t === "comercial" ? "Comercial" : "Colaborador";
+  const colorTipo = (t) => t === "superuser" ? T.primary800 : t === "admin" ? T.okTx : t === "comercial" ? T.warnTx : T.n600;
+  const bgTipo = (t) => t === "superuser" ? T.primary50 : t === "admin" ? T.okBg : t === "comercial" ? T.warnBg : T.n100;
   return (
     <div style={{ display: "grid", gap: 8 }}>
       {miembros.map((m) => {
@@ -2741,6 +2763,7 @@ function EquipoLista({ miembros, esSuperuser, onEliminar, onSetTipoUsuario, miCo
               <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                 <select value={tipo} onChange={(e) => onSetTipoUsuario(m.id, e.target.value, m.nombre)} style={{ height: 30, borderRadius: 6, border: "1px solid " + T.n200, fontSize: 12.5, background: "#fff", padding: "0 8px", color: T.n800 }}>
                   <option value="colaborador">Colaborador</option>
+                  <option value="comercial">Comercial (solo lectura)</option>
                   <option value="admin">Admin</option>
                   <option value="superuser">Superuser</option>
                 </select>
@@ -2818,6 +2841,9 @@ function AdminPortal({ session, onLogout }) {
   const [busqueda, setBusqueda] = useState("");
   const [filtroImpl, setFiltroImpl] = useState("");
   const [filtroDev, setFiltroDev] = useState("");
+  const [filtroVendedor, setFiltroVendedor] = useState("");
+  const [newComerciales, setNewComerciales] = useState([]);
+  const [editComerciales, setEditComerciales] = useState([]);
   const [notifs, setNotifs] = useState([]);
   const [notifNoLeidas, setNotifNoLeidas] = useState(0);
   const [newContactos, setNewContactos] = useState([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
@@ -3089,11 +3115,11 @@ function AdminPortal({ session, onLogout }) {
     try {
       await api("createClient", {
         sessionCode: sc, nombre: newName, codigo: newCode, tenant: newTenant, razonSocial: newRazonSocial, cuits: newCuits, logo: newLogo,
-        comercial: newComercial, goLiveEstimado: newGoLive, fechaIngreso: newFechaIngreso || null, erpPdv: newErpPdv, contactos: newContactos.filter((c) => c.nombre.trim()),
+        comerciales: newComerciales, goLiveEstimado: newGoLive, fechaIngreso: newFechaIngreso || null, erpPdv: newErpPdv, contactos: newContactos.filter((c) => c.nombre.trim()),
       });
       flash("Cliente creado. Compartile el código " + newCode.trim().toUpperCase() + ". Al primer login se dispara el alta en Redmine y sus credenciales de API.", 5000);
       setNewName(""); setNewCode(""); setNewTenant(""); setNewRazonSocial(""); setNewCuits([]); setNewCuitInput(""); setNewLogo(null);
-      setNewComercial(""); setNewGoLive(""); setNewFechaIngreso(""); setNewErpPdv([]); setNewErpPdvInput(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
+      setNewComerciales([]); setNewGoLive(""); setNewFechaIngreso(""); setNewErpPdv([]); setNewErpPdvInput(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
       cargarListado();
     } catch (e) { flash(e.message); }
   };
@@ -3376,9 +3402,9 @@ function AdminPortal({ session, onLogout }) {
             <div style={{ marginTop: 18 }}><Stepper fase={meta.phase} /></div>
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid " + T.n100 }}>
               {!editandoInfo ? (
-                <span onClick={() => { setEditNombre(meta.name || ""); setEditCodigo(meta.codigo || ""); setEditTenant(meta.tenant || ""); setEditComercial(meta.comercial || ""); setEditFechaIngreso(meta.fechaIngreso || ""); setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditErpPdv(meta.erpPdv || []); setEditErpPdvInput(""); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
+                soloLectura ? null : (<span onClick={() => { setEditNombre(meta.name || ""); setEditCodigo(meta.codigo || ""); setEditTenant(meta.tenant || ""); setEditComerciales(meta.comerciales || []); setEditFechaIngreso(meta.fechaIngreso || ""); setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditErpPdv(meta.erpPdv || []); setEditErpPdvInput(""); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
                   ✎ Editar datos del cliente
-                </span>
+                </span>)
               ) : (
                 <div style={{ display: "grid", gap: 10 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
@@ -3391,7 +3417,7 @@ function AdminPortal({ session, onLogout }) {
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                     <div><Label>Tenant productivo</Label><Input value={editTenant} onChange={(e) => setEditTenant(e.target.value)} /></div>
-                    <div><Label>Comercial de la cuenta</Label><Input value={editComercial} onChange={(e) => setEditComercial(e.target.value)} /></div>
+                    <div><Label>Vendedor/es</Label><SelectorVendedores vendedores={vendedoresTeam} seleccion={editComerciales} onChange={setEditComerciales} /></div>
                     <div><Label>Fecha de ingreso (trato ganado)</Label><Input type="date" value={editFechaIngreso} onChange={(e) => setEditFechaIngreso(e.target.value)} /></div>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1.4fr 2fr", gap: 10 }}>
@@ -3442,7 +3468,7 @@ function AdminPortal({ session, onLogout }) {
                     <ImageUpload value={editLogo} onChange={setEditLogo} label="logo" />
                     <div style={{ display: "flex", gap: 8 }}>
                       <Btn variant="ghost" size="sm" onClick={() => setEditandoInfo(false)}>Cancelar</Btn>
-                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, nombre: editNombre, codigo: editCodigo, tenant: editTenant, comercial: editComercial, fechaIngreso: editFechaIngreso || null, razonSocial: editRazonSocial, cuits: editCuits, erpPdv: editErpPdv, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); if (r.meta && r.meta.codigoNuevo) setSel(r.meta.codigoNuevo); setEditandoInfo(false); cargarListado(); flash("Datos actualizados ✓", 2000); } catch (e) { flash(e.message); } }}>Guardar</Btn>
+                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, nombre: editNombre, codigo: editCodigo, tenant: editTenant, comerciales: editComerciales, fechaIngreso: editFechaIngreso || null, razonSocial: editRazonSocial, cuits: editCuits, erpPdv: editErpPdv, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); if (r.meta && r.meta.codigoNuevo) setSel(r.meta.codigoNuevo); setEditandoInfo(false); cargarListado(); flash("Datos actualizados ✓", 2000); } catch (e) { flash(e.message); } }}>Guardar</Btn>
                     </div>
                   </div>
                 </div>
@@ -3771,8 +3797,12 @@ function AdminPortal({ session, onLogout }) {
   const clientesVisibles = (clients || [])
     .filter((c) => !filtroImpl || c.implementadorId === filtroImpl)
     .filter((c) => !filtroDev || c.desarrolladorId === filtroDev)
+    .filter((c) => !filtroVendedor || (c.comerciales || []).includes(filtroVendedor))
     .filter((c) => !busqueda.trim() || c.name.toLowerCase().includes(busqueda.trim().toLowerCase()) || c.code.toLowerCase().includes(busqueda.trim().toLowerCase()));
   const implementadoresTeam = team.filter((m) => m.rol === "implementador");
+  const vendedoresTeam = team.filter((m) => m.tipo_usuario === "comercial");
+  const soloLectura = session.tipoUsuario === "comercial";
+  const nombreVendedor = (id) => (team.find((m) => m.id === id) || {}).nombre || "—";
   const devsTeam = team.filter((m) => m.rol === "desarrollador");
   const finanzasTeam = team.filter((m) => m.rol === "finanzas");
 
@@ -3787,6 +3817,7 @@ function AdminPortal({ session, onLogout }) {
           {/* ══════════ MÓDULO: CLIENTES ══════════ */}
           {modulo === "clientes" && (
             <>
+              {!soloLectura && (
               <Card style={{ marginBottom: 16 }}>
                 <SectionHeader title="Dar de alta un cliente" />
                 <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1.2fr", gap: 10, marginBottom: 10 }}>
@@ -3814,7 +3845,7 @@ function AdminPortal({ session, onLogout }) {
                       </div>
                     )}
                   </div>
-                  <div><Label>Comercial de la cuenta</Label><Input value={newComercial} onChange={(e) => setNewComercial(e.target.value)} placeholder="Nombre del ejecutivo" /></div>
+                  <div><Label>Vendedor/es</Label><SelectorVendedores vendedores={vendedoresTeam} seleccion={newComerciales} onChange={setNewComerciales} /></div>
                 </div>
 
                 <div style={{ marginBottom: 14 }}>
@@ -3875,6 +3906,7 @@ function AdminPortal({ session, onLogout }) {
                   Al primer login del cliente, el portal dispara el alta en Redmine (Feature del cliente con su tenant original + US de tenant sandbox) y genera sus credenciales de API sandbox.
                 </div>
               </Card>
+              )}
 
               <Card>
                 <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 14px" }}>
@@ -3890,7 +3922,11 @@ function AdminPortal({ session, onLogout }) {
                     <option value="">Todos los desarrolladores</option>
                     {devsTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                   </select>
-                  {(busqueda || filtroImpl || filtroDev) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroDev(""); }}>Limpiar filtros</Btn>}
+                  <select value={filtroVendedor} onChange={(e) => setFiltroVendedor(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                    <option value="">Todos los vendedores</option>
+                    {vendedoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                  </select>
+                  {(busqueda || filtroImpl || filtroDev || filtroVendedor) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroDev(""); setFiltroVendedor(""); }}>Limpiar filtros</Btn>}
                 </div>
 
                 {clients && clients.length > 0 && (
@@ -3978,7 +4014,11 @@ function AdminPortal({ session, onLogout }) {
                   <option value="">Todos los implementadores</option>
                   {implementadoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                 </select>
-                {(busqueda || filtroImpl) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); }}>Limpiar filtros</Btn>}
+                <select value={filtroVendedor} onChange={(e) => setFiltroVendedor(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                  <option value="">Todos los vendedores</option>
+                  {vendedoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                </select>
+                {(busqueda || filtroImpl || filtroVendedor) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroVendedor(""); }}>Limpiar filtros</Btn>}
               </div>
               <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} onCambiarColor={cambiarColor} onEnviarAvisos={enviarAvisosPendientes} enviandoAvisosDe={enviandoAvisosDe} />
         {/* Panel lateral rápido del tablero: se abre al hacer clic en una tarjeta */}
@@ -4004,7 +4044,7 @@ function AdminPortal({ session, onLogout }) {
 
                   <div style={{ display: "grid", gap: 12, marginBottom: 18 }}>
                     {[
-                      ["Comercial de la cuenta", panelData.meta.comercial || "—"],
+                      ["Vendedor/es", (panelData.meta.comerciales || []).length ? panelData.meta.comerciales.map(nombreVendedor).join(", ") : "—"],
                       ["Tenant", panelData.meta.tenant || "—"],
                       ["Implementador/a", panelData.meta.implementadorNombre || "Sin asignar"],
                       ["Desarrollador/a", panelData.meta.desarrolladorNombre || "Sin asignar"],
@@ -4087,7 +4127,7 @@ function AdminPortal({ session, onLogout }) {
             <>
               <Card style={{ marginBottom: 16 }}>
                 <SectionHeader title="Equipo de Implementación" />
-                <EquipoLista miembros={implementadoresTeam} esSuperuser={session.tipoUsuario === "superuser"} onEliminar={eliminarMiembro} onSetTipoUsuario={setTipoUsuario} miCodigo={sc} />
+                <EquipoLista miembros={team} esSuperuser={session.tipoUsuario === "superuser"} onEliminar={eliminarMiembro} onSetTipoUsuario={setTipoUsuario} miCodigo={sc} />
               </Card>
               <Card style={{ marginBottom: 16 }}>
                 <SectionHeader title="Equipo de Desarrollo" />
