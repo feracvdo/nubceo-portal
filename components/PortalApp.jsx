@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.26.0";
+const APP_VERSION = "1.26.1";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -2844,6 +2844,11 @@ function AdminPortal({ session, onLogout }) {
   const [filtroVendedor, setFiltroVendedor] = useState("");
   const [newComerciales, setNewComerciales] = useState([]);
   const [editComerciales, setEditComerciales] = useState([]);
+  const implementadoresTeam = team.filter((m) => m.rol === "implementador");
+  const devsTeam = team.filter((m) => m.rol === "desarrollador");
+  const vendedoresTeam = team.filter((m) => m.rol === "ventas");
+  const soloLectura = session.tipoUsuario === "comercial";
+  const nombreVendedor = (id) => (team.find((m) => m.id === id) || {}).nombre || "—";
   const [notifs, setNotifs] = useState([]);
   const [notifNoLeidas, setNotifNoLeidas] = useState(0);
   const [newContactos, setNewContactos] = useState([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
@@ -3799,11 +3804,6 @@ function AdminPortal({ session, onLogout }) {
     .filter((c) => !filtroDev || c.desarrolladorId === filtroDev)
     .filter((c) => !filtroVendedor || (c.comerciales || []).includes(filtroVendedor))
     .filter((c) => !busqueda.trim() || c.name.toLowerCase().includes(busqueda.trim().toLowerCase()) || c.code.toLowerCase().includes(busqueda.trim().toLowerCase()));
-  const implementadoresTeam = team.filter((m) => m.rol === "implementador");
-  const vendedoresTeam = team.filter((m) => m.tipo_usuario === "comercial");
-  const soloLectura = session.tipoUsuario === "comercial";
-  const nombreVendedor = (id) => (team.find((m) => m.id === id) || {}).nombre || "—";
-  const devsTeam = team.filter((m) => m.rol === "desarrollador");
   const finanzasTeam = team.filter((m) => m.rol === "finanzas");
 
   return (
@@ -4127,7 +4127,7 @@ function AdminPortal({ session, onLogout }) {
             <>
               <Card style={{ marginBottom: 16 }}>
                 <SectionHeader title="Equipo de Implementación" />
-                <EquipoLista miembros={team} esSuperuser={session.tipoUsuario === "superuser"} onEliminar={eliminarMiembro} onSetTipoUsuario={setTipoUsuario} miCodigo={sc} />
+                <EquipoLista miembros={implementadoresTeam} esSuperuser={session.tipoUsuario === "superuser"} onEliminar={eliminarMiembro} onSetTipoUsuario={setTipoUsuario} miCodigo={sc} />
               </Card>
               <Card style={{ marginBottom: 16 }}>
                 <SectionHeader title="Equipo de Desarrollo" />
@@ -4136,6 +4136,11 @@ function AdminPortal({ session, onLogout }) {
               <Card style={{ marginBottom: 16 }}>
                 <SectionHeader title="Equipo de Finanzas" />
                 <EquipoLista miembros={finanzasTeam} esSuperuser={session.tipoUsuario === "superuser"} onEliminar={eliminarMiembro} onSetTipoUsuario={setTipoUsuario} miCodigo={sc} />
+              </Card>
+              <Card style={{ marginBottom: 16 }}>
+                <SectionHeader title="Equipo de Ventas" />
+                {vendedoresTeam.length === 0 && <div style={{ fontSize: 13, color: T.n400 }}>Todavía no hay nadie en este equipo.</div>}
+                <EquipoLista miembros={vendedoresTeam} esSuperuser={session.tipoUsuario === "superuser"} onEliminar={eliminarMiembro} onSetTipoUsuario={setTipoUsuario} miCodigo={sc} />
               </Card>
 
               <Card>
@@ -4146,17 +4151,20 @@ function AdminPortal({ session, onLogout }) {
                   <div><Label>Mail (para que el cliente lo contacte)</Label><Input value={newImplEmail} onChange={(e) => setNewImplEmail(e.target.value)} placeholder="Ej: fernanda@nubceo.com" /></div>
                   <div>
                     <Label>Rol</Label>
-                    <select value={newImplRol} onChange={(e) => setNewImplRol(e.target.value)} style={{ width: "100%", height: 38, borderRadius: 8, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                    <select value={newImplRol} onChange={(e) => { const v = e.target.value; setNewImplRol(v); if (v === "ventas") setNewImplTipo("comercial"); }} style={{ width: "100%", height: 38, borderRadius: 8, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
                       <option value="implementador">Implementador/a</option>
                       <option value="desarrollador">Desarrollador/a</option>
                       <option value="finanzas">Finanzas</option>
+                      <option value="ventas">Ventas (vendedor)</option>
                     </select>
+                    {newImplRol === "ventas" && <div style={{ fontSize: 11.5, color: T.n400, marginTop: 4 }}>Se crea como Comercial: ve todo, no edita nada.</div>}
                   </div>
                   {session.tipoUsuario === "superuser" && (
                     <div>
                       <Label>Tipo de usuario</Label>
                       <select value={newImplTipo} onChange={(e) => setNewImplTipo(e.target.value)} style={{ width: "100%", height: 38, borderRadius: 8, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
                         <option value="colaborador">Colaborador</option>
+                        <option value="comercial">Comercial (solo lectura)</option>
                         <option value="admin">Admin</option>
                         <option value="superuser">Superuser</option>
                       </select>
