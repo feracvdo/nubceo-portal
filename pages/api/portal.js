@@ -1074,11 +1074,15 @@ export default async function handler(req, res) {
       // Un admin puede elegir crear admin o colaborador, pero NO superuser (solo un superuser puede promover).
       let tipoNuevo = ["superuser", "admin", "colaborador", "comercial"].includes(req.body.tipoUsuario) ? req.body.tipoUsuario : "colaborador";
       if (tipoNuevo === "superuser" && tu !== "superuser") tipoNuevo = "admin";
-      await db.from("equipo").insert({
+      const { error: insErr } = await db.from("equipo").insert({
         codigo: nuevo, nombre: req.body.nombre.trim(), email: (req.body.email || "").trim() || null,
         rol, foto: req.body.foto || null, tipo_usuario: tipoNuevo,
         es_superadmin: tipoNuevo === "superuser", // compat con código viejo
       });
+      if (insErr) {
+        console.error("Error al crear usuario del equipo:", insErr.message);
+        return res.status(500).json({ error: "No se pudo crear: " + insErr.message });
+      }
       return res.json({ ok: true });
     }
 
