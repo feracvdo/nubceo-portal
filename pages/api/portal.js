@@ -1069,10 +1069,10 @@ export default async function handler(req, res) {
       const errPolitica = codigoEquipoValido(nuevo);
       if (errPolitica) return res.status(400).json({ error: errPolitica });
       if (nuevo === ADMIN_CODE || (await isTeam(nuevo)) || (await getCliente(nuevo))) return res.status(409).json({ error: "Ese código ya está en uso" });
-      const rol = ["desarrollador", "finanzas"].includes(req.body.rol) ? req.body.rol : "implementador";
+      const rol = ["desarrollador", "finanzas", "ventas"].includes(req.body.rol) ? req.body.rol : "implementador";
       // El tipo de usuario del que se crea: por defecto colaborador (el más restrictivo).
       // Un admin puede elegir crear admin o colaborador, pero NO superuser (solo un superuser puede promover).
-      let tipoNuevo = ["superuser", "admin", "colaborador"].includes(req.body.tipoUsuario) ? req.body.tipoUsuario : "colaborador";
+      let tipoNuevo = ["superuser", "admin", "colaborador", "comercial"].includes(req.body.tipoUsuario) ? req.body.tipoUsuario : "colaborador";
       if (tipoNuevo === "superuser" && tu !== "superuser") tipoNuevo = "admin";
       await db.from("equipo").insert({
         codigo: nuevo, nombre: req.body.nombre.trim(), email: (req.body.email || "").trim() || null,
