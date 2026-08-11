@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.26.2";
+const APP_VERSION = "1.27.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -374,18 +374,43 @@ export default function PortalImplementacion() {
         setSession({ code: c, name: r.name, who });
         setScreen("client");
       }
+      // Persistimos la sesión para que refrescar la página no cierre la sesión.
+      try { localStorage.setItem("nubceo_session", JSON.stringify({ code: c, who: who || "" })); } catch (e) {}
     } catch (e) {
+      try { localStorage.removeItem("nubceo_session"); } catch (e2) {}
       setErr(e.message === "Código no encontrado" ? "Código no encontrado. Verificá el código que te envió tu implementador." : e.message);
     } finally {
       setLoggingIn(false);
     }
   };
 
+  const logout = () => {
+    try { localStorage.removeItem("nubceo_session"); localStorage.removeItem("nubceo_modulo"); } catch (e) {}
+    setSession(null); setScreen("login");
+  };
+
+  // Al cargar, si hay una sesión guardada, la rehidratamos (revalidando el código).
+  const [rehidratando, setRehidratando] = useState(true);
+  useEffect(() => {
+    let guardada = null;
+    try { guardada = JSON.parse(localStorage.getItem("nubceo_session") || "null"); } catch (e) {}
+    if (guardada && guardada.code) {
+      login(guardada.code, guardada.who || "").finally(() => setRehidratando(false));
+    } else {
+      setRehidratando(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (rehidratando) {
+    return <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", color: T.n400, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>Cargando…</div>;
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: T.n800 }}>
       {screen === "login" && <Login onLogin={login} err={err} loggingIn={loggingIn} />}
-      {screen === "client" && <ClientPortal session={session} onLogout={() => { setSession(null); setScreen("login"); }} />}
-      {screen === "admin" && <AdminPortal session={session} onLogout={() => { setSession(null); setScreen("login"); }} />}
+      {screen === "client" && <ClientPortal session={session} onLogout={logout} />}
+      {screen === "admin" && <AdminPortal session={session} onLogout={logout} />}
     </div>
   );
 }
@@ -2810,7 +2835,8 @@ function AdminPortal({ session, onLogout }) {
   const [apiKeyEnEnv, setApiKeyEnEnv] = useState(false);
   const [avisosAutomaticos, setAvisosAutomaticos] = useState(false);
   const [cfgMsg, setCfgMsg] = useState("");
-  const [modulo, setModulo] = useState("clientes"); // clientes | tablero | perfil | equipo | config
+  const [modulo, setModulo] = useState(() => { try { return localStorage.getItem("nubceo_modulo") || "clientes"; } catch (e) { return "clientes"; } });
+  useEffect(() => { try { localStorage.setItem("nubceo_modulo", modulo); } catch (e) {} }, [modulo]);
   const [nuevoCodigo, setNuevoCodigo] = useState("");
   const [confirmaCodigo, setConfirmaCodigo] = useState("");
   const [perfilMsg, setPerfilMsg] = useState("");
@@ -3153,11 +3179,25 @@ function AdminPortal({ session, onLogout }) {
   };
 
   const asignar = async (code, implementadorId, rol = "implementador") => {
+    // Optimista: reflejamos el cambio en la lista al instante (sin recargar todo),
+    // así el selector no "vuelve atrás" y no hace falta clickear dos veces.
+    const campoId = rol === "desarrollador" ? "desarrolladorId" : "implementadorId";
+    const campoNom = rol === "desarrollador" ? "desarrolladorNombre" : "implementadorNombre";
+    const nom = (team.find((m) => m.id === implementadorId) || {}).nombre || null;
+    setClients((prev) => prev.map((c) => c.code === code ? { ...c, [campoId]: implementadorId, [campoNom]: nom } : c));
     try {
       const r = await api("assignClient", { sessionCode: sc, code, implementadorId, rol, who: session.who });
       if (sel === code) { setSelMeta(r.meta); setSelData(r.data); }
-      cargarListado();
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message); cargarListado(); }
+  };
+
+  // Asignar/quitar vendedores desde la lista, también optimista.
+  const setVendedoresCliente = async (code, nuevaLista) => {
+    setClients((prev) => prev.map((c) => c.code === code ? { ...c, comerciales: nuevaLista } : c));
+    if (sel === code) setSelMeta((m) => (m ? { ...m, comerciales: nuevaLista } : m));
+    try {
+      await api("setComerciales", { sessionCode: sc, code, comerciales: nuevaLista, who: session.who });
+    } catch (e) { flash(e.message); cargarListado(); }
   };
 
   // Cambia el color de seguimiento del cliente en el tablero: gris → verde → amarillo → rojo → gris.
@@ -3980,6 +4020,21 @@ function AdminPortal({ session, onLogout }) {
                             <option value="">Sin desarrollador/a</option>
                             {devsTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                           </select>
+                          {vendedoresTeam.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center", maxWidth: 150 }}>
+                              {(cli.comerciales || []).map((id) => (
+                                <span key={id} onClick={() => setVendedoresCliente(cli.code, (cli.comerciales || []).filter((x) => x !== id))}
+                                  title="Quitar vendedor" style={{ cursor: "pointer", fontSize: 10.5, background: T.primary50, color: T.primary800, border: "1px solid " + T.primary100, borderRadius: 100, padding: "1px 7px" }}>
+                                  {nombreVendedor(id)} ✕
+                                </span>
+                              ))}
+                              <select value="" onChange={(e) => { if (e.target.value) setVendedoresCliente(cli.code, [...(cli.comerciales || []), e.target.value]); }}
+                                style={{ fontSize: 11, borderRadius: 6, border: "1px dashed " + T.n200, padding: "3px 6px", color: T.n400, background: "#fff" }}>
+                                <option value="">+ vendedor</option>
+                                {vendedoresTeam.filter((m) => !(cli.comerciales || []).includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                              </select>
+                            </div>
+                          )}
                         </div>
                         <div onClick={() => abrir(cli.code)} style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", cursor: "pointer", maxWidth: 180 }}>
                           <Badge tone="blue">Fase {cli.phase + 1} · {FASES[cli.phase]}</Badge>
