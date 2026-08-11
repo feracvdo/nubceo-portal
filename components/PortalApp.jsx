@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.26.1";
+const APP_VERSION = "1.26.2";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -3133,7 +3133,7 @@ function AdminPortal({ session, onLogout }) {
     if (!newImplCode.trim() || !newImplName.trim()) return;
     try {
       await api("createTeam", { sessionCode: sc, nombre: newImplName, codigo: newImplCode, email: newImplEmail, rol: newImplRol, foto: newImplFoto, tipoUsuario: newImplTipo });
-      const etiquetaTipo = { superuser: "Superuser", admin: "Admin", colaborador: "Colaborador" }[newImplTipo] || "Colaborador";
+      const etiquetaTipo = { superuser: "Superuser", admin: "Admin", colaborador: "Colaborador", comercial: "Comercial (solo lectura)" }[newImplTipo] || "Colaborador";
       flash("Persona creada como " + etiquetaTipo + ". Su código de acceso es " + newImplCode.trim().toUpperCase() + ". Compartíselo por un canal seguro.", 5000);
       setNewImplName(""); setNewImplCode(""); setNewImplEmail(""); setNewImplRol("implementador"); setNewImplFoto(null);
       cargarListado();
