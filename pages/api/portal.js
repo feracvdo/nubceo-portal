@@ -1311,6 +1311,16 @@ export default async function handler(req, res) {
       return res.json({ ok: true, draftUrl, googleEmail: conn.googleEmail || null });
     }
 
+    if (action === "setComerciales") {
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      const ids = Array.isArray(req.body.comerciales) ? req.body.comerciales : [];
+      const { error } = await db.from("clientes").update({ comerciales: ids }).eq("id", cli.id);
+      if (error) return res.status(500).json({ error: error.message });
+      await addHistory(cli.id, who || "Equipo", "Actualizó los vendedores asignados");
+      return res.json(await assemble(cli));
+    }
+
     if (action === "setEstadoContrato") {
       // Estado del contrato del cliente. Editable por cualquier miembro del equipo
       // (implementador, desarrollador o finanzas). Es informativo: no bloquea el avance.
