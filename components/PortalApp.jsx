@@ -37,7 +37,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.27.0";
+const APP_VERSION = "1.27.1";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -3993,7 +3993,7 @@ function AdminPortal({ session, onLogout }) {
                     const pendRv = !cli.relevamientoEnviado;
                     const pct = Math.round((cli.completados / cli.totalPasos) * 100);
                     return (
-                      <div key={cli.code} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 12, border: "1px solid " + T.n200, background: "#fff" }}>
+                      <div key={cli.code} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, border: "1px solid " + T.n200, background: "#fff" }}>
                         <div onClick={() => abrir(cli.code)} style={{ width: 38, height: 38, borderRadius: 8, flexShrink: 0, cursor: "pointer", background: T.n50, border: "1px solid " + T.n200, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: T.n400 }}>
                           {cli.logo ? <img src={cli.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : cli.name.slice(0, 1).toUpperCase()}
                         </div>
@@ -4003,13 +4003,13 @@ function AdminPortal({ session, onLogout }) {
                           </div>
                           <div style={{ fontSize: 12.5, color: T.n400, marginTop: 2 }}>Última actividad: {cli.ultimaActividad ? fmtDate(cli.ultimaActividad) : "sin actividad"}</div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
-                            <div style={{ flex: 1, maxWidth: 220, height: 6, borderRadius: 100, background: T.n100, overflow: "hidden" }}>
+                            <div style={{ flex: 1, maxWidth: 380, height: 6, borderRadius: 100, background: T.n100, overflow: "hidden" }}>
                               <div style={{ width: pct + "%", height: "100%", background: pct === 100 ? "#22c55e" : T.primary, borderRadius: 100 }} />
                             </div>
                             <span style={{ fontSize: 12, fontWeight: 700, color: T.n600 }}>{cli.completados}/{cli.totalPasos} pasos</span>
                           </div>
                         </div>
-                        <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", flexDirection: "column", gap: 4, width: 158, flexShrink: 0 }}>
                           <select value={cli.implementadorId || ""} onChange={(e) => asignar(cli.code, e.target.value || null, "implementador")}
                             style={{ fontSize: 12, borderRadius: 6, border: "1px solid " + T.n200, padding: "4px 6px", color: cli.implementadorId ? T.n800 : T.n400, background: "#fff", maxWidth: 150 }}>
                             <option value="">Sin implementador/a</option>
@@ -4036,8 +4036,8 @@ function AdminPortal({ session, onLogout }) {
                             </div>
                           )}
                         </div>
-                        <div onClick={() => abrir(cli.code)} style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", cursor: "pointer", maxWidth: 180 }}>
-                          <Badge tone="blue">Fase {cli.phase + 1} · {FASES[cli.phase]}</Badge>
+                        <div onClick={() => abrir(cli.code)} style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", cursor: "pointer", width: 200, flexShrink: 0 }}>
+                          <span style={{ background: T.primary50, color: T.primary800, fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 8, whiteSpace: "normal", lineHeight: 1.25, textAlign: "right" }}>Fase {cli.phase + 1} · {FASES[cli.phase]}</span>
                           {!cli.implementadorId && <Badge tone="amber">Sin asignar</Badge>}
                           {pendRv && <Badge tone="amber">Relevamiento pendiente</Badge>}
                           {cli.omitioSucursales && <Badge tone="amber">Sucursales pendiente</Badge>}
