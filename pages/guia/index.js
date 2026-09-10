@@ -7,8 +7,20 @@
 // No toca ningún archivo del portal. Lo único que comparte es el logo de
 // /public/logo-nubceo.png.
 
-import { useState } from "react";
-import { STEPS, NIVELES, CLIENTE_DEMO } from "../../lib/autoimp/contenido";
+import { useState, useEffect } from "react";
+import { STEPS, NIVELES } from "../../lib/autoimp/contenido";
+
+// Todo pasa por nuestra API. El navegador nunca toca la base.
+async function api(action, payload = {}) {
+  const res = await fetch("/api/autoimp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(j.error || "No pudimos conectarnos. Probá de nuevo.");
+  return j;
+}
 
 const CSS = `
 .ai-root{--primary:#0a6bf4;--primary-50:#e8f1fe;--primary-100:#b9d2fb;--primary-200:#8ab3f8;
@@ -199,6 +211,64 @@ export default function Guia() {
   const [apiPath, setApiPath] = useState(null); // null | 'propio' | 'nubceo'
   const [fb, setFb] = useState(nuevoFb);
 
+  const [codigo, setCodigo] = useState(null);
+  const [cliente, setCliente] = useState(null);
+  const [quien, setQuien] = useState("");
+  const [cargando, setCargando] = useState(true);
+  const [errorLogin, setErrorLogin] = useState(null);
+  const [inputCodigo, setInputCodigo] = useState("");
+  const [inputNombre, setInputNombre] = useState("");
+
+  // El código puede venir en el link (?c=XXX) o de la última vez que entró
+  // desde este navegador. Si no hay ninguno, se pide.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const c = (url.searchParams.get("c") || localStorage.getItem("autoimp_codigo") || "").trim().toUpperCase();
+    const n = localStorage.getItem("autoimp_nombre") || "";
+    setQuien(n);
+    setInputNombre(n);
+    if (!c) { setCargando(false); return; }
+    entrar(c, n, true);
+  }, []);
+
+  async function entrar(c, n, silencioso) {
+    setCargando(true);
+    setErrorLogin(null);
+    try {
+      const r = await api("entrar", { codigo: c });
+      setCliente(r.cliente);
+      setCodigo(c);
+      setQuien(n || "");
+      localStorage.setItem("autoimp_codigo", c);
+      if (n) localStorage.setItem("autoimp_nombre", n);
+      const pasos = (r.progreso && r.progreso.pasos) || {};
+      setDone(STEPS.map((_, i) => !!(pasos[i] && pasos[i].hecho)));
+      setSrcPath((r.progreso && r.progreso.origen) || null);
+      setApiPath((r.progreso && r.progreso.api_desarrolla) || null);
+      const base = nuevoFb();
+      (r.comentarios || []).forEach((c2) => {
+        if (base[c2.paso]) base[c2.paso] = { nivel: c2.nivel, texto: c2.comentario || "", enviado: true };
+      });
+      setFb(base);
+    } catch (e) {
+      if (!silencioso) setErrorLogin(e.message);
+      localStorage.removeItem("autoimp_codigo");
+    } finally {
+      setCargando(false);
+    }
+  }
+
+  const salir = () => {
+    localStorage.removeItem("autoimp_codigo");
+    window.location.href = "/guia";
+  };
+
+  // Guardado optimista: la pantalla no espera al servidor.
+  const guardar = (patch) => {
+    if (!codigo) return;
+    api("guardar", { codigo, quien, totalPasos: STEPS.length, ...patch }).catch(() => {});
+  };
+
   const total = STEPS.length;
   const hechos = done.filter(Boolean).length;
   const pct = Math.round((hechos / total) * 100);
@@ -208,9 +278,17 @@ export default function Guia() {
     setVidIdx(0);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const toggleDone = (i) => setDone((d) => d.map((v, k) => (k === i ? !v : v)));
+  const toggleDone = (i) => {
+    const nuevo = done.map((v, k) => (k === i ? !v : v));
+    setDone(nuevo);
+    guardar({ paso: i, hecho: nuevo[i] });
+  };
   const patchFb = (i, campo, valor) => setFb((f) => f.map((x, k) => (k === i ? { ...x, [campo]: valor } : x)));
-  const elegirSrc = (k) => { setSrcPath(k); setApiPath(null); setVidIdx(0); };
+  const elegirSrc = (k) => {
+    setSrcPath(k); setApiPath(null); setVidIdx(0);
+    guardar({ origen: k, apiDesarrolla: null });
+  };
+  const elegirApi = (k) => { setApiPath(k); guardar({ apiDesarrolla: k }); };
 
   // Placeholders de fase 1. En fase 2 estos avisan al implementador de verdad.
   const playVideo = () => alert("Acá va el video embebido. Todavía no están grabados.");
@@ -218,7 +296,7 @@ export default function Guia() {
   const pedirAyuda = () => alert("Acá se abre el contacto con tu implementador de Nubceo.");
   const delegar = () => alert("Comparte el link de este paso con otra persona de tu equipo.");
 
-  const Video = ({ videos }) => {
+  const renderVideo = (videos) => {
     const v = videos[Math.min(vidIdx, videos.length - 1)];
     return (
       <div className="ai-player">
@@ -240,7 +318,7 @@ export default function Guia() {
     );
   };
 
-  const Feedback = ({ i }) => {
+  const renderFeedback = (i) => {
     const f = fb[i];
     if (f.enviado) {
       const n = NIVELES.find((x) => x.k === f.nivel);
@@ -275,7 +353,10 @@ export default function Guia() {
           onChange={(e) => patchFb(i, "texto", e.target.value)}
         />
         <div className="ai-fbfoot">
-          <button className="ai-btn ai-btn-o ai-btn-sm" disabled={!f.nivel} onClick={() => patchFb(i, "enviado", true)}>
+          <button className="ai-btn ai-btn-o ai-btn-sm" disabled={!f.nivel} onClick={() => {
+            patchFb(i, "enviado", true);
+            api("comentario", { codigo, quien, paso: i, nivel: f.nivel, comentario: f.texto }).catch(() => {});
+          }}>
             Enviar comentario
           </button>
           {!f.nivel && <span className="ai-small ai-muted">Elegí una opción para poder enviarlo.</span>}
@@ -284,7 +365,7 @@ export default function Guia() {
     );
   };
 
-  const Fork = ({ s }) => {
+  const renderFork = (s) => {
     if (srcPath === null) {
       return (
         <>
@@ -318,7 +399,7 @@ export default function Guia() {
     );
   };
 
-  const RamaApi = () => {
+  const renderRamaApi = () => {
     const intro = (
       <div className="ai-callout warn" style={{ marginTop: "1.4rem" }}>
         <b>La integración por API la hacemos juntos.</b> Implica desarrollo, especificación técnica y pruebas conjuntas
@@ -332,13 +413,13 @@ export default function Guia() {
           <h3>¿Quién desarrolla la integración?</h3>
           <div className="ai-pickhint"><span className="ai-pd" /> Elegí una opción para continuar</div>
           <div className="ai-forkgrid">
-            <div className="ai-forkcard" onClick={() => setApiPath("propio")}>
+            <div className="ai-forkcard" onClick={() => elegirApi("propio")}>
               <span className="ai-fb ai-fb-self">Sin costo de desarrollo</span>
               <div className="ft">La desarrolla mi equipo o mi punto de venta</div>
               <div className="fd">Te entregamos la especificación técnica y acompañamos las pruebas. El desarrollo lo
                 hace tu equipo de sistemas o el proveedor de tu punto de venta.</div>
             </div>
-            <div className="ai-forkcard" onClick={() => setApiPath("nubceo")}>
+            <div className="ai-forkcard" onClick={() => elegirApi("nubceo")}>
               <span className="ai-fb ai-fb-impl">Con cotización</span>
               <div className="ft">Que la desarrolle Nubceo</div>
               <div className="fd">Nos encargamos nosotros. Necesitamos un relevamiento técnico previo para entender cómo
@@ -395,13 +476,13 @@ export default function Guia() {
           <button className="ai-btn ai-btn-g" onClick={pedirAyuda}>Tengo dudas antes de avanzar</button>
         </div>
         <p className="ai-small ai-muted" style={{ marginTop: "1.2rem" }}>
-          <span className="ai-link" onClick={() => setApiPath(null)}>Elegí la otra opción</span>
+          <span className="ai-link" onClick={() => elegirApi(null)}>Elegí la otra opción</span>
         </p>
       </>
     );
   };
 
-  const Bienvenida = () => (
+  const renderBienvenida = () => (
     <section className="ai-panel">
       <div className="ai-kicker">Bienvenida</div>
       <h1>Tu cuenta ya está creada. Te enseñamos a configurarla.</h1>
@@ -433,7 +514,7 @@ export default function Guia() {
     </section>
   );
 
-  const Paso = ({ i }) => {
+  const renderPaso = (i) => {
     const s = STEPS[i];
     const soloFork = s.fork && srcPath === null;
     const esApi = s.fork && srcPath === "api";
@@ -443,12 +524,12 @@ export default function Guia() {
         <h1>{s.title}</h1>
         <p className="ai-lead">{s.lead}</p>
 
-        {s.fork && <Fork s={s} />}
-        {esApi && <RamaApi />}
+        {s.fork && renderFork(s)}
+        {esApi && renderRamaApi()}
 
         {!soloFork && !esApi && (
           <>
-            <Video videos={s.videos} />
+            {renderVideo(s.videos)}
 
             <div className="ai-where">
               <span className="wl">Dónde hacerlo</span>
@@ -490,7 +571,7 @@ export default function Guia() {
               </span>
             </div>
 
-            <Feedback i={i} />
+            {renderFeedback(i)}
           </>
         )}
 
@@ -506,7 +587,7 @@ export default function Guia() {
     );
   };
 
-  const Cierre = () => (
+  const renderCierre = () => (
     <section className="ai-panel">
       <div className="ai-hero">
         <div className="ai-circ">✓</div>
@@ -531,12 +612,76 @@ export default function Guia() {
 
       <div className="ai-pfoot">
         <button className="ai-btn ai-btn-p" onClick={() => abrirNubceo("Inicio")}>Ir a Nubceo →</button>
-        <button className="ai-btn ai-btn-g" onClick={() => {
-          setDone(STEPS.map(() => false)); setSrcPath(null); setApiPath(null); setFb(nuevoFb()); go(0);
-        }}>Reiniciar</button>
+        <button className="ai-btn ai-btn-g" onClick={() => go(0)}>Volver al inicio</button>
       </div>
     </section>
   );
+
+  if (cargando) {
+    return (
+      <div className="ai-root">
+        <style dangerouslySetInnerHTML={{ __html: CSS }} />
+        <div style={{ padding: "5rem 2rem", textAlign: "center", color: "var(--n400)" }}>Cargando tu guía…</div>
+      </div>
+    );
+  }
+
+  if (!cliente) {
+    return (
+      <div className="ai-root">
+        <style dangerouslySetInnerHTML={{ __html: CSS }} />
+        <div className="ai-nav">
+          <img src="/logo-nubceo.png" alt="Nubceo" />
+          <span className="tag">Guía de puesta en marcha · Conciliador</span>
+        </div>
+        <div style={{ maxWidth: 460, margin: "0 auto", padding: "3rem 1.5rem" }}>
+          <section className="ai-panel">
+            <div className="ai-kicker">Acceso</div>
+            <h1>Entrá a tu guía</h1>
+            <p className="ai-lead">Usá el mismo código que te compartió tu referente de Nubceo.</p>
+
+            <div style={{ marginTop: "1.5rem" }}>
+              <label className="ai-fbl" htmlFor="ai-cod">Tu código de acceso</label>
+              <input
+                id="ai-cod"
+                value={inputCodigo}
+                onChange={(e) => setInputCodigo(e.target.value.toUpperCase())}
+                onKeyDown={(e) => { if (e.key === "Enter") entrar(inputCodigo.trim(), inputNombre.trim()); }}
+                placeholder="Por ejemplo: DEMO123"
+                style={{ width: "100%", padding: "11px 12px", marginTop: ".4rem", border: "1px solid var(--n200)",
+                  borderRadius: 8, fontSize: 15, fontFamily: "var(--font)", letterSpacing: ".04em" }}
+              />
+            </div>
+
+            <div style={{ marginTop: "1rem" }}>
+              <label className="ai-fbl" htmlFor="ai-nom">Tu nombre</label>
+              <div className="ai-fbs">Opcional. Sirve para que tu equipo sepa quién hizo cada paso.</div>
+              <input
+                id="ai-nom"
+                value={inputNombre}
+                onChange={(e) => setInputNombre(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") entrar(inputCodigo.trim(), inputNombre.trim()); }}
+                placeholder="Nombre y apellido"
+                style={{ width: "100%", padding: "11px 12px", marginTop: ".4rem", border: "1px solid var(--n200)",
+                  borderRadius: 8, fontSize: 15, fontFamily: "var(--font)" }}
+              />
+            </div>
+
+            {errorLogin && (
+              <div className="ai-callout warn" style={{ marginTop: "1.1rem" }}>{errorLogin}</div>
+            )}
+
+            <div className="ai-pfoot">
+              <button className="ai-btn ai-btn-p" disabled={!inputCodigo.trim()}
+                onClick={() => entrar(inputCodigo.trim().toUpperCase(), inputNombre.trim())}>
+                Entrar →
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
 
   const navs = ["Bienvenida", ...STEPS.map((s) => s.nav), "Listo"];
 
@@ -575,14 +720,24 @@ export default function Guia() {
             })}
           </ul>
           <div className="ai-sidefoot">
-            Empresa: <b>{CLIENTE_DEMO.empresa}</b><br />
-            Referente: <b>{CLIENTE_DEMO.referente}</b><br />
-            Alcance: <b>{CLIENTE_DEMO.alcance}</b>
+            Empresa: <b>{cliente.nombre}</b><br />
+            {cliente.implementador && (<>Te acompaña: <b>{cliente.implementador}</b><br /></>)}
+            Alcance: <b>Conciliador transaccional</b>
+            {cliente.implementadorEmail && (
+              <div style={{ marginTop: ".7rem" }}>
+                <a className="ai-link" href={"mailto:" + cliente.implementadorEmail + "?subject=Consulta%20sobre%20la%20gu%C3%ADa%20de%20puesta%20en%20marcha"}>
+                  Escribirle
+                </a>
+              </div>
+            )}
+            <div style={{ marginTop: ".7rem" }}>
+              <span className="ai-link" onClick={salir}>Salir</span>
+            </div>
           </div>
         </aside>
 
         <main>
-          {cur === 0 ? <Bienvenida /> : cur === total + 1 ? <Cierre /> : <Paso i={cur - 1} />}
+          {cur === 0 ? renderBienvenida() : cur === total + 1 ? renderCierre() : renderPaso(cur - 1)}
         </main>
       </div>
     </div>
