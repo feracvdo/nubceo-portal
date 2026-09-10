@@ -55,9 +55,7 @@ const CSS = `
 .pn-mut{background:var(--n100);color:var(--n600)}
 .pn-btn{font-family:var(--font);font-size:13px;border-radius:7px;padding:6px 13px;cursor:pointer;border:none;
   background:var(--primary);color:#fff;font-weight:500}
-.pn-btn.g{background:transparent;color:var(--n600);border:1px solid var(--n200);
-  border-radius:8px;font-size:14px;font-weight:500;padding:6px 14px}
-.pn-btn.g:hover{opacity:.8}
+.pn-btn.g{background:transparent;color:var(--n600);border:1px solid var(--n200)}
 .pn-btn.r{background:transparent;color:var(--bad-tx);border:1px solid #fca5a5}
 .pn-btn.r:hover{background:var(--bad-tx);color:#fff}
 .pn-paso{border:1px solid var(--n200);border-radius:11px;padding:.9rem 1.1rem;margin-bottom:.7rem;background:var(--n50)}
@@ -81,16 +79,7 @@ export default function Panel() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
-  // El código puede venir del link (así entra desde la solapa del portal, sin
-  // tipear nada) o de la sesión de esta pestaña.
   useEffect(() => {
-    const url = new URL(window.location.href);
-    const delLink = (url.searchParams.get("c") || "").trim().toUpperCase();
-    if (delLink) {
-      window.history.replaceState({}, "", "/guia/panel");
-      entrar(delLink, true);
-      return;
-    }
     const c = sessionStorage.getItem("autoimp_panel") || "";
     if (!c) { setCargando(false); return; }
     entrar(c, true);
@@ -170,13 +159,7 @@ export default function Panel() {
         <img src="/logo-nubceo.png" alt="Nubceo" />
         <span className="tag">Autoimplementador · interno</span>
         <div className="sp" />
-        <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--n800)" }}>{miembro.nombre}</div>
-          <div style={{ fontSize: 11.5, color: "var(--n400)" }}>Equipo Nubceo</div>
-        </div>
-        <button className="pn-btn g" onClick={() => { window.location.href = "/"; }}>
-          ← Volver al portal
-        </button>
+        <span style={{ fontSize: 13, color: "var(--n600)" }}>{miembro.nombre}</span>
         <button className="pn-btn g" onClick={() => { sessionStorage.removeItem("autoimp_panel"); location.reload(); }}>
           Salir
         </button>
