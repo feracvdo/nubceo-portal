@@ -412,7 +412,7 @@ export default function Guia() {
       <div className="ai-boundary">
         <div className="ai-bcol cx">
           <div className="bt">Listo — lo hizo tu referente</div>
-          <ul><li>✓ Empresa y datos fiscales</li><li>✓ Credenciales de procesadoras</li><li>✓ Sucursales cabecera</li></ul>
+          <ul><li>✓ Empresa y datos fiscales</li><li>✓ Credenciales de procesadoras</li></ul>
         </div>
         <div className="ai-arrow">→</div>
         <div className="ai-bcol self">
@@ -560,7 +560,6 @@ export default function Guia() {
           <ul className="ai-cxlist">
             <li><span className="ai-lock">✓</span> Datos de la empresa</li>
             <li><span className="ai-lock">✓</span> Procesadoras vinculadas</li>
-            <li><span className="ai-lock">✓</span> Sucursales cabecera</li>
           </ul>
           <h4 className="second">Tu puesta en marcha</h4>
           <ul className="ai-steplist">
