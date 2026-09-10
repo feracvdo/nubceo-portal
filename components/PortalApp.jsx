@@ -2633,6 +2633,7 @@ const NAV_ITEMS = [
   ["tablero", "▦", "Tablero"],
   ["notificaciones", "🔔", "Notificaciones"],
   ["equipo", "👥", "Equipo"],
+  ["autoimp", "🚀", "Autoimplementador"],
   ["config", "⚙", "Configuración"],
   ["perfil", "🙂", "Mi perfil"],
 ];
@@ -3850,7 +3851,7 @@ function AdminPortal({ session, onLogout }) {
     <div>
       <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin />
       <div style={{ display: "flex" }}>
-        <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); if (m === "notificaciones") cargarNotificaciones(); }} noLeidas={notifNoLeidas} />
+        <Sidebar activo={modulo} onCambiar={(m) => { if (m === "autoimp") { window.open("/guia/panel?c=" + encodeURIComponent(sc), "_blank"); return; } setModulo(m); setPanelCliente(null); }} />
         <div style={{ flex: 1, minWidth: 0, padding: "26px 24px 60px", maxWidth: 1180, margin: "0 auto" }}>
           {msg && <Alert tone="success" style={{ marginBottom: 16 }}>{msg}</Alert>}
 
