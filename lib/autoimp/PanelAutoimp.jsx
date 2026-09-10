@@ -100,6 +100,7 @@ export default function PanelAutoimp({ codigo }) {
   const [filtroImpl, setFiltroImpl] = useState("");
   const [abierto, setAbierto] = useState(null); // código con el mensaje desplegado
   const [copiado, setCopiado] = useState("");
+  const [verCom, setVerCom] = useState(null); // null | código del cliente | "__todos"
 
   const recargar = async () => {
     const d = await api("panelDatos", { codigo });
@@ -172,15 +173,23 @@ export default function PanelAutoimp({ codigo }) {
     });
 
   const habilitados = todos.filter((c) => c.habilitado).length;
+  const comsPorCliente = {};
+  comentarios.forEach((c) => { comsPorCliente[c.cliente_codigo] = (comsPorCliente[c.cliente_codigo] || 0) + 1; });
   const vacioTxt = filtroImpl || q
     ? "Ningún cliente coincide con los filtros."
     : "Todavía no habilitaste a nadie. Tildá “ver todos los clientes” para elegir.";
 
+  const comsVisibles = verCom === "__todos"
+    ? comentarios
+    : verCom ? comentarios.filter((c) => c.cliente_codigo === verCom) : [];
+
   const porPaso = STEPS.map((s, i) => {
-    const cs = comentarios.filter((c) => c.paso === i);
+    const cs = comsVisibles.filter((c) => c.paso === i);
     const duros = cs.filter((c) => c.nivel === "costo" || c.nivel === "trabe").length;
     return { i, nav: s.nav, cs, duros };
   }).filter((x) => x.cs.length);
+
+  const nombreDe = (cod) => (todos.find((c) => c.codigo === cod) || {}).nombre || cod;
 
   return (
     <div className="pn-emb">
@@ -271,6 +280,12 @@ export default function PanelAutoimp({ codigo }) {
                             {abrirMsg ? "Cerrar" : "Acceso"}
                           </button>
                         )}
+                        {comsPorCliente[c.codigo] > 0 && (
+                          <button className="btn" style={{ marginLeft: 6 }}
+                            onClick={() => setVerCom(verCom === c.codigo ? null : c.codigo)}>
+                            💬 {comsPorCliente[c.codigo]}
+                          </button>
+                        )}
                         {c.habilitado && c.entro && (
                           <button className="btn r" style={{ marginLeft: 6 }} onClick={() => reiniciar(c)}>Reiniciar</button>
                         )}
@@ -305,14 +320,38 @@ export default function PanelAutoimp({ codigo }) {
         )}
       </div>
 
+      {comentarios.length > 0 && !verCom && (
+        <div className="pn-card" style={{ display: "flex", alignItems: "center", gap: ".9rem", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <h2>Comentarios de los clientes</h2>
+            <div className="sub" style={{ marginBottom: 0 }}>
+              Hay {comentarios.length} comentario{comentarios.length === 1 ? "" : "s"} cargado{comentarios.length === 1 ? "" : "s"}.
+              Tocá el 💬 de un cliente para leer los suyos, o mirá el resumen de todos juntos.
+            </div>
+          </div>
+          <button className="btn" onClick={() => setVerCom("__todos")}>Ver el resumen de todos</button>
+        </div>
+      )}
+
+      {verCom && (
       <div className="pn-card">
-        <h2>Cómo les resultó cada paso</h2>
-        <div className="sub">
-          Agrupado por paso, no por cliente: si varios se traban en el mismo, el problema es del paso.
+        <div style={{ display: "flex", alignItems: "flex-start", gap: ".9rem" }}>
+          <div style={{ flex: 1 }}>
+            <h2>{verCom === "__todos" ? "Cómo les resultó cada paso" : "Comentarios de " + nombreDe(verCom)}</h2>
+            <div className="sub">
+              {verCom === "__todos"
+                ? "Agrupado por paso, no por cliente: si varios se traban en el mismo, el problema es del paso."
+                : "Lo que dejó este cliente, paso por paso."}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: ".5rem", flexShrink: 0 }}>
+            {verCom !== "__todos" && <button className="btn" onClick={() => setVerCom("__todos")}>Ver todos</button>}
+            <button className="btn" onClick={() => setVerCom(null)}>Cerrar</button>
+          </div>
         </div>
 
         {porPaso.length === 0 ? (
-          <div className="vacio">Todavía no hay comentarios.</div>
+          <div className="vacio">Este cliente todavía no dejó comentarios.</div>
         ) : porPaso.map((p) => (
           <div key={p.i} className={"paso" + (p.duros >= 2 ? " alerta" : "")}>
             <div className="ph">
@@ -340,6 +379,7 @@ export default function PanelAutoimp({ codigo }) {
           </div>
         ))}
       </div>
+      )}
 
       <div className="ver">Autoimplementador v{VERSION}</div>
     </div>
