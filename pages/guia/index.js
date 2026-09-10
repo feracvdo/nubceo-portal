@@ -296,7 +296,7 @@ export default function Guia() {
   const pedirAyuda = () => alert("Acá se abre el contacto con tu implementador de Nubceo.");
   const delegar = () => alert("Comparte el link de este paso con otra persona de tu equipo.");
 
-  const Video = ({ videos }) => {
+  const renderVideo = (videos) => {
     const v = videos[Math.min(vidIdx, videos.length - 1)];
     return (
       <div className="ai-player">
@@ -318,7 +318,7 @@ export default function Guia() {
     );
   };
 
-  const Feedback = ({ i }) => {
+  const renderFeedback = (i) => {
     const f = fb[i];
     if (f.enviado) {
       const n = NIVELES.find((x) => x.k === f.nivel);
@@ -365,7 +365,7 @@ export default function Guia() {
     );
   };
 
-  const Fork = ({ s }) => {
+  const renderFork = (s) => {
     if (srcPath === null) {
       return (
         <>
@@ -399,7 +399,7 @@ export default function Guia() {
     );
   };
 
-  const RamaApi = () => {
+  const renderRamaApi = () => {
     const intro = (
       <div className="ai-callout warn" style={{ marginTop: "1.4rem" }}>
         <b>La integración por API la hacemos juntos.</b> Implica desarrollo, especificación técnica y pruebas conjuntas
@@ -482,7 +482,7 @@ export default function Guia() {
     );
   };
 
-  const Bienvenida = () => (
+  const renderBienvenida = () => (
     <section className="ai-panel">
       <div className="ai-kicker">Bienvenida</div>
       <h1>Tu cuenta ya está creada. Te enseñamos a configurarla.</h1>
@@ -514,7 +514,7 @@ export default function Guia() {
     </section>
   );
 
-  const Paso = ({ i }) => {
+  const renderPaso = (i) => {
     const s = STEPS[i];
     const soloFork = s.fork && srcPath === null;
     const esApi = s.fork && srcPath === "api";
@@ -524,12 +524,12 @@ export default function Guia() {
         <h1>{s.title}</h1>
         <p className="ai-lead">{s.lead}</p>
 
-        {s.fork && <Fork s={s} />}
-        {esApi && <RamaApi />}
+        {s.fork && renderFork(s)}
+        {esApi && renderRamaApi()}
 
         {!soloFork && !esApi && (
           <>
-            <Video videos={s.videos} />
+            {renderVideo(s.videos)}
 
             <div className="ai-where">
               <span className="wl">Dónde hacerlo</span>
@@ -571,7 +571,7 @@ export default function Guia() {
               </span>
             </div>
 
-            <Feedback i={i} />
+            {renderFeedback(i)}
           </>
         )}
 
@@ -587,7 +587,7 @@ export default function Guia() {
     );
   };
 
-  const Cierre = () => (
+  const renderCierre = () => (
     <section className="ai-panel">
       <div className="ai-hero">
         <div className="ai-circ">✓</div>
@@ -737,7 +737,7 @@ export default function Guia() {
         </aside>
 
         <main>
-          {cur === 0 ? <Bienvenida /> : cur === total + 1 ? <Cierre /> : <Paso i={cur - 1} />}
+          {cur === 0 ? renderBienvenida() : cur === total + 1 ? renderCierre() : renderPaso(cur - 1)}
         </main>
       </div>
     </div>
