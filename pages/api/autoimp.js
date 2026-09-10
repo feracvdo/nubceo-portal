@@ -41,10 +41,26 @@ async function progresoDe(codigo) {
   return data || null;
 }
 
+// Bitácora: append-only. Nunca frena la respuesta si falla.
+async function registrar(codigo, email, accion, paso, detalle) {
+  try {
+    await db.from("auto_eventos").insert({
+      cliente_codigo: codigo,
+      email: email || null,
+      paso: paso === undefined ? null : paso,
+      accion,
+      detalle: detalle || null,
+    });
+  } catch (e) {
+    console.error("autoimp bitácora:", e);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
 
-  const { action, quien } = req.body || {};
+  const { action } = req.body || {};
+  const email = ((req.body || {}).email || "").trim().toLowerCase() || null;
   const codigo = norm(req.body?.codigo);
 
   try {
@@ -67,6 +83,7 @@ export default async function handler(req, res) {
       if (!prog) {
         await db.from("auto_progreso").insert({ cliente_codigo: codigo, pasos: {} });
       }
+      await registrar(codigo, email, "entro");
 
       return res.json({
         cliente: {
@@ -86,14 +103,11 @@ export default async function handler(req, res) {
 
       if (typeof req.body.paso === "number") {
         if (req.body.hecho) {
-          pasos[req.body.paso] = {
-            hecho: true,
-            quien: (quien || "").trim() || null,
-            at: new Date().toISOString(),
-          };
+          pasos[req.body.paso] = { hecho: true, email, at: new Date().toISOString() };
         } else {
           delete pasos[req.body.paso];
         }
+        await registrar(codigo, email, req.body.hecho ? "marco" : "desmarco", req.body.paso);
       }
 
       const upd = {
@@ -101,8 +115,14 @@ export default async function handler(req, res) {
         pasos,
         actualizado_at: new Date().toISOString(),
       };
-      if (req.body.origen !== undefined) upd.origen = req.body.origen || null;
-      if (req.body.apiDesarrolla !== undefined) upd.api_desarrolla = req.body.apiDesarrolla || null;
+      if (req.body.origen !== undefined) {
+        upd.origen = req.body.origen || null;
+        if (upd.origen) await registrar(codigo, email, "origen", null, upd.origen);
+      }
+      if (req.body.apiDesarrolla !== undefined) {
+        upd.api_desarrolla = req.body.apiDesarrolla || null;
+        if (upd.api_desarrolla) await registrar(codigo, email, "api", null, upd.api_desarrolla);
+      }
 
       // Se considera terminado cuando están todos los pasos marcados.
       const totalPasos = Number(req.body.totalPasos) || 0;
@@ -127,11 +147,12 @@ export default async function handler(req, res) {
           paso,
           nivel,
           comentario: (req.body.comentario || "").trim() || null,
-          quien: (quien || "").trim() || null,
+          email,
           creado_at: new Date().toISOString(),
         },
         { onConflict: "cliente_codigo,paso" }
       );
+      await registrar(codigo, email, "comentario", paso, nivel);
       return res.json({ ok: true });
     }
 
