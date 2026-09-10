@@ -66,6 +66,103 @@ export default async function handler(req, res) {
   try {
     if (!codigo) return res.status(400).json({ error: "Falta el código de acceso." });
 
+    // ─────────── Acciones internas (equipo de Nubceo) ───────────
+    if (action && action.startsWith("panel")) {
+      const { data: miembro } = await db
+        .from("equipo")
+        .select("id, nombre, email")
+        .eq("codigo", codigo)
+        .maybeSingle();
+
+      if (!miembro) return res.status(403).json({ error: "Código no válido." });
+
+      if (action === "panelEntrar") return res.json({ miembro });
+
+      if (action === "panelDatos") {
+        const [prog, coms] = await Promise.all([
+          db.from("auto_progreso").select("*").order("actualizado_at", { ascending: true }),
+          db.from("auto_comentarios").select("*").order("creado_at", { ascending: false }),
+        ]);
+
+        const filas = prog.data || [];
+        const codigos = filas.map((f) => f.cliente_codigo);
+
+        let porCodigo = {};
+        if (codigos.length) {
+          const { data: cls } = await db
+            .from("clientes")
+            .select("codigo, nombre, razon_social, implementador_id")
+            .in("codigo", codigos);
+          const ids = [...new Set((cls || []).map((c) => c.implementador_id).filter(Boolean))];
+          let impl = {};
+          if (ids.length) {
+            const { data: eq } = await db.from("equipo").select("id, nombre").in("id", ids);
+            (eq || []).forEach((e) => { impl[e.id] = e.nombre; });
+          }
+          (cls || []).forEach((c) => {
+            porCodigo[c.codigo] = {
+              nombre: c.razon_social || c.nombre,
+              implementador: impl[c.implementador_id] || null,
+            };
+          });
+        }
+
+        const clientes = filas.map((f) => {
+          const pasos = f.pasos || {};
+          const hechos = Object.keys(pasos).filter((k) => pasos[k] && pasos[k].hecho).map(Number);
+          const info = porCodigo[f.cliente_codigo] || {};
+          return {
+            codigo: f.cliente_codigo,
+            nombre: info.nombre || "(no está en el portal)",
+            implementador: info.implementador || null,
+            hechos,
+            origen: f.origen,
+            apiDesarrolla: f.api_desarrolla,
+            iniciado: f.iniciado_at,
+            finalizado: f.finalizado_at,
+            actualizado: f.actualizado_at,
+          };
+        });
+
+        return res.json({ clientes, comentarios: coms.data || [] });
+      }
+
+      // Reset: un paso puntual o toda la configuración del cliente
+      if (action === "panelReset") {
+        const cc = norm(req.body.clienteCodigo);
+        if (!cc) return res.status(400).json({ error: "Falta el cliente." });
+
+        const { data: prog } = await db
+          .from("auto_progreso").select("*").eq("cliente_codigo", cc).maybeSingle();
+        if (!prog) return res.status(404).json({ error: "Ese cliente no tiene progreso cargado." });
+
+        const paso = req.body.paso;
+        let pasos = { ...(prog.pasos || {}) };
+        if (Number.isInteger(paso)) {
+          delete pasos[paso];
+        } else {
+          pasos = {};
+        }
+
+        await db.from("auto_progreso").update({
+          pasos,
+          finalizado_at: null,
+          actualizado_at: new Date().toISOString(),
+          ...(Number.isInteger(paso) ? {} : { origen: null, api_desarrolla: null }),
+        }).eq("cliente_codigo", cc);
+
+        await registrar(
+          cc, miembro.email, "reset",
+          Number.isInteger(paso) ? paso : null,
+          "Reiniciado por " + (miembro.nombre || miembro.email)
+        );
+        return res.json({ ok: true });
+      }
+
+      return res.status(400).json({ error: "Acción desconocida." });
+    }
+    // ────────────────────────────────────────────────────────────
+
     const cliente = await buscarCliente(codigo);
     if (!cliente) {
       return res.status(404).json({ error: "No encontramos ese código. Revisalo o escribinos." });
