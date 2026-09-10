@@ -3,6 +3,7 @@ import { CONECTORES, ESTADOS_PROCESADORA, DOCS, COLUMNAS_OBLIGATORIAS, TEMPLATE_
 import { validarVentas, validarTabla, exportarNubceo } from "../lib/validadorVentas";
 import { convertirSucursales, exportarTemplateSucursales } from "../lib/sucursalesTemplate";
 import MailsCard from "./MailsCard";
+import PanelAutoimp from "../lib/autoimp/PanelAutoimp";
 
 // ─── Tokens de marca Nubceo (tema C — Soft, portal de usuario) ───
 const T = {
@@ -3851,9 +3852,10 @@ function AdminPortal({ session, onLogout }) {
     <div>
       <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin />
       <div style={{ display: "flex" }}>
-        <Sidebar activo={modulo} onCambiar={(m) => { if (m === "autoimp") { window.open("/guia/panel?c=" + encodeURIComponent(sc), "_blank"); return; } setModulo(m); setPanelCliente(null); }} />
+        <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); }} noLeidas={notifNoLeidas} />
         <div style={{ flex: 1, minWidth: 0, padding: "26px 24px 60px", maxWidth: 1180, margin: "0 auto" }}>
           {msg && <Alert tone="success" style={{ marginBottom: 16 }}>{msg}</Alert>}
+          {modulo === "autoimp" && <PanelAutoimp codigo={sc} />}
 
           {/* ══════════ MÓDULO: CLIENTES ══════════ */}
           {modulo === "clientes" && (
