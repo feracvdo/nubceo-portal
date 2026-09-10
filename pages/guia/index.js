@@ -173,6 +173,8 @@ const CSS = `
 .ai-btn-g{background:transparent;color:var(--n600);border:1px solid var(--n200)}
 .ai-btn-g:hover{border-color:var(--n400)}
 .ai-btn-sm{font-size:13px;padding:6px 14px}
+.ai-btn-out{background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;font-weight:600}
+.ai-btn-out:hover{background:#b91c1c;color:#fff;border-color:#b91c1c}
 .ai-badge{display:inline-flex;align-items:center;gap:.35rem;font-size:12px;font-weight:500;padding:3px 10px;border-radius:100px}
 .ai-b-green{background:var(--ok-bg);color:var(--ok-tx)}
 .ai-b-amber{background:var(--warn-bg);color:var(--warn-tx)}
@@ -213,34 +215,53 @@ export default function Guia() {
 
   const [codigo, setCodigo] = useState(null);
   const [cliente, setCliente] = useState(null);
-  const [quien, setQuien] = useState("");
+  const [email, setEmail] = useState("");
   const [cargando, setCargando] = useState(true);
   const [errorLogin, setErrorLogin] = useState(null);
   const [inputCodigo, setInputCodigo] = useState("");
-  const [inputNombre, setInputNombre] = useState("");
+  const [inputEmail, setInputEmail] = useState("");
 
   // El código puede venir en el link (?c=XXX) o de la última vez que entró
   // desde este navegador. Si no hay ninguno, se pide.
+  // La sesión guardada en el navegador dura una hora desde el último ingreso.
+  // El código que viene en el link siempre gana, aunque la sesión haya vencido.
   useEffect(() => {
     const url = new URL(window.location.href);
-    const c = (url.searchParams.get("c") || localStorage.getItem("autoimp_codigo") || "").trim().toUpperCase();
-    const n = localStorage.getItem("autoimp_nombre") || "";
-    setQuien(n);
-    setInputNombre(n);
+    const delLink = (url.searchParams.get("c") || "").trim().toUpperCase();
+
+    const vence = Number(localStorage.getItem("autoimp_vence") || 0);
+    const vigente = vence > Date.now();
+    if (!vigente) limpiarSesion();
+
+    const guardado = vigente ? (localStorage.getItem("autoimp_codigo") || "") : "";
+    const mail = vigente ? (localStorage.getItem("autoimp_email") || "") : "";
+    const c = delLink || guardado.trim().toUpperCase();
+
+    setEmail(mail);
+    setInputEmail(mail);
     if (!c) { setCargando(false); return; }
-    entrar(c, n, true);
+    entrar(c, mail, true);
   }, []);
 
-  async function entrar(c, n, silencioso) {
+  function limpiarSesion() {
+    localStorage.removeItem("autoimp_codigo");
+    localStorage.removeItem("autoimp_email");
+    localStorage.removeItem("autoimp_vence");
+  }
+
+  const UNA_HORA = 60 * 60 * 1000;
+
+  async function entrar(c, mail, silencioso) {
     setCargando(true);
     setErrorLogin(null);
     try {
-      const r = await api("entrar", { codigo: c });
+      const r = await api("entrar", { codigo: c, email: mail || "" });
       setCliente(r.cliente);
       setCodigo(c);
-      setQuien(n || "");
+      setEmail(mail || "");
       localStorage.setItem("autoimp_codigo", c);
-      if (n) localStorage.setItem("autoimp_nombre", n);
+      localStorage.setItem("autoimp_vence", String(Date.now() + UNA_HORA));
+      if (mail) localStorage.setItem("autoimp_email", mail);
       const pasos = (r.progreso && r.progreso.pasos) || {};
       setDone(STEPS.map((_, i) => !!(pasos[i] && pasos[i].hecho)));
       setSrcPath((r.progreso && r.progreso.origen) || null);
@@ -252,21 +273,22 @@ export default function Guia() {
       setFb(base);
     } catch (e) {
       if (!silencioso) setErrorLogin(e.message);
-      localStorage.removeItem("autoimp_codigo");
+      limpiarSesion();
     } finally {
       setCargando(false);
     }
   }
 
   const salir = () => {
-    localStorage.removeItem("autoimp_codigo");
+    limpiarSesion();
     window.location.href = "/guia";
   };
 
   // Guardado optimista: la pantalla no espera al servidor.
   const guardar = (patch) => {
     if (!codigo) return;
-    api("guardar", { codigo, quien, totalPasos: STEPS.length, ...patch }).catch(() => {});
+    localStorage.setItem("autoimp_vence", String(Date.now() + UNA_HORA));
+    api("guardar", { codigo, email, totalPasos: STEPS.length, ...patch }).catch(() => {});
   };
 
   const total = STEPS.length;
@@ -355,7 +377,7 @@ export default function Guia() {
         <div className="ai-fbfoot">
           <button className="ai-btn ai-btn-o ai-btn-sm" disabled={!f.nivel} onClick={() => {
             patchFb(i, "enviado", true);
-            api("comentario", { codigo, quien, paso: i, nivel: f.nivel, comentario: f.texto }).catch(() => {});
+            api("comentario", { codigo, email, paso: i, nivel: f.nivel, comentario: f.texto }).catch(() => {});
           }}>
             Enviar comentario
           </button>
@@ -646,7 +668,7 @@ export default function Guia() {
                 id="ai-cod"
                 value={inputCodigo}
                 onChange={(e) => setInputCodigo(e.target.value.toUpperCase())}
-                onKeyDown={(e) => { if (e.key === "Enter") entrar(inputCodigo.trim(), inputNombre.trim()); }}
+                onKeyDown={(e) => { if (e.key === "Enter") entrar(inputCodigo.trim(), inputEmail.trim().toLowerCase()); }}
                 placeholder="Por ejemplo: DEMO123"
                 style={{ width: "100%", padding: "11px 12px", marginTop: ".4rem", border: "1px solid var(--n200)",
                   borderRadius: 8, fontSize: 15, fontFamily: "var(--font)", letterSpacing: ".04em" }}
@@ -654,14 +676,15 @@ export default function Guia() {
             </div>
 
             <div style={{ marginTop: "1rem" }}>
-              <label className="ai-fbl" htmlFor="ai-nom">Tu nombre</label>
-              <div className="ai-fbs">Opcional. Sirve para que tu equipo sepa quién hizo cada paso.</div>
+              <label className="ai-fbl" htmlFor="ai-mail">Tu correo</label>
+              <div className="ai-fbs">Para que tu equipo y tu implementador sepan quién hizo cada paso.</div>
               <input
-                id="ai-nom"
-                value={inputNombre}
-                onChange={(e) => setInputNombre(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") entrar(inputCodigo.trim(), inputNombre.trim()); }}
-                placeholder="Nombre y apellido"
+                id="ai-mail"
+                type="email"
+                value={inputEmail}
+                onChange={(e) => setInputEmail(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") entrar(inputCodigo.trim(), inputEmail.trim().toLowerCase()); }}
+                placeholder="nombre@tuempresa.com"
                 style={{ width: "100%", padding: "11px 12px", marginTop: ".4rem", border: "1px solid var(--n200)",
                   borderRadius: 8, fontSize: 15, fontFamily: "var(--font)" }}
               />
@@ -673,7 +696,7 @@ export default function Guia() {
 
             <div className="ai-pfoot">
               <button className="ai-btn ai-btn-p" disabled={!inputCodigo.trim()}
-                onClick={() => entrar(inputCodigo.trim().toUpperCase(), inputNombre.trim())}>
+                onClick={() => entrar(inputCodigo.trim().toUpperCase(), inputEmail.trim().toLowerCase())}>
                 Entrar →
               </button>
             </div>
@@ -697,6 +720,9 @@ export default function Guia() {
           <span>{pct}% completado</span>
           <div className="ai-track"><div className="ai-fill" style={{ width: pct + "%" }} /></div>
         </div>
+        <button className="ai-btn ai-btn-out ai-btn-sm" style={{ marginLeft: "1.25rem" }} onClick={salir}>
+          Salir
+        </button>
       </div>
 
       <div className="ai-wrap">
@@ -730,9 +756,7 @@ export default function Guia() {
                 </a>
               </div>
             )}
-            <div style={{ marginTop: ".7rem" }}>
-              <span className="ai-link" onClick={salir}>Salir</span>
-            </div>
+            {email && (<div style={{ marginTop: ".7rem" }}>Entraste como <b>{email}</b></div>)}
           </div>
         </aside>
 
