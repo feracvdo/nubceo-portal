@@ -8,7 +8,7 @@
 // /public/logo-nubceo.png.
 
 import { useState, useEffect } from "react";
-import { STEPS, NIVELES } from "../../lib/autoimp/contenido";
+import { STEPS, NIVELES, VERSION } from "../../lib/autoimp/contenido";
 
 // Todo pasa por nuestra API. El navegador nunca toca la base.
 async function api(action, payload = {}) {
@@ -62,6 +62,7 @@ const CSS = `
 .ai-steplist li.done .ai-bullet{border-color:var(--ok-tx);background:var(--ok-bg);color:var(--ok-tx)}
 .ai-sidefoot{margin-top:1.1rem;padding-top:1.1rem;border-top:1px solid var(--n100);font-size:12px;color:var(--n400)}
 .ai-sidefoot b{color:var(--n600);font-weight:600}
+.ai-ver{margin-top:.9rem;font-size:10.5px;color:var(--n200);letter-spacing:.04em}
 .ai-panel{background:#fff;border:1px solid var(--soft-border);border-radius:16px;padding:2rem 2.25rem 1.5rem;
   animation:aiFade .28s ease}
 @keyframes aiFade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
@@ -694,6 +695,8 @@ export default function Guia() {
               <div className="ai-callout warn" style={{ marginTop: "1.1rem" }}>{errorLogin}</div>
             )}
 
+            <div className="ai-ver" style={{ textAlign: "right" }}>v{VERSION}</div>
+
             <div className="ai-pfoot">
               <button className="ai-btn ai-btn-p" disabled={!inputCodigo.trim()}
                 onClick={() => entrar(inputCodigo.trim().toUpperCase(), inputEmail.trim().toLowerCase())}>
@@ -757,6 +760,7 @@ export default function Guia() {
               </div>
             )}
             {email && (<div style={{ marginTop: ".7rem" }}>Entraste como <b>{email}</b></div>)}
+            <div className="ai-ver">Guía v{VERSION}</div>
           </div>
         </aside>
 
