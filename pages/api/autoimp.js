@@ -79,52 +79,66 @@ export default async function handler(req, res) {
       if (action === "panelEntrar") return res.json({ miembro });
 
       if (action === "panelDatos") {
-        const [prog, coms] = await Promise.all([
-          db.from("auto_progreso").select("*").order("actualizado_at", { ascending: true }),
+        const [prog, coms, cls] = await Promise.all([
+          db.from("auto_progreso").select("*"),
           db.from("auto_comentarios").select("*").order("creado_at", { ascending: false }),
+          db.from("clientes").select("codigo, nombre, razon_social, implementador_id").order("nombre"),
         ]);
 
-        const filas = prog.data || [];
-        const codigos = filas.map((f) => f.cliente_codigo);
+        const progPorCodigo = {};
+        (prog.data || []).forEach((f) => { progPorCodigo[f.cliente_codigo] = f; });
 
-        let porCodigo = {};
-        if (codigos.length) {
-          const { data: cls } = await db
-            .from("clientes")
-            .select("codigo, nombre, razon_social, implementador_id")
-            .in("codigo", codigos);
-          const ids = [...new Set((cls || []).map((c) => c.implementador_id).filter(Boolean))];
-          let impl = {};
-          if (ids.length) {
-            const { data: eq } = await db.from("equipo").select("id, nombre").in("id", ids);
-            (eq || []).forEach((e) => { impl[e.id] = e.nombre; });
-          }
-          (cls || []).forEach((c) => {
-            porCodigo[c.codigo] = {
-              nombre: c.razon_social || c.nombre,
-              implementador: impl[c.implementador_id] || null,
-            };
-          });
+        const ids = [...new Set((cls.data || []).map((c) => c.implementador_id).filter(Boolean))];
+        const impl = {};
+        if (ids.length) {
+          const { data: eq } = await db.from("equipo").select("id, nombre").in("id", ids);
+          (eq || []).forEach((e) => { impl[e.id] = e.nombre; });
         }
 
-        const clientes = filas.map((f) => {
-          const pasos = f.pasos || {};
+        // Se listan todos los clientes del portal: los habilitados para ver su
+        // avance, y el resto para poder habilitarlos.
+        const clientes = (cls.data || []).map((c) => {
+          const f = progPorCodigo[c.codigo] || null;
+          const pasos = (f && f.pasos) || {};
           const hechos = Object.keys(pasos).filter((k) => pasos[k] && pasos[k].hecho).map(Number);
-          const info = porCodigo[f.cliente_codigo] || {};
           return {
-            codigo: f.cliente_codigo,
-            nombre: info.nombre || "(no está en el portal)",
-            implementador: info.implementador || null,
+            codigo: c.codigo,
+            nombre: c.razon_social || c.nombre,
+            implementador: impl[c.implementador_id] || null,
+            habilitado: !!(f && f.habilitado),
             hechos,
-            origen: f.origen,
-            apiDesarrolla: f.api_desarrolla,
-            iniciado: f.iniciado_at,
-            finalizado: f.finalizado_at,
-            actualizado: f.actualizado_at,
+            origen: f ? f.origen : null,
+            apiDesarrolla: f ? f.api_desarrolla : null,
+            iniciado: f ? f.iniciado_at : null,
+            finalizado: f ? f.finalizado_at : null,
+            actualizado: f ? f.actualizado_at : null,
+            entro: !!f && (hechos.length > 0 || !!f.origen),
           };
         });
 
         return res.json({ clientes, comentarios: coms.data || [] });
+      }
+
+      // Prender o apagar el acceso de un cliente a la guía
+      if (action === "panelHabilitar") {
+        const cc = norm(req.body.clienteCodigo);
+        const hab = !!req.body.habilitado;
+        if (!cc) return res.status(400).json({ error: "Falta el cliente." });
+
+        const { data: existente } = await db
+          .from("auto_progreso").select("cliente_codigo").eq("cliente_codigo", cc).maybeSingle();
+
+        if (existente) {
+          await db.from("auto_progreso")
+            .update({ habilitado: hab, actualizado_at: new Date().toISOString() })
+            .eq("cliente_codigo", cc);
+        } else {
+          await db.from("auto_progreso").insert({ cliente_codigo: cc, pasos: {}, habilitado: hab });
+        }
+
+        await registrar(cc, miembro.email, hab ? "habilitado" : "deshabilitado", null,
+          (hab ? "Habilitado" : "Deshabilitado") + " por " + (miembro.nombre || miembro.email));
+        return res.json({ ok: true });
       }
 
       // Reset: un paso puntual o toda la configuración del cliente
@@ -176,9 +190,12 @@ export default async function handler(req, res) {
         db.from("auto_comentarios").select("paso, nivel, comentario").eq("cliente_codigo", codigo),
       ]);
 
-      // Primera entrada: dejamos la fila creada para que el arranque quede fechado.
-      if (!prog) {
-        await db.from("auto_progreso").insert({ cliente_codigo: codigo, pasos: {} });
+      // La guía no se abre sola: un implementador tiene que habilitar al cliente
+      // desde el panel. Sin fila habilitada, no hay acceso.
+      if (!prog || !prog.habilitado) {
+        return res.status(403).json({
+          error: "Tu guía todavía no está habilitada. Escribile a tu referente de Nubceo para que te dé acceso.",
+        });
       }
       await registrar(codigo, email, "entro");
 
