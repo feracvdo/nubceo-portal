@@ -56,6 +56,9 @@ const CSS = `
 .pn-emb .sw.on i{left:19px}
 .pn-emb input[type=text]{height:36px;padding:0 11px;border:1px solid var(--pnn200);border-radius:8px;
   font-size:13.5px;font-family:inherit;color:var(--pnn800);background:#fff;width:100%}
+.pn-emb select{height:36px;padding:0 9px;border:1px solid var(--pnn200);border-radius:8px;
+  font-size:13.5px;font-family:inherit;color:var(--pnn800);background:#fff}
+.pn-emb .limpiar{font-size:12.5px;color:var(--pnp);cursor:pointer;font-weight:600}
 .pn-emb .filtros{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:1rem}
 .pn-emb .paso{border:1px solid var(--pnn200);border-radius:11px;padding:.9rem 1.1rem;margin-bottom:.7rem;background:var(--pnn50)}
 .pn-emb .paso.alerta{border-color:#fca5a5;background:#fff5f5}
@@ -94,6 +97,7 @@ export default function PanelAutoimp({ codigo }) {
   const [error, setError] = useState(null);
   const [busca, setBusca] = useState("");
   const [verTodos, setVerTodos] = useState(false);
+  const [filtroImpl, setFiltroImpl] = useState("");
   const [abierto, setAbierto] = useState(null); // código con el mensaje desplegado
   const [copiado, setCopiado] = useState("");
 
@@ -155,8 +159,11 @@ export default function PanelAutoimp({ codigo }) {
   const comentarios = (datos && datos.comentarios) || [];
   const q = busca.trim().toLowerCase();
 
+  const implementadores = [...new Set(todos.map((c) => c.implementador).filter(Boolean))].sort();
+
   const lista = todos
     .filter((c) => (verTodos ? true : c.habilitado))
+    .filter((c) => !filtroImpl || (filtroImpl === "__" ? !c.implementador : c.implementador === filtroImpl))
     .filter((c) => !q || c.nombre.toLowerCase().includes(q) || c.codigo.toLowerCase().includes(q))
     .sort((a, b) => {
       if (a.habilitado !== b.habilitado) return a.habilitado ? -1 : 1;
@@ -165,6 +172,9 @@ export default function PanelAutoimp({ codigo }) {
     });
 
   const habilitados = todos.filter((c) => c.habilitado).length;
+  const vacioTxt = filtroImpl || q
+    ? "Ningún cliente coincide con los filtros."
+    : "Todavía no habilitaste a nadie. Tildá “ver todos los clientes” para elegir.";
 
   const porPaso = STEPS.map((s, i) => {
     const cs = comentarios.filter((c) => c.paso === i);
@@ -188,15 +198,23 @@ export default function PanelAutoimp({ codigo }) {
           <div style={{ flex: "1 1 240px", maxWidth: 300 }}>
             <input type="text" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nombre o código…" />
           </div>
+          <select value={filtroImpl} onChange={(e) => setFiltroImpl(e.target.value)}>
+            <option value="">Todos los implementadores</option>
+            {implementadores.map((n) => <option key={n} value={n}>{n}</option>)}
+            <option value="__">— Sin asignar —</option>
+          </select>
           <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, color: "var(--pnn600)", cursor: "pointer" }}>
             <input type="checkbox" checked={verTodos} onChange={(e) => setVerTodos(e.target.checked)} style={{ width: 15, height: 15 }} />
             Ver todos los clientes del portal
           </label>
+          {(busca || filtroImpl) && (
+            <span className="limpiar" onClick={() => { setBusca(""); setFiltroImpl(""); }}>Limpiar filtros</span>
+          )}
         </div>
 
         {lista.length === 0 ? (
           <div className="vacio">
-            {verTodos ? "Ningún cliente coincide con la búsqueda." : "Todavía no habilitaste a nadie. Tildá “ver todos” para elegir."}
+            {vacioTxt}
           </div>
         ) : (
           <table>
