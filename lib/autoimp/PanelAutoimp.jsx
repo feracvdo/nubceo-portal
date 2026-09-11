@@ -69,6 +69,25 @@ const CSS = `
 .pn-emb .com .meta{font-size:11px;color:var(--pnn400);margin-top:.15rem}
 .pn-emb .vacio{text-align:center;color:var(--pnn400);padding:2.2rem;font-size:13.5px}
 .pn-emb .ver{font-size:10.5px;color:var(--pnn200);letter-spacing:.04em;text-align:right}
+.pn-tabs{display:flex;gap:.4rem;margin-bottom:1.2rem;border-bottom:1px solid var(--pnn200)}
+.pn-tabs .tb{font-size:13.5px;font-weight:600;color:var(--pnn400);padding:.6rem 1rem;cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px}
+.pn-tabs .tb:hover{color:var(--pnn600)}
+.pn-tabs .tb.on{color:var(--pnp);border-bottom-color:var(--pnp)}
+.pn-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:.8rem;margin-bottom:1.4rem}
+.pn-kpi{background:var(--pn50);border-radius:10px;padding:1.05rem 1.15rem}
+.pn-kpi .v{font-size:28px;font-weight:700;color:var(--pn900);line-height:1.15}
+.pn-kpi .l{font-size:12px;font-weight:500;color:#033a8a;opacity:.72;margin-top:.2rem}
+.pn-kpi .h{font-size:11px;color:var(--pnn400);margin-top:.3rem}
+.pn-fila{display:flex;align-items:center;gap:.8rem;margin-bottom:.55rem}
+.pn-fila .et{flex:0 0 40%;font-size:13px;color:var(--pnn800)}
+.pn-fila .pista{flex:1;height:22px;background:var(--pnn100);border-radius:6px;overflow:hidden;position:relative}
+.pn-fila .pista i{display:block;height:100%;background:var(--pnp);border-radius:6px;
+  transition:width .4s ease;min-width:2px}
+.pn-fila .pista i.dif1{background:#22c55e}.pn-fila .pista i.dif2{background:var(--pnp)}
+.pn-fila .pista i.dif3{background:#ca8a04}.pn-fila .pista i.dif4{background:#b91c1c}
+.pn-fila .n{flex:0 0 96px;font-size:12.5px;color:var(--pnn600);text-align:right}
+.pn-caida{font-size:11.5px;color:var(--pnbt);font-weight:600}
 .pn-emb .msgbox{margin-top:.8rem;background:var(--pnn50);border:1px solid var(--pnn200);border-radius:10px;padding:.9rem 1rem}
 .pn-emb .msgbox pre{margin:0;font-family:inherit;font-size:13px;color:var(--pnn600);white-space:pre-wrap;line-height:1.6}
 .pn-emb .msgbox .acc{display:flex;gap:.5rem;margin-top:.8rem;flex-wrap:wrap;align-items:center}
@@ -167,6 +186,7 @@ export default function PanelAutoimp({ codigo }) {
   const [filtroImpl, setFiltroImpl] = useState("");
   const [abierto, setAbierto] = useState(null); // código con el mensaje desplegado
   const [copiado, setCopiado] = useState("");
+  const [tab, setTab] = useState("seguimiento");
   const [verCom, setVerCom] = useState(null); // null | código del cliente | "__todos"
   const [aviso, setAviso] = useState(null);   // { codigo, para, asunto, cuerpo }
   const [enviando, setEnviando] = useState(false);
@@ -294,9 +314,150 @@ export default function PanelAutoimp({ codigo }) {
 
   const nombreDe = (cod) => (todos.find((c) => c.codigo === cod) || {}).nombre || cod;
 
+  // ─────────── Mediciones ───────────
+  const hab = todos.filter((c) => c.habilitado);
+  const entraron = hab.filter((c) => c.entro);
+  const terminaron = hab.filter((c) => c.finalizado);
+  const enCurso = entraron.filter((c) => !c.finalizado);
+  const frenados = enCurso.filter((c) => (dias(c.actualizado) || 0) >= 21);
+
+  const durs = terminaron
+    .map((c) => (c.iniciado && c.finalizado
+      ? Math.round((new Date(c.finalizado) - new Date(c.iniciado)) / 86400000) : null))
+    .filter((x) => x !== null && x >= 0);
+  const tiempoProm = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null;
+
+  const usadas = entraron.map((c) => c.consultasUsadas || 0);
+  const consProm = usadas.length ? (usadas.reduce((a, b) => a + b, 0) / usadas.length).toFixed(1) : null;
+
+  const base = entraron.length;
+  const embudo = STEPS.map((st, i) => {
+    const q = entraron.filter((c) => c.hechos.includes(i)).length;
+    return { i, nav: st.nav, q, pct: base ? Math.round((q / base) * 100) : 0 };
+  });
+  let peorCaida = null;
+  embudo.forEach((e, i) => {
+    const previo = i === 0 ? base : embudo[i - 1].q;
+    const caida = previo - e.q;
+    if (previo > 0 && (!peorCaida || caida > peorCaida.caida)) peorCaida = { ...e, caida, previo };
+  });
+
+  const NIV_VAL = { facil: 1, normal: 2, costo: 3, trabe: 4 };
+  const dificultad = STEPS.map((st, i) => {
+    const cs = comentarios.filter((c) => c.paso === i);
+    const prom = cs.length ? cs.reduce((a, c) => a + (NIV_VAL[c.nivel] || 2), 0) / cs.length : null;
+    return { i, nav: st.nav, q: cs.length, prom };
+  }).filter((x) => x.q > 0);
+
+  const muestraChica = base < 10;
+
+  const renderMediciones = () => (
+    <>
+      {muestraChica && (
+        <div style={{ background: "var(--pnw)", border: "1px solid #fde68a", borderRadius: 10,
+          padding: ".8rem 1rem", marginBottom: "1.2rem", fontSize: 13, color: "var(--pnwt)" }}>
+          <b>Muestra chica.</b> Con {base} cliente{base === 1 ? "" : "s"} que entraron a la guía, estos números
+          todavía no son concluyentes. Recién a partir de diez o quince casos conviene tomar decisiones con esto.
+        </div>
+      )}
+
+      <div className="pn-card">
+        <h2>Cómo viene funcionando</h2>
+        <div className="sub">Sobre los {hab.length} clientes con la guía habilitada.</div>
+
+        <div className="pn-kpis">
+          <div className="pn-kpi">
+            <div className="v">{enCurso.length}</div>
+            <div className="l">En curso</div>
+            <div className="h">{frenados.length} sin moverse hace más de 3 semanas</div>
+          </div>
+          <div className="pn-kpi">
+            <div className="v">{terminaron.length}</div>
+            <div className="l">Terminaron</div>
+            <div className="h">{base ? Math.round((terminaron.length / base) * 100) : 0}% de los que entraron</div>
+          </div>
+          <div className="pn-kpi">
+            <div className="v">{tiempoProm === null ? "—" : tiempoProm + "d"}</div>
+            <div className="l">Tiempo promedio</div>
+            <div className="h">{durs.length ? "Sobre " + durs.length + " caso" + (durs.length === 1 ? "" : "s") : "Sin casos terminados"}</div>
+          </div>
+          <div className="pn-kpi">
+            <div className="v">{consProm === null ? "—" : consProm}</div>
+            <div className="l">Consultas por cliente</div>
+            <div className="h">Cuánto tiempo de implementador consume</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="pn-card">
+        <h2>Dónde se cae la gente</h2>
+        <div className="sub">
+          Cuántos de los {base} clientes que entraron completaron cada paso. El escalón más grande entre
+          dos barras es el paso que hay que rehacer.
+        </div>
+        {base === 0 ? (
+          <div className="vacio">Todavía no entró nadie a la guía.</div>
+        ) : (
+          <>
+            {embudo.map((e, k) => {
+              const previo = k === 0 ? base : embudo[k - 1].q;
+              const caida = previo - e.q;
+              return (
+                <div key={e.i} className="pn-fila">
+                  <span className="et">{e.i + 1}. {e.nav}</span>
+                  <span className="pista"><i style={{ width: Math.max(e.pct, 1) + "%" }} /></span>
+                  <span className="n">
+                    {e.q} · {e.pct}%
+                    {caida > 0 && <span className="pn-caida"> −{caida}</span>}
+                  </span>
+                </div>
+              );
+            })}
+            {peorCaida && peorCaida.caida > 0 && (
+              <div style={{ marginTop: "1rem", fontSize: 13, color: "var(--pnn600)" }}>
+                La mayor pérdida está en <b>{peorCaida.i + 1}. {peorCaida.nav}</b>: llegaron {peorCaida.previo} y
+                lo completaron {peorCaida.q}. Ahí es donde más rinde invertir.
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="pn-card">
+        <h2>Qué paso les cuesta más</h2>
+        <div className="sub">
+          Promedio de dificultad según lo que reportaron los clientes, de fácil a me trabé. Es la otra cara del
+          embudo: mide dónde sufren, aunque después zafen.
+        </div>
+        {dificultad.length === 0 ? (
+          <div className="vacio">Todavía no hay comentarios cargados.</div>
+        ) : dificultad.map((x) => {
+          const nivel = Math.round(x.prom);
+          const etiqueta = ["", "Fácil", "Normal", "Les costó", "Se trabaron"][nivel] || "Normal";
+          return (
+            <div key={x.i} className="pn-fila">
+              <span className="et">{x.i + 1}. {x.nav}</span>
+              <span className="pista"><i className={"dif" + nivel} style={{ width: (x.prom / 4) * 100 + "%" }} /></span>
+              <span className="n">{etiqueta} · {x.q}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="ver">Autoimplementador v{VERSION}</div>
+    </>
+  );
+
   return (
     <div className="pn-emb">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
+
+      <div className="pn-tabs">
+        <span className={"tb" + (tab === "seguimiento" ? " on" : "")} onClick={() => setTab("seguimiento")}>Seguimiento</span>
+        <span className={"tb" + (tab === "mediciones" ? " on" : "")} onClick={() => setTab("mediciones")}>Mediciones</span>
+      </div>
+
+      {tab === "mediciones" ? renderMediciones() : (<>
 
       <div className="pn-card">
         <h2>Clientes en autoimplementación</h2>
@@ -570,6 +731,7 @@ export default function PanelAutoimp({ codigo }) {
       )}
 
       <div className="ver">Autoimplementador v{VERSION}</div>
+      </>)}
     </div>
   );
 }
