@@ -73,6 +73,12 @@ const CSS = `
 .pn-emb .msgbox pre{margin:0;font-family:inherit;font-size:13px;color:var(--pnn600);white-space:pre-wrap;line-height:1.6}
 .pn-emb .msgbox .acc{display:flex;gap:.5rem;margin-top:.8rem;flex-wrap:wrap;align-items:center}
 .pn-emb .lnk{font-size:12.5px;color:var(--pnp);word-break:break-all}
+.pn-emb .lbl2{font-size:10.5px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--pnn400);margin-bottom:.3rem}
+.pn-emb textarea{width:100%;padding:10px 12px;border:1px solid var(--pnn200);border-radius:8px;
+  font-family:inherit;font-size:13.5px;color:var(--pnn800);background:#fff;resize:vertical;line-height:1.6}
+.pn-emb textarea:focus,.pn-emb input[type=text]:focus{outline:none;border-color:var(--pnp);
+  box-shadow:0 0 0 3px rgba(10,107,244,.12)}
 `;
 
 const dias = (iso) => (iso ? Math.floor((Date.now() - new Date(iso)) / 86400000) : null);
@@ -91,6 +97,67 @@ const mensajeDe = (cliente) =>
   "Son 7 pasos, podés salir y retomar donde lo dejaste. Al pie de cada paso hay un espacio para contarnos cómo te resultó — lo leemos.\n\n" +
   "Cualquier duda, escribime.";
 
+// Los tres toques de la cadencia de seguimiento, adaptados a la guía.
+// El toque se elige por los días sin movimiento, igual que en el resto del equipo.
+function toqueDe(d) {
+  if (d >= 10) return 3;
+  if (d >= 7) return 2;
+  return 1;
+}
+
+function borradorAviso(cli, pasoActual, d, entro) {
+  // Todavía no abrió la guía: el mensaje es una invitación, no un recordatorio.
+  if (!entro) {
+    return {
+      asunto: "Tu guía de puesta en marcha está lista",
+      cuerpo:
+        "Hola,\n\n" +
+        "Te dejamos habilitada la guía para poner en marcha tu Conciliador. Son siete pasos con videos " +
+        "cortos: mirás el video y hacés la configuración en Nubceo, a tu ritmo y sin reuniones.\n\n" +
+        "Podés entrar cuando quieras y salir y retomar donde lo dejaste. Si algo no queda claro, " +
+        "desde la misma guía podés escribirme.\n\n" +
+        "¿Arrancamos esta semana?",
+    };
+  }
+
+  const t = toqueDe(d);
+  const paso = pasoActual ? "el paso «" + pasoActual + "»" : "tu puesta en marcha";
+
+  if (t === 1) {
+    return {
+      asunto: "¿Seguimos con tu puesta en marcha?",
+      cuerpo:
+        "Hola,\n\n" +
+        "Vi que la guía de puesta en marcha quedó en " + paso + ". Nada grave: " +
+        "te escribo por si algo no quedó claro o si hace falta que alguien de tu equipo te pase un dato.\n\n" +
+        "¿Podés retomarla esta semana? Si preferís, lo hacemos juntos en una llamada corta y lo destrabamos en el momento.\n\n" +
+        "Quedo atento.",
+    };
+  }
+  if (t === 2) {
+    return {
+      asunto: "Tu Conciliador sigue sin arrancar",
+      cuerpo:
+        "Hola,\n\n" +
+        "Hace " + d + " días que la guía está detenida en " + paso + ", y mientras tanto tu Conciliador no está " +
+        "conciliando nada: cada semana que pasa se acumula información sin cruzar.\n\n" +
+        "Necesito que avancemos con ese paso en los próximos días. Si hay algo que te está frenando, " +
+        "decime qué es y lo resolvemos; y si preferís que lo hagamos en vivo, pasame dos horarios y lo agendamos.\n\n" +
+        "Gracias.",
+    };
+  }
+  return {
+    asunto: "Necesitamos definir cómo seguimos",
+    cuerpo:
+      "Hola,\n\n" +
+      "Hace " + d + " días que la puesta en marcha está detenida en " + paso + " y no logramos avanzar. " +
+      "Sumo en copia a las personas del proyecto para que estemos todos al tanto.\n\n" +
+      "Te propongo una reunión corta esta semana para definir juntos cómo seguimos: si retomamos la guía " +
+      "con una fecha concreta, o si conviene que pasemos a una implementación acompañada.\n\n" +
+      "Decime qué día te queda cómodo.",
+  };
+}
+
 export default function PanelAutoimp({ codigo }) {
   const [datos, setDatos] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -101,6 +168,8 @@ export default function PanelAutoimp({ codigo }) {
   const [abierto, setAbierto] = useState(null); // código con el mensaje desplegado
   const [copiado, setCopiado] = useState("");
   const [verCom, setVerCom] = useState(null); // null | código del cliente | "__todos"
+  const [aviso, setAviso] = useState(null);   // { codigo, para, asunto, cuerpo }
+  const [enviando, setEnviando] = useState(false);
 
   const recargar = async () => {
     const d = await api("panelDatos", { codigo });
@@ -155,6 +224,28 @@ export default function PanelAutoimp({ codigo }) {
       await api("panelCupo", { codigo, clienteCodigo: cli.codigo, total });
       await recargar();
     } catch (e) { alert(e.message); }
+  };
+
+  const abrirAviso = (cli, pasoActual, d) => {
+    if (aviso && aviso.codigo === cli.codigo) { setAviso(null); return; }
+    const dd = d || 0;
+    const b = borradorAviso(cli, pasoActual, dd, cli.entro);
+    setAviso({
+      codigo: cli.codigo, para: cli.email || "", asunto: b.asunto, cuerpo: b.cuerpo,
+      toque: cli.entro ? toqueDe(dd) : 0,
+    });
+  };
+
+  const enviarAviso = async () => {
+    if (!aviso.para.trim()) { alert("Falta el correo del destinatario."); return; }
+    setEnviando(true);
+    try {
+      await api("panelAviso", { codigo, clienteCodigo: aviso.codigo, para: aviso.para.trim(),
+        asunto: aviso.asunto, cuerpo: aviso.cuerpo });
+      setAviso(null);
+      await recargar();
+    } catch (e) { alert(e.message); }
+    finally { setEnviando(false); }
   };
 
   const reiniciar = async (cli) => {
@@ -317,6 +408,13 @@ export default function PanelAutoimp({ codigo }) {
                             {abrirMsg ? "Cerrar" : "Acceso"}
                           </button>
                         )}
+                        <button className="btn" style={{ marginLeft: 6,
+                          background: c.entro && d >= 10 ? "#fee2e2" : c.entro && d >= 7 ? "#fef9c3" : undefined,
+                          color: c.entro && d >= 10 ? "#b91c1c" : c.entro && d >= 7 ? "#854d0e" : undefined }}
+                          title="Escribirle al cliente"
+                          onClick={() => abrirAviso(c, actual === -1 ? null : STEPS[actual].nav, d)}>
+                          ✉ Enviar aviso
+                        </button>
                         {comsPorCliente[c.codigo] > 0 && (
                           <button className="btn" style={{ marginLeft: 6 }}
                             onClick={() => setVerCom(verCom === c.codigo ? null : c.codigo)}>
@@ -328,6 +426,59 @@ export default function PanelAutoimp({ codigo }) {
                         )}
                       </td>
                     </tr>
+                    {aviso && aviso.codigo === c.codigo && (
+                      <tr>
+                        <td colSpan={9} style={{ background: "#fff" }}>
+                          <div className="msgbox">
+                            <div style={{ display: "flex", alignItems: "center", gap: ".6rem", marginBottom: ".8rem", flexWrap: "wrap" }}>
+                              <span className={"chip " + (aviso.toque === 3 ? "bad" : aviso.toque === 2 ? "warn" : "mut")}>
+                                {aviso.toque === 0
+                                  ? "Invitación · todavía no entró"
+                                  : "Toque " + aviso.toque + " · " + (aviso.toque === 1 ? "recordatorio suave" : aviso.toque === 2 ? "insistencia" : "escalamiento")}
+                              </span>
+                              {c.avisosEnviados > 0 && (
+                                <span style={{ fontSize: 12, color: "var(--pnn400)" }}>
+                                  Ya le mandaste {c.avisosEnviados} aviso{c.avisosEnviados === 1 ? "" : "s"}
+                                  {c.ultimoAviso ? ", el último hace " + dias(c.ultimoAviso) + " días" : ""}.
+                                </span>
+                              )}
+                            </div>
+
+                            <div style={{ display: "grid", gap: ".6rem" }}>
+                              <div style={{ display: "flex", gap: ".6rem", flexWrap: "wrap" }}>
+                                <div style={{ flex: "1 1 240px" }}>
+                                  <div className="lbl2">Para</div>
+                                  <input type="text" value={aviso.para}
+                                    onChange={(e) => setAviso({ ...aviso, para: e.target.value })}
+                                    placeholder="correo@delcliente.com" />
+                                </div>
+                                <div style={{ flex: "2 1 320px" }}>
+                                  <div className="lbl2">Asunto</div>
+                                  <input type="text" value={aviso.asunto}
+                                    onChange={(e) => setAviso({ ...aviso, asunto: e.target.value })} />
+                                </div>
+                              </div>
+                              <div>
+                                <div className="lbl2">Mensaje</div>
+                                <textarea value={aviso.cuerpo} rows={11}
+                                  onChange={(e) => setAviso({ ...aviso, cuerpo: e.target.value })} />
+                              </div>
+                            </div>
+
+                            <div className="acc">
+                              <button className="btn" onClick={enviarAviso} disabled={enviando}
+                                style={{ background: "#0a6bf4", color: "#fff" }}>
+                                {enviando ? "Enviando…" : "Enviar aviso"}
+                              </button>
+                              <button className="btn" onClick={() => setAviso(null)}>Cancelar</button>
+                              <span style={{ fontSize: 11.5, color: "var(--pnn400)" }}>
+                                Sale desde Nubceo y las respuestas te llegan a vos. Editalo antes de mandarlo.
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                     {abrirMsg && (
                       <tr>
                         <td colSpan={9} style={{ background: "#fff" }}>
