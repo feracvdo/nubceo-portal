@@ -33,15 +33,16 @@ const CSS = `
   min-height:100vh}
 .ai-root *{box-sizing:border-box;margin:0;padding:0}
 .ai-splash{position:fixed;inset:0;z-index:999;background:var(--soft-bg);display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:1.5rem;transition:opacity .6s ease,visibility .6s}
+  align-items:center;justify-content:center;gap:1.5rem;transition:opacity 1.1s ease,visibility 1.1s}
 .ai-splash.out{opacity:0;visibility:hidden}
-.ai-splash img{height:56px;width:auto;animation:aiLogoIn .85s cubic-bezier(.2,.7,.3,1) both}
-.ai-splash.out img{animation:aiLogoOut .6s ease forwards}
+.ai-splash img{height:64px;width:auto;animation:aiLogoIn 1.6s cubic-bezier(.19,.85,.28,1) both}
+.ai-splash.out img{animation:aiLogoOut 1.1s cubic-bezier(.4,0,.6,1) forwards}
 .ai-splash .cap{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--primary-200);
-  animation:aiCapIn .7s ease .35s both}
-@keyframes aiLogoIn{from{opacity:0;filter:blur(14px);transform:scale(.9)}
-  to{opacity:1;filter:blur(0);transform:none}}
-@keyframes aiLogoOut{to{opacity:0;filter:blur(10px);transform:scale(1.06)}}
+  animation:aiCapIn 1s ease .75s both}
+@keyframes aiLogoIn{0%{opacity:0;filter:blur(18px);transform:scale(.88)}
+  60%{opacity:1}
+  100%{opacity:1;filter:blur(0);transform:none}}
+@keyframes aiLogoOut{to{opacity:0;filter:blur(14px);transform:scale(1.1)}}
 @keyframes aiCapIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){
   .ai-splash,.ai-splash img,.ai-splash .cap{animation:none!important;transition:opacity .2s}}
@@ -239,8 +240,8 @@ export default function Guia() {
   const [portada, setPortada] = useState(true);
   const [portadaSale, setPortadaSale] = useState(false);
   useEffect(() => {
-    const t1 = setTimeout(() => setPortadaSale(true), 1150);
-    const t2 = setTimeout(() => setPortada(false), 1800);
+    const t1 = setTimeout(() => setPortadaSale(true), 2200);
+    const t2 = setTimeout(() => setPortada(false), 3400);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
