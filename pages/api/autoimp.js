@@ -130,11 +130,19 @@ export default async function handler(req, res) {
       if (action === "panelEntrar") return res.json({ miembro });
 
       if (action === "panelDatos") {
-        const [prog, coms, cls] = await Promise.all([
+        const [prog, coms, cls, evs] = await Promise.all([
           db.from("auto_progreso").select("*"),
           db.from("auto_comentarios").select("*").order("creado_at", { ascending: false }),
           db.from("clientes").select("codigo, nombre, razon_social, implementador_id").order("nombre"),
+          db.from("auto_eventos").select("cliente_codigo, email, creado_at")
+            .not("email", "is", null).order("creado_at", { ascending: false }).limit(500),
         ]);
+
+        // Último correo con el que entró cada cliente: es a quien le escribimos.
+        const ultimoEmail = {};
+        (evs.data || []).forEach((e) => {
+          if (!ultimoEmail[e.cliente_codigo]) ultimoEmail[e.cliente_codigo] = e.email;
+        });
 
         const progPorCodigo = {};
         (prog.data || []).forEach((f) => { progPorCodigo[f.cliente_codigo] = f; });
@@ -160,6 +168,9 @@ export default async function handler(req, res) {
             hechos,
             origen: f ? f.origen : null,
             apiDesarrolla: f ? f.api_desarrolla : null,
+            email: ultimoEmail[c.codigo] || null,
+            ultimoAviso: f ? f.ultimo_aviso_at : null,
+            avisosEnviados: f ? (f.avisos_enviados ?? 0) : 0,
             consultasTotal: f ? (f.consultas_total ?? 20) : 20,
             consultasUsadas: f ? (f.consultas_usadas ?? 0) : 0,
             iniciado: f ? f.iniciado_at : null,
@@ -191,6 +202,52 @@ export default async function handler(req, res) {
 
         await registrar(cc, miembro.email, hab ? "habilitado" : "deshabilitado", null,
           (hab ? "Habilitado" : "Deshabilitado") + " por " + (miembro.nombre || miembro.email));
+        return res.json({ ok: true });
+      }
+
+      // Aviso al cliente que dejó de avanzar. Por ahora se dispara a mano.
+      if (action === "panelAviso") {
+        const cc = norm(req.body.clienteCodigo);
+        const para = (req.body.para || "").trim();
+        const asunto = (req.body.asunto || "").trim();
+        const cuerpo = (req.body.cuerpo || "").trim();
+        if (!cc || !para || !cuerpo) return res.status(400).json({ error: "Faltan el destinatario o el mensaje." });
+        if (!resend) return res.status(500).json({ error: "Falta configurar RESEND_API_KEY." });
+
+        const { data: prog } = await db
+          .from("auto_progreso").select("avisos_enviados").eq("cliente_codigo", cc).maybeSingle();
+
+        try {
+          await resend.emails.send({
+            from: DE,
+            to: para,
+            replyTo: miembro.email || undefined,
+            subject: asunto || "Tu puesta en marcha de Nubceo",
+            html: `
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+                          background:#eef4ff;padding:28px">
+                <div style="max-width:540px;margin:0 auto;background:#fff;border:1px solid #c7dcfd;
+                            border-radius:14px;padding:26px 28px">
+                  <div style="font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+                              color:#0a6bf4;margin-bottom:14px">Nubceo · Puesta en marcha</div>
+                  <div style="font-size:14.5px;color:#1e2433;line-height:1.65;white-space:pre-wrap">${
+                    cuerpo.replace(/</g, "&lt;")
+                  }</div>
+                </div>
+              </div>`,
+          });
+        } catch (e) {
+          console.error("autoimp aviso:", e);
+          return res.status(500).json({ error: "No se pudo enviar el mail." });
+        }
+
+        await db.from("auto_progreso").update({
+          ultimo_aviso_at: new Date().toISOString(),
+          avisos_enviados: ((prog && prog.avisos_enviados) || 0) + 1,
+        }).eq("cliente_codigo", cc);
+
+        await registrar(cc, miembro.email, "aviso", null,
+          "Aviso enviado a " + para + " por " + (miembro.nombre || miembro.email));
         return res.json({ ok: true });
       }
 
