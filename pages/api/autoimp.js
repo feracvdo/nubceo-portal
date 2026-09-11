@@ -87,6 +87,26 @@ async function avisarPorMail({ para, asunto, titulo, cuerpo, pie }) {
   }
 }
 
+// Notificación dentro del portal, para que aparezca en la campanita.
+// Es la única tabla de Fernanda en la que escribimos, y solo insertamos filas
+// con el mismo formato que las suyas: destinatario, cliente, tipo, paso, texto.
+async function notificarEnPortal({ destinatarioId, clienteId, tipo, paso, texto }) {
+  if (!destinatarioId) return;
+  try {
+    await db.from("notificaciones").insert({
+      destinatario_id: destinatarioId,
+      cliente_id: clienteId || null,
+      tipo,
+      paso: paso || "autoimplementador",
+      texto,
+      leida: false,
+      creado_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.error("autoimp notificación:", e);
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
 
@@ -322,7 +342,16 @@ export default async function handler(req, res) {
       const pasoTxt = paso === null ? "" : " en el paso " + (paso + 1);
       const restantes = Math.max(0, total - (agotado ? usadas : usadas + 1));
 
+      const slugPaso = paso === null ? "autoimplementador" : "autoimp_paso_" + (paso + 1);
+
       if (agotado) {
+        await notificarEnPortal({
+          destinatarioId: cliente.implementador_id,
+          clienteId: cliente.id,
+          tipo: "autoimp_sin_consultas",
+          paso: slugPaso,
+          texto: nombreCli + " se quedó sin consultas del autoimplementador y volvió a pedir ayuda" + pasoTxt + ".",
+        });
         await avisarPorMail({
           para: impl?.email,
           asunto: "[Autoimplementador] " + nombreCli + " se quedó sin consultas",
@@ -332,6 +361,14 @@ export default async function handler(req, res) {
           pie: "Podés ampliarle el cupo desde el panel del autoimplementador, en el portal de implementación.",
         });
       } else {
+        await notificarEnPortal({
+          destinatarioId: cliente.implementador_id,
+          clienteId: cliente.id,
+          tipo: "autoimp_consulta",
+          paso: slugPaso,
+          texto: nombreCli + " pidió ayuda desde el autoimplementador" + pasoTxt +
+            " (consulta " + (usadas + 1) + " de " + total + ").",
+        });
         await avisarPorMail({
           para: impl?.email,
           asunto: "[Autoimplementador] Consulta de " + nombreCli,
