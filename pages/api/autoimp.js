@@ -9,6 +9,10 @@
 //  - Lo nuestro vive en tablas con prefijo auto_.
 
 import { supabaseAdmin as db } from "../../lib/supabaseAdmin";
+import { Resend } from "resend";
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+const DE = process.env.RESEND_FROM_EMAIL || "noreply@nubceo.com";
 
 const norm = (c) => (c || "").trim().toUpperCase();
 
@@ -53,6 +57,33 @@ async function registrar(codigo, email, accion, paso, detalle) {
     });
   } catch (e) {
     console.error("autoimp bitácora:", e);
+  }
+}
+
+// Aviso por mail al implementador. Nunca frena la respuesta al cliente.
+async function avisarPorMail({ para, asunto, titulo, cuerpo, pie }) {
+  if (!resend || !para) return;
+  try {
+    await resend.emails.send({
+      from: DE,
+      to: para,
+      subject: asunto,
+      html: `
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+                    background:#eef4ff;padding:28px">
+          <div style="max-width:520px;margin:0 auto;background:#fff;border:1px solid #c7dcfd;
+                      border-radius:14px;padding:26px 28px">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+                        color:#0a6bf4;margin-bottom:10px">Autoimplementador</div>
+            <h1 style="font-size:19px;color:#02265c;margin:0 0 12px">${titulo}</h1>
+            <p style="font-size:14px;color:#4b5468;line-height:1.6;margin:0 0 16px">${cuerpo}</p>
+            <p style="font-size:12.5px;color:#8e96a8;line-height:1.6;margin:0;padding-top:14px;
+                      border-top:1px solid #eef0f4">${pie}</p>
+          </div>
+        </div>`,
+    });
+  } catch (e) {
+    console.error("autoimp mail:", e);
   }
 }
 
@@ -109,6 +140,8 @@ export default async function handler(req, res) {
             hechos,
             origen: f ? f.origen : null,
             apiDesarrolla: f ? f.api_desarrolla : null,
+            consultasTotal: f ? (f.consultas_total ?? 20) : 20,
+            consultasUsadas: f ? (f.consultas_usadas ?? 0) : 0,
             iniciado: f ? f.iniciado_at : null,
             finalizado: f ? f.finalizado_at : null,
             actualizado: f ? f.actualizado_at : null,
@@ -141,6 +174,21 @@ export default async function handler(req, res) {
         return res.json({ ok: true });
       }
 
+      // Cambiar el cupo de consultas de un cliente
+      if (action === "panelCupo") {
+        const cc = norm(req.body.clienteCodigo);
+        const total = Math.max(0, parseInt(req.body.total, 10) || 0);
+        if (!cc) return res.status(400).json({ error: "Falta el cliente." });
+
+        const { data: existe } = await db
+          .from("auto_progreso").select("cliente_codigo").eq("cliente_codigo", cc).maybeSingle();
+        if (!existe) return res.status(404).json({ error: "Ese cliente todavía no está habilitado." });
+
+        await db.from("auto_progreso").update({ consultas_total: total }).eq("cliente_codigo", cc);
+        await registrar(cc, miembro.email, "cupo", null, "Cupo de consultas fijado en " + total);
+        return res.json({ ok: true });
+      }
+
       // Reset: un paso puntual o toda la configuración del cliente
       if (action === "panelReset") {
         const cc = norm(req.body.clienteCodigo);
@@ -162,7 +210,7 @@ export default async function handler(req, res) {
           pasos,
           finalizado_at: null,
           actualizado_at: new Date().toISOString(),
-          ...(Number.isInteger(paso) ? {} : { origen: null, api_desarrolla: null }),
+          ...(Number.isInteger(paso) ? {} : { origen: null, api_desarrolla: null, consultas_usadas: 0 }),
         }).eq("cliente_codigo", cc);
 
         await registrar(
@@ -204,6 +252,8 @@ export default async function handler(req, res) {
           nombre: cliente.razon_social || cliente.nombre,
           implementador: impl?.nombre || null,
           implementadorEmail: impl?.email || null,
+          consultasTotal: prog.consultas_total ?? 20,
+          consultasUsadas: prog.consultas_usadas ?? 0,
         },
         progreso: prog || { pasos: {}, origen: null, api_desarrolla: null },
         comentarios: coms.data || [],
@@ -245,6 +295,60 @@ export default async function handler(req, res) {
 
       await db.from("auto_progreso").upsert(upd, { onConflict: "cliente_codigo" });
       return res.json({ ok: true, pasos, finalizado: !!upd.finalizado_at });
+    }
+
+    // ── Consulta al implementador: descuenta una del cupo ──
+    if (action === "consulta") {
+      const prog = await progresoDe(codigo);
+      if (!prog || !prog.habilitado) return res.status(403).json({ error: "Guía no habilitada." });
+
+      const total = prog.consultas_total ?? 20;
+      const usadas = prog.consultas_usadas ?? 0;
+      const agotado = usadas >= total;
+
+      if (!agotado) {
+        await db.from("auto_progreso")
+          .update({ consultas_usadas: usadas + 1 })
+          .eq("cliente_codigo", codigo);
+      }
+
+      const paso = Number.isInteger(Number(req.body.paso)) ? Number(req.body.paso) : null;
+      await registrar(codigo, email, agotado ? "consulta_sin_cupo" : "consulta", paso,
+        agotado ? "Pidió ayuda sin consultas disponibles" : "Consulta " + (usadas + 1) + " de " + total);
+
+      const impl = await implementadorDe(cliente);
+      const quien = email || "alguien del equipo del cliente";
+      const nombreCli = cliente.razon_social || cliente.nombre;
+      const pasoTxt = paso === null ? "" : " en el paso " + (paso + 1);
+      const restantes = Math.max(0, total - (agotado ? usadas : usadas + 1));
+
+      if (agotado) {
+        await avisarPorMail({
+          para: impl?.email,
+          asunto: "[Autoimplementador] " + nombreCli + " se quedó sin consultas",
+          titulo: nombreCli + " agotó su cupo de consultas",
+          cuerpo: quien + " pidió ayuda" + pasoTxt + ", pero ya usó las " + total +
+            " consultas incluidas. Le mostramos igual tus datos de contacto, así que es probable que te escriba.",
+          pie: "Podés ampliarle el cupo desde el panel del autoimplementador, en el portal de implementación.",
+        });
+      } else {
+        await avisarPorMail({
+          para: impl?.email,
+          asunto: "[Autoimplementador] Consulta de " + nombreCli,
+          titulo: nombreCli + " tiene una duda",
+          cuerpo: quien + " pidió ayuda" + pasoTxt + ". Es la consulta " + (usadas + 1) + " de " + total +
+            "; le quedan " + restantes + ".",
+          pie: "Le dimos tu mail para que te escriba directamente. Si no te llega nada en un par de días, conviene que le escribas vos.",
+        });
+      }
+      return res.json({
+        agotado,
+        total,
+        usadas: agotado ? usadas : usadas + 1,
+        restantes: Math.max(0, total - (agotado ? usadas : usadas + 1)),
+        implementador: impl?.nombre || null,
+        implementadorEmail: impl?.email || null,
+      });
     }
 
     // ── Comentario de un paso: la escala es obligatoria, el texto no ──
