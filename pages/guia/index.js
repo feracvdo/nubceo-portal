@@ -32,6 +32,19 @@ const CSS = `
   font-family:var(--font);background:var(--soft-bg);color:var(--n800);font-size:15px;line-height:1.5;
   min-height:100vh}
 .ai-root *{box-sizing:border-box;margin:0;padding:0}
+.ai-splash{position:fixed;inset:0;z-index:999;background:var(--soft-bg);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:1.5rem;transition:opacity .6s ease,visibility .6s}
+.ai-splash.out{opacity:0;visibility:hidden}
+.ai-splash img{height:56px;width:auto;animation:aiLogoIn .85s cubic-bezier(.2,.7,.3,1) both}
+.ai-splash.out img{animation:aiLogoOut .6s ease forwards}
+.ai-splash .cap{font-size:12px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--primary-200);
+  animation:aiCapIn .7s ease .35s both}
+@keyframes aiLogoIn{from{opacity:0;filter:blur(14px);transform:scale(.9)}
+  to{opacity:1;filter:blur(0);transform:none}}
+@keyframes aiLogoOut{to{opacity:0;filter:blur(10px);transform:scale(1.06)}}
+@keyframes aiCapIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){
+  .ai-splash,.ai-splash img,.ai-splash .cap{animation:none!important;transition:opacity .2s}}
 .ai-nav{position:sticky;top:0;z-index:50;height:60px;background:#fff;border-bottom:1px solid var(--n200);
   display:flex;align-items:center;gap:1.25rem;padding:0 2rem}
 .ai-nav img{height:26px}
@@ -221,6 +234,15 @@ export default function Guia() {
   const [errorLogin, setErrorLogin] = useState(null);
   const [inputCodigo, setInputCodigo] = useState("");
   const [inputEmail, setInputEmail] = useState("");
+
+  // Portada: el logo entra desenfocado, se enfoca y la pantalla se disuelve.
+  const [portada, setPortada] = useState(true);
+  const [portadaSale, setPortadaSale] = useState(false);
+  useEffect(() => {
+    const t1 = setTimeout(() => setPortadaSale(true), 1150);
+    const t2 = setTimeout(() => setPortada(false), 1800);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, []);
 
   // El código puede venir en el link (?c=XXX) o de la última vez que entró
   // desde este navegador. Si no hay ninguno, se pide.
@@ -640,10 +662,18 @@ export default function Guia() {
     </section>
   );
 
+  const Portada = () => (portada ? (
+    <div className={"ai-splash" + (portadaSale ? " out" : "")}>
+      <img src="/logo-nubceo.png" alt="Nubceo" />
+      <div className="cap">Guía de puesta en marcha</div>
+    </div>
+  ) : null);
+
   if (cargando) {
     return (
       <div className="ai-root">
         <style dangerouslySetInnerHTML={{ __html: CSS }} />
+        <Portada />
         <div style={{ padding: "5rem 2rem", textAlign: "center", color: "var(--n400)" }}>Cargando tu guía…</div>
       </div>
     );
@@ -653,6 +683,7 @@ export default function Guia() {
     return (
       <div className="ai-root">
         <style dangerouslySetInnerHTML={{ __html: CSS }} />
+        <Portada />
         <div className="ai-nav">
           <img src="/logo-nubceo.png" alt="Nubceo" />
           <span className="tag">Guía de puesta en marcha · Conciliador</span>
@@ -714,6 +745,7 @@ export default function Guia() {
   return (
     <div className="ai-root">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
+      <Portada />
 
       <div className="ai-nav">
         <img src="/logo-nubceo.png" alt="Nubceo" />
