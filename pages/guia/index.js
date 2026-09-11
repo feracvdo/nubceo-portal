@@ -225,6 +225,23 @@ const CSS = `
 .ai-modal .datos .n{font-size:15px;font-weight:600;color:var(--primary-900)}
 .ai-modal .datos a{font-size:14px;color:var(--primary);text-decoration:none;word-break:break-all}
 .ai-modal .acc{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
+.ai-val{margin-top:1.5rem;border:1px solid var(--primary-100);border-radius:14px;overflow:hidden;background:#fff}
+.ai-val .cab{background:var(--primary-50);padding:1rem 1.2rem;border-bottom:1px solid var(--primary-100)}
+.ai-val .cab .t{font-size:15px;font-weight:600;color:var(--primary-900)}
+.ai-val .cab .d{font-size:13px;color:var(--n600);margin-top:.2rem;line-height:1.55}
+.ai-val .cpo{padding:1.2rem}
+.ai-drop{border:2px dashed var(--primary-200);border-radius:12px;padding:1.8rem 1rem;text-align:center;
+  cursor:pointer;transition:background .15s,border-color .15s}
+.ai-drop:hover{background:var(--primary-50);border-color:var(--primary)}
+.ai-drop .g{font-size:14px;font-weight:600;color:var(--primary-800)}
+.ai-drop .p{font-size:12.5px;color:var(--n400);margin-top:.25rem}
+.ai-chips{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.9rem}
+.ai-errs{border:1px solid var(--n200);border-radius:10px;max-height:260px;overflow:auto}
+.ai-errs .fila{display:flex;gap:.7rem;padding:.5rem .8rem;border-bottom:1px solid var(--n100);font-size:12.5px}
+.ai-errs .fila:last-child{border-bottom:none}
+.ai-errs .nro{flex:0 0 58px;color:var(--n400);font-weight:600}
+.ai-errs .col{flex:0 0 34%;color:var(--n800);font-weight:600}
+.ai-errs .msg{flex:1;color:#b91c1c}
 .ai-hero{text-align:center;padding:1.5rem 0 .5rem}
 .ai-circ{width:64px;height:64px;border-radius:50%;background:var(--ok-bg);color:var(--ok-tx);display:flex;
   align-items:center;justify-content:center;font-size:30px;margin:0 auto 1rem}
@@ -252,6 +269,9 @@ export default function Guia() {
 
   // Portada: el logo entra desenfocado, se enfoca y la pantalla se disuelve.
   const [ayuda, setAyuda] = useState(null);
+  const [val, setVal] = useState(null);       // null | {cargando} | {error} | resultado
+  const [valFix, setValFix] = useState(true);
+  const [valNombre, setValNombre] = useState("");
   const [portada, setPortada] = useState(true);
   const [portadaSale, setPortadaSale] = useState(false);
   useEffect(() => {
@@ -625,6 +645,8 @@ export default function Guia() {
               <div className="ai-callout">{s.nota[srcPath]}</div>
             )}
 
+            {s.herramienta === "csv" && srcPath === "csv" && renderValidador()}
+
             <h3>Los pasos, en orden</h3>
             <ul className="ai-todo">
               {s.todo.map((t, k) => (<li key={k}><span className="ai-num">{k + 1}</span><span>{t}</span></li>))}
@@ -700,6 +722,147 @@ export default function Guia() {
       </div>
     </section>
   );
+
+  // Validador del archivo de ventas. Reutiliza lib/validadorVentas.js, el mismo
+  // que usa el portal, con import dinámico: si ese módulo cambiara, falla solo
+  // esta herramienta y no la guía entera.
+  const validarArchivo = (file) => {
+    if (!file) return;
+    setValNombre(file.name);
+    if (!/\.(csv|txt)$/i.test(file.name)) {
+      setVal({ error: "El archivo tiene que ser CSV. Desde Excel: Guardar como → CSV UTF-8 (delimitado por comas)." });
+      return;
+    }
+    setVal({ cargando: true });
+    const r = new FileReader();
+    r.onerror = () => setVal({ error: "No pudimos leer el archivo. Probá de nuevo." });
+    r.onload = async () => {
+      try {
+        const mod = await import("../../lib/validadorVentas");
+        setVal(mod.validarVentas(r.result));
+      } catch (e) {
+        setVal({ error: "No pudimos analizar el archivo. Escribinos y lo miramos con vos." });
+      }
+    };
+    r.readAsText(file);
+  };
+
+  const descargarNormalizado = async () => {
+    try {
+      const mod = await import("../../lib/validadorVentas");
+      const txt = mod.exportarNubceo(val, valFix);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([txt], { type: "text/csv;charset=utf-8" }));
+      a.download = "ventas-nubceo.csv";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) {
+      alert("No pudimos generar el archivo.");
+    }
+  };
+
+  const renderValidador = () => {
+    const res = val && !val.cargando && !val.error ? val : null;
+    const erroresFila = [];
+    if (res && res.filas) {
+      res.filas.forEach((f) => (f.errs || []).forEach((e) => {
+        if (erroresFila.length < 60) erroresFila.push({ n: f.i + 2, col: e.col, msg: e.msg });
+      }));
+    }
+
+    return (
+      <div className="ai-val">
+        <div className="cab">
+          <div className="t">Probá tu archivo antes de subirlo</div>
+          <div className="d">
+            Soltá acá el CSV y te decimos qué está mal, fila por fila, antes de que lo cargues en Nubceo.
+            El archivo no sale de tu navegador: se revisa acá mismo y no se guarda en ningún lado.
+          </div>
+        </div>
+        <div className="cpo">
+          <label className="ai-drop" style={{ display: "block" }}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => { e.preventDefault(); validarArchivo(e.dataTransfer.files && e.dataTransfer.files[0]); }}>
+            <input type="file" accept=".csv,.txt" style={{ display: "none" }}
+              onChange={(e) => validarArchivo(e.target.files && e.target.files[0])} />
+            <div className="g">Arrastrá tu archivo o hacé clic para elegirlo</div>
+            <div className="p">{valNombre || "CSV separado por punto y coma, en UTF-8"}</div>
+          </label>
+
+          {val && val.cargando && <p className="ai-small ai-muted" style={{ marginTop: "1rem" }}>Revisando…</p>}
+
+          {val && val.error && (
+            <div className="ai-callout warn" style={{ marginTop: "1rem" }}>{val.error}</div>
+          )}
+
+          {res && (
+            <div style={{ marginTop: "1.2rem" }}>
+              <div className="ai-chips">
+                <span className="ai-badge ai-b-green">{res.resumen ? res.resumen.total : 0} filas leídas</span>
+                <span className={"ai-badge " + (res.resumen && res.resumen.conError ? "ai-b-amber" : "ai-b-green")}>
+                  {res.resumen && res.resumen.conError
+                    ? res.resumen.conError + " con error"
+                    : "Sin errores"}
+                </span>
+                {res.resumen && res.resumen.fixContable > 0 && (
+                  <span className="ai-badge ai-b-amber">{res.resumen.fixContable} para corregir solas</span>
+                )}
+              </div>
+
+              {(res.errores || []).length > 0 && (
+                <div className="ai-callout warn">{res.errores.slice(0, 4).join(" · ")}</div>
+              )}
+
+              {erroresFila.length > 0 && (
+                <>
+                  <p className="ai-small ai-muted" style={{ marginBottom: ".5rem" }}>
+                    Corregilos en tu planilla y volvé a soltar el archivo acá.
+                  </p>
+                  <div className="ai-errs">
+                    {erroresFila.map((e, k) => (
+                      <div key={k} className="fila">
+                        <span className="nro">Fila {e.n}</span>
+                        <span className="col">{e.col}</span>
+                        <span className="msg">{e.msg}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {(res.warnings || []).length > 0 && (
+                <p className="ai-small ai-muted" style={{ marginTop: ".8rem" }}>
+                  Avisos: {res.warnings.slice(0, 4).join(" · ")}
+                </p>
+              )}
+
+              {res.ok && (
+                <>
+                  {res.resumen && res.resumen.fixContable > 0 && (
+                    <div className="ai-mark" style={{ marginTop: "1rem" }} onClick={() => setValFix(!valFix)}>
+                      <span className="ai-box" style={{ background: valFix ? "var(--ok-tx)" : undefined,
+                        borderColor: valFix ? "var(--ok-tx)" : undefined, color: valFix ? "#fff" : "transparent" }}>✓</span>
+                      <span>
+                        <span className="mt">Completar los impuestos en cero</span><br />
+                        <span className="ms">Donde el neto es igual al bruto y la columna de impuestos quedó vacía.</span>
+                      </span>
+                    </div>
+                  )}
+                  <div className="ai-verify" style={{ marginTop: "1rem" }}>
+                    <div className="vl">✓ Tu archivo está listo</div>
+                    <p>Descargalo en el formato exacto de Nubceo y subilo desde la plataforma. Es el mismo contenido, ordenado como lo espera el importador.</p>
+                  </div>
+                  <button className="ai-btn ai-btn-p" style={{ marginTop: "1rem" }} onClick={descargarNormalizado}>
+                    Descargar en formato Nubceo
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const ModalAyuda = () => {
     if (!ayuda) return null;
