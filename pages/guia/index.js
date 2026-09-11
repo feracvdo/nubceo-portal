@@ -211,6 +211,20 @@ const CSS = `
 .ai-bcol.cx ul{color:var(--n600)}
 .ai-bcol.self ul{color:var(--primary-900)}
 .ai-arrow{display:flex;align-items:center;justify-content:center;color:var(--n200);font-size:22px}
+.ai-modal-bg{position:fixed;inset:0;z-index:900;background:rgba(13,17,32,.45);display:flex;
+  align-items:center;justify-content:center;padding:1.5rem;animation:aiFade .2s ease}
+.ai-modal{background:#fff;border-radius:16px;padding:1.8rem;max-width:440px;width:100%;
+  box-shadow:0 18px 48px rgba(2,38,92,.25)}
+.ai-modal h2{font-size:19px;font-weight:600;color:var(--soft-head);margin-bottom:.4rem}
+.ai-modal .cnt{display:inline-flex;align-items:center;gap:.45rem;font-size:12px;font-weight:600;
+  border-radius:100px;padding:4px 12px;margin-bottom:1rem}
+.ai-modal .cnt.ok{background:var(--ok-bg);color:var(--ok-tx)}
+.ai-modal .cnt.bad{background:#fee2e2;color:#b91c1c}
+.ai-modal .datos{background:var(--primary-50);border:1px solid var(--primary-100);border-radius:12px;
+  padding:1rem 1.15rem;margin:1.1rem 0}
+.ai-modal .datos .n{font-size:15px;font-weight:600;color:var(--primary-900)}
+.ai-modal .datos a{font-size:14px;color:var(--primary);text-decoration:none;word-break:break-all}
+.ai-modal .acc{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
 .ai-hero{text-align:center;padding:1.5rem 0 .5rem}
 .ai-circ{width:64px;height:64px;border-radius:50%;background:var(--ok-bg);color:var(--ok-tx);display:flex;
   align-items:center;justify-content:center;font-size:30px;margin:0 auto 1rem}
@@ -237,6 +251,7 @@ export default function Guia() {
   const [inputEmail, setInputEmail] = useState("");
 
   // Portada: el logo entra desenfocado, se enfoca y la pantalla se disuelve.
+  const [ayuda, setAyuda] = useState(null);
   const [portada, setPortada] = useState(true);
   const [portadaSale, setPortadaSale] = useState(false);
   useEffect(() => {
@@ -339,7 +354,30 @@ export default function Guia() {
   // Placeholders de fase 1. En fase 2 estos avisan al implementador de verdad.
   const playVideo = () => alert("Acá va el video embebido. Todavía no están grabados.");
   const abrirNubceo = (p) => alert("Abre Nubceo en:\n\n" + p + "\n\n(Pendiente: las rutas reales las define producto.)");
-  const pedirAyuda = () => alert("Acá se abre el contacto con tu implementador de Nubceo.");
+  // Consultar desde un paso descuenta una del cupo. Los accesos generales
+  // (bienvenida, bifurcación) muestran el contacto sin descontar.
+  const pedirAyuda = async (paso) => {
+    if (paso === undefined || paso === null) {
+      setAyuda({
+        libre: true, agotado: false,
+        implementador: cliente?.implementador, implementadorEmail: cliente?.implementadorEmail,
+        restantes: Math.max(0, (cliente?.consultasTotal ?? 0) - (cliente?.consultasUsadas ?? 0)),
+        total: cliente?.consultasTotal ?? 0,
+      });
+      return;
+    }
+    setAyuda({ cargando: true, paso });
+    try {
+      const r = await api("consulta", { codigo, email, paso });
+      setAyuda({ ...r, paso });
+      setCliente((c) => (c ? { ...c, consultasUsadas: r.usadas } : c));
+    } catch (e) {
+      setAyuda({
+        error: e.message,
+        implementador: cliente?.implementador, implementadorEmail: cliente?.implementadorEmail,
+      });
+    }
+  };
   const delegar = () => alert("Comparte el link de este paso con otra persona de tu equipo.");
 
   const renderVideo = (videos) => {
@@ -627,7 +665,7 @@ export default function Guia() {
           {!soloFork && !esApi && (
             <button className="ai-btn ai-btn-s ai-btn-sm" onClick={delegar}>Este paso lo hace otra persona</button>
           )}
-          <span className="ai-help" onClick={pedirAyuda}>Tengo una duda de este paso</span>
+          <span className="ai-help" onClick={() => pedirAyuda(i)}>Tengo una duda de este paso</span>
         </div>
       </section>
     );
@@ -662,6 +700,68 @@ export default function Guia() {
       </div>
     </section>
   );
+
+  const ModalAyuda = () => {
+    if (!ayuda) return null;
+    const paso = Number.isInteger(ayuda.paso) ? STEPS[ayuda.paso] : null;
+    const asunto = encodeURIComponent(
+      "Consulta — " + (cliente?.nombre || "") + (paso ? " · Paso " + (ayuda.paso + 1) + ": " + paso.nav : "")
+    );
+    return (
+      <div className="ai-modal-bg" onClick={() => setAyuda(null)}>
+        <div className="ai-modal" onClick={(e) => e.stopPropagation()}>
+          {ayuda.cargando ? (
+            <p className="ai-lead">Un momento…</p>
+          ) : (
+            <>
+              <h2>{ayuda.agotado ? "Usaste todas tus consultas" : "Hablá con tu implementador"}</h2>
+
+              {!ayuda.libre && !ayuda.error && (
+                <span className={"cnt " + (ayuda.agotado ? "bad" : "ok")}>
+                  {ayuda.agotado
+                    ? "0 de " + ayuda.total + " disponibles"
+                    : "Te quedan " + ayuda.restantes + " de " + ayuda.total}
+                </span>
+              )}
+
+              <p className="ai-lead">
+                {ayuda.agotado
+                  ? "Tu plan incluía " + ayuda.total + " consultas y ya las usaste todas. Igual te dejamos el contacto: escribile y va a ver de qué se trata. Le avisamos que llegaste al límite."
+                  : paso
+                    ? "Contale en qué te trabaste del paso " + (ayuda.paso + 1) + " y te responde por mail."
+                    : "Escribile cuando quieras. Esta consulta no te descuenta ninguna del plan."}
+              </p>
+
+              {ayuda.implementador ? (
+                <div className="datos">
+                  <div className="n">{ayuda.implementador}</div>
+                  {ayuda.implementadorEmail
+                    ? <a href={"mailto:" + ayuda.implementadorEmail + "?subject=" + asunto}>{ayuda.implementadorEmail}</a>
+                    : <span className="ai-small ai-muted">Sin mail cargado — escribinos por el canal de siempre.</span>}
+                </div>
+              ) : (
+                <div className="ai-callout warn" style={{ marginTop: "1rem" }}>
+                  Todavía no tenés un implementador asignado. Escribile a tu referente de Nubceo.
+                </div>
+              )}
+
+              {ayuda.error && <div className="ai-callout warn">{ayuda.error}</div>}
+
+              <div className="acc">
+                {ayuda.implementadorEmail && (
+                  <a className="ai-btn ai-btn-p" style={{ textDecoration: "none" }}
+                    href={"mailto:" + ayuda.implementadorEmail + "?subject=" + asunto}>
+                    Escribirle ahora
+                  </a>
+                )}
+                <button className="ai-btn ai-btn-g" onClick={() => setAyuda(null)}>Cerrar</button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   const Portada = () => (portada ? (
     <div className={"ai-splash" + (portadaSale ? " out" : "")}>
@@ -747,6 +847,7 @@ export default function Guia() {
     <div className="ai-root">
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <Portada />
+      <ModalAyuda />
 
       <div className="ai-nav">
         <img src="/logo-nubceo.png" alt="Nubceo" />
@@ -790,6 +891,11 @@ export default function Guia() {
                 <a className="ai-link" href={"mailto:" + cliente.implementadorEmail + "?subject=Consulta%20sobre%20la%20gu%C3%ADa%20de%20puesta%20en%20marcha"}>
                   Escribirle
                 </a>
+              </div>
+            )}
+            {cliente.consultasTotal > 0 && (
+              <div style={{ marginTop: ".7rem" }}>
+                Consultas: <b>{Math.max(0, cliente.consultasTotal - (cliente.consultasUsadas || 0))} de {cliente.consultasTotal}</b>
               </div>
             )}
             {email && (<div style={{ marginTop: ".7rem" }}>Entraste como <b>{email}</b></div>)}
