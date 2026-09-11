@@ -145,6 +145,18 @@ export default function PanelAutoimp({ codigo }) {
     }
   };
 
+  const cambiarCupo = async (cli) => {
+    const val = prompt("¿Cuántas consultas al implementador incluye la autoimplementación de " + cli.nombre + "?",
+      String(cli.consultasTotal ?? 20));
+    if (val === null) return;
+    const total = parseInt(val, 10);
+    if (isNaN(total) || total < 0) { alert("Poné un número."); return; }
+    try {
+      await api("panelCupo", { codigo, clienteCodigo: cli.codigo, total });
+      await recargar();
+    } catch (e) { alert(e.message); }
+  };
+
   const reiniciar = async (cli) => {
     if (!confirm("¿Reiniciar todo el progreso de " + cli.nombre + "? Queda registrado en la bitácora.")) return;
     try {
@@ -203,6 +215,19 @@ export default function PanelAutoimp({ codigo }) {
           dentro de Nubceo, este link es la única puerta de entrada.
         </div>
 
+        {(() => {
+          const sinCupo = todos.filter((c) => c.habilitado && (c.consultasTotal || 0) > 0
+            && (c.consultasUsadas || 0) >= c.consultasTotal);
+          if (!sinCupo.length) return null;
+          return (
+            <div style={{ background: "var(--pnb)", border: "1px solid #fca5a5", borderRadius: 10,
+              padding: ".8rem 1rem", marginBottom: "1rem", fontSize: 13, color: "var(--pnbt)" }}>
+              <b>{sinCupo.length === 1 ? "Un cliente se quedó" : sinCupo.length + " clientes se quedaron"} sin consultas: </b>
+              {sinCupo.map((c) => c.nombre).join(", ")}. Siguen viendo tu contacto, pero ya usaron todo el cupo.
+            </div>
+          );
+        })()}
+
         <div className="filtros">
           <div style={{ flex: "1 1 240px", maxWidth: 300 }}>
             <input type="text" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nombre o código…" />
@@ -231,7 +256,7 @@ export default function PanelAutoimp({ codigo }) {
               <tr>
                 <th style={{ width: 60 }}>Guía</th>
                 <th>Cliente</th><th>Avance</th><th>Paso actual</th><th>Origen</th>
-                <th>Sin moverse</th><th>Implementador</th><th></th>
+                <th>Sin moverse</th><th>Consultas</th><th>Implementador</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -273,6 +298,18 @@ export default function PanelAutoimp({ codigo }) {
                           ? <span className={"chip " + clase}>{d}d</span>
                           : <span style={{ color: "var(--pnn400)" }}>—</span>}
                       </td>
+                      <td>
+                        {c.habilitado ? (() => {
+                          const rest = Math.max(0, (c.consultasTotal || 0) - (c.consultasUsadas || 0));
+                          const cl = rest === 0 ? "bad" : rest <= 3 ? "warn" : "mut";
+                          return (
+                            <span className={"chip " + cl} style={{ cursor: "pointer" }}
+                              title="Clic para cambiar el cupo" onClick={() => cambiarCupo(c)}>
+                              {rest} de {c.consultasTotal}
+                            </span>
+                          );
+                        })() : <span style={{ color: "var(--pnn400)" }}>—</span>}
+                      </td>
                       <td style={{ color: "var(--pnn600)" }}>{c.implementador || "—"}</td>
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         {c.habilitado && (
@@ -293,7 +330,7 @@ export default function PanelAutoimp({ codigo }) {
                     </tr>
                     {abrirMsg && (
                       <tr>
-                        <td colSpan={8} style={{ background: "#fff" }}>
+                        <td colSpan={9} style={{ background: "#fff" }}>
                           <div className="msgbox">
                             <div className="lnk">{linkDe(c.codigo)}</div>
                             <pre style={{ marginTop: ".7rem" }}>{mensajeDe(c)}</pre>
