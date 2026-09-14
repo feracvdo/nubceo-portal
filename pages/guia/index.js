@@ -533,6 +533,7 @@ export default function Guia() {
         <>
           {intro}
           {s4 && renderVideo(s4.videosApi)}
+          {s4 && renderDescargas(s4, "api")}
           <h3>¿Quién desarrolla la integración?</h3>
           <div className="ai-pickhint"><span className="ai-pd" /> Elegí una opción para continuar</div>
           <div className="ai-forkgrid">
@@ -575,6 +576,7 @@ export default function Guia() {
     return (
       <>
         {intro}
+        {s4 && renderDescargas(s4, "api")}
         <h3>{propio ? "Lo desarrolla tu equipo o tu punto de venta" : "La desarrollamos nosotros"}</h3>
         <ul className="ai-todo">
           {pasos.map((t, k) => (<li key={k}><span className="ai-num">{k + 1}</span><span>{t}</span></li>))}
@@ -671,20 +673,7 @@ export default function Guia() {
               <div className="ai-callout">{s.nota[srcPath]}</div>
             )}
 
-            {s.descargas && s.descargas.length > 0 && (
-              <div className="ai-desc">
-                <div className="dt">Material para descargar</div>
-                <div className="dl">
-                  {s.descargas.map((x, k) => (
-                    x.url
-                      ? <a key={k} className="ai-btn ai-btn-s ai-btn-sm" href={x.url} download
-                          style={{ textDecoration: "none" }}>↓ {x.t}</a>
-                      : <span key={k} className="ai-btn ai-btn-s ai-btn-sm"
-                          style={{ opacity: .5, cursor: "default" }}>{x.t} · próximamente</span>
-                  ))}
-                </div>
-              </div>
-            )}
+            {renderDescargas(s, srcPath)}
 
             {s.herramienta === "csv" && srcPath === "csv" && renderValidador()}
 
@@ -800,6 +789,25 @@ export default function Guia() {
     } catch (e) {
       alert("No pudimos generar el archivo.");
     }
+  };
+
+  const renderDescargas = (s, via) => {
+    const items = (s.descargas || []).filter((x) => !x.via || x.via === via);
+    if (!items.length) return null;
+    return (
+      <div className="ai-desc">
+        <div className="dt">Material para descargar</div>
+        <div className="dl">
+          {items.map((x, k) => (
+            x.url
+              ? <a key={k} className="ai-btn ai-btn-s ai-btn-sm" href={x.url} download
+                  style={{ textDecoration: "none" }}>↓ {x.t}</a>
+              : <span key={k} className="ai-btn ai-btn-s ai-btn-sm"
+                  style={{ opacity: .5, cursor: "default" }}>{x.t} · próximamente</span>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const renderValidador = () => {
