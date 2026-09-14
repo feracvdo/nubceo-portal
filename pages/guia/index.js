@@ -8,7 +8,7 @@
 // /public/logo-nubceo.png.
 
 import { useState, useEffect } from "react";
-import { STEPS, NIVELES, VERSION } from "../../lib/autoimp/contenido";
+import { STEPS, NIVELES, VERSION, VIDEO_BIENVENIDA } from "../../lib/autoimp/contenido";
 
 // Todo pasa por nuestra API. El navegador nunca toca la base.
 async function api(action, payload = {}) {
@@ -87,6 +87,8 @@ const CSS = `
 .ai-muted{color:var(--n600)}
 .ai-small{font-size:13px}
 .ai-player{margin-top:1.4rem;border:1px solid var(--primary-100);border-radius:14px;overflow:hidden;background:#fff}
+.ai-frame{position:relative;aspect-ratio:16/9;background:var(--primary-900)}
+.ai-frame iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .ai-screen{position:relative;aspect-ratio:16/9;background:linear-gradient(135deg,var(--primary-900),var(--primary-600) 55%,var(--sky));
   display:flex;align-items:center;justify-content:center;cursor:pointer}
 .ai-screen:hover .ai-play{transform:scale(1.07)}
@@ -242,6 +244,9 @@ const CSS = `
 .ai-errs .nro{flex:0 0 58px;color:var(--n400);font-weight:600}
 .ai-errs .col{flex:0 0 34%;color:var(--n800);font-weight:600}
 .ai-errs .msg{flex:1;color:#b91c1c}
+.ai-desc{margin-top:1.4rem;border:1px solid var(--n200);border-radius:12px;padding:1rem 1.15rem;background:var(--n50)}
+.ai-desc .dt{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--n400);margin-bottom:.6rem}
+.ai-desc .dl{display:flex;gap:.5rem;flex-wrap:wrap}
 .ai-hero{text-align:center;padding:1.5rem 0 .5rem}
 .ai-circ{width:64px;height:64px;border-radius:50%;background:var(--ok-bg);color:var(--ok-tx);display:flex;
   align-items:center;justify-content:center;font-size:30px;margin:0 auto 1rem}
@@ -372,7 +377,6 @@ export default function Guia() {
   const elegirApi = (k) => { setApiPath(k); guardar({ apiDesarrolla: k }); };
 
   // Placeholders de fase 1. En fase 2 estos avisan al implementador de verdad.
-  const playVideo = () => alert("Acá va el video embebido. Todavía no están grabados.");
   const abrirNubceo = (p) => alert("Abre Nubceo en:\n\n" + p + "\n\n(Pendiente: las rutas reales las define producto.)");
   // Consultar desde un paso descuenta una del cupo. Los accesos generales
   // (bienvenida, bifurcación) muestran el contacto sin descontar.
@@ -401,19 +405,32 @@ export default function Guia() {
   const delegar = () => alert("Comparte el link de este paso con otra persona de tu equipo.");
 
   const renderVideo = (videos) => {
+    if (!videos || !videos.length) return null;
     const v = videos[Math.min(vidIdx, videos.length - 1)];
     return (
       <div className="ai-player">
-        <div className="ai-screen" onClick={playVideo}>
-          <div className="ai-play" />
-          <div className="lbl">{v.t}</div>
-          <div className="dur">{v.d}</div>
-        </div>
+        {v.id ? (
+          <div className="ai-frame">
+            <iframe
+              key={v.id}
+              src={"https://www.loom.com/embed/" + v.id + "?hideOwner=true&hide_share=true"}
+              title={v.t}
+              frameBorder="0"
+              allowFullScreen
+            />
+          </div>
+        ) : (
+          <div className="ai-screen">
+            <div className="ai-play" />
+            <div className="lbl">{v.t} · próximamente</div>
+            <div className="dur">{v.d}</div>
+          </div>
+        )}
         {videos.length > 1 && (
           <div className="ai-plist">
             {videos.map((x, k) => (
               <span key={k} className={"ai-ptab" + (k === vidIdx ? " on" : "")} onClick={() => setVidIdx(k)}>
-                {k + 1}. {x.t}
+                {k + 1}. {x.t} <span style={{ opacity: .6 }}>{x.d}</span>
               </span>
             ))}
           </div>
@@ -504,6 +521,7 @@ export default function Guia() {
   };
 
   const renderRamaApi = () => {
+    const s4 = STEPS.find((x) => x.videosApi);
     const intro = (
       <div className="ai-callout warn" style={{ marginTop: "1.4rem" }}>
         <b>La integración por API la hacemos juntos.</b> Implica desarrollo, especificación técnica y pruebas conjuntas
@@ -514,6 +532,7 @@ export default function Guia() {
       return (
         <>
           {intro}
+          {s4 && renderVideo(s4.videosApi)}
           <h3>¿Quién desarrolla la integración?</h3>
           <div className="ai-pickhint"><span className="ai-pd" /> Elegí una opción para continuar</div>
           <div className="ai-forkgrid">
@@ -594,6 +613,8 @@ export default function Guia() {
         Nubceo. Mirás el video, hacés el paso en la plataforma, lo marcás como hecho y seguís. A tu ritmo, sin
         reuniones.</p>
 
+      {renderVideo([VIDEO_BIENVENIDA])}
+
       <div className="ai-boundary">
         <div className="ai-bcol cx">
           <div className="bt">Listo — lo hizo tu referente</div>
@@ -624,7 +645,7 @@ export default function Guia() {
     const esApi = s.fork && srcPath === "api";
     return (
       <section className="ai-panel">
-        <div className="ai-kicker">{s.kicker} · {s.nav}</div>
+        <div className="ai-kicker">Paso {i + 1} de {STEPS.length} · {s.nav}</div>
         <h1>{s.title}</h1>
         <p className="ai-lead">{s.lead}</p>
 
@@ -637,12 +658,32 @@ export default function Guia() {
 
             <div className="ai-where">
               <span className="wl">Dónde hacerlo</span>
-              <span className="path">{s.path}</span>
-              <button className="ai-btn ai-btn-p ai-btn-sm" onClick={() => abrirNubceo(s.path)}>Abrir en Nubceo ↗</button>
+              <span className="path">
+                {(s.videos && s.videos[Math.min(vidIdx, s.videos.length - 1)] || {}).ruta || s.path}
+              </span>
+              <button className="ai-btn ai-btn-p ai-btn-sm"
+                onClick={() => abrirNubceo((s.videos && s.videos[Math.min(vidIdx, s.videos.length - 1)] || {}).ruta || s.path)}>
+                Abrir en Nubceo ↗
+              </button>
             </div>
 
             {s.nota && srcPath && (
               <div className="ai-callout">{s.nota[srcPath]}</div>
+            )}
+
+            {s.descargas && s.descargas.length > 0 && (
+              <div className="ai-desc">
+                <div className="dt">Material para descargar</div>
+                <div className="dl">
+                  {s.descargas.map((x, k) => (
+                    x.url
+                      ? <a key={k} className="ai-btn ai-btn-s ai-btn-sm" href={x.url} download
+                          style={{ textDecoration: "none" }}>↓ {x.t}</a>
+                      : <span key={k} className="ai-btn ai-btn-s ai-btn-sm"
+                          style={{ opacity: .5, cursor: "default" }}>{x.t} · próximamente</span>
+                  ))}
+                </div>
+              </div>
             )}
 
             {s.herramienta === "csv" && srcPath === "csv" && renderValidador()}
