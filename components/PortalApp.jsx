@@ -5,6 +5,7 @@ import { convertirSucursales, exportarTemplateSucursales } from "../lib/sucursal
 import MailsCard from "./MailsCard";
 import PanelAutoimp from "../lib/autoimp/PanelAutoimp";
 import useMarcas, { MarcaPunto, COLORES } from "../lib/marcas/useMarcas";
+import AyudaMemoria from "../lib/memoria/AyudaMemoria";
 
 // ─── Tokens de marca Nubceo (tema C — Soft, portal de usuario) ───
 const T = {
@@ -484,7 +485,7 @@ const ContactoImplementador = ({ nombre, email, cliente }) => {
   );
 };
 
-const Nav = ({ name, who, onLogout, admin, implementador }) => (
+const Nav = ({ name, who, onLogout, admin, implementador, extra }) => (
   <div style={{ background: "#fff", borderBottom: "1px solid " + T.n200, minHeight: 60, display: "flex", alignItems: "center", padding: "10px 24px", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10, gap: 12, flexWrap: "wrap" }}>
     <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
       <Wordmark />
@@ -496,6 +497,7 @@ const Nav = ({ name, who, onLogout, admin, implementador }) => (
         <div style={{ fontSize: 13.5, fontWeight: 600, color: T.n800 }}>{name}</div>
         {who && <div style={{ fontSize: 11.5, color: T.n400 }}>{who}{admin ? " · Equipo Nubceo" : ""}</div>}
       </div>
+      {extra}
       <Btn variant="ghost" size="sm" onClick={onLogout}>Salir</Btn>
     </div>
   </div>
@@ -3376,7 +3378,7 @@ function AdminPortal({ session, onLogout }) {
     const alertas = detectarAlertas(selData.relevamiento);
     return (
       <div>
-        <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin />
+        <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin extra={<AyudaMemoria codigo={sc} />} />
         <div style={{ maxWidth: 940, margin: "0 auto", padding: "0 20px 60px" }}>
           <div style={{ position: "sticky", top: 61, zIndex: 5, background: T.bg, marginBottom: 14, padding: "14px 0 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Btn variant="ghost" size="sm" onClick={cerrarDetalle}>← Volver al listado</Btn>
@@ -3855,7 +3857,7 @@ function AdminPortal({ session, onLogout }) {
 
   return (
     <div>
-      <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin />
+      <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin extra={<AyudaMemoria codigo={sc} />} />
       <div style={{ display: "flex" }}>
         <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); }} noLeidas={notifNoLeidas} />
         <div style={{ flex: 1, minWidth: 0, padding: "26px 24px 60px", maxWidth: 1180, margin: "0 auto" }}>
