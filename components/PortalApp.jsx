@@ -6,6 +6,7 @@ import MailsCard from "./MailsCard";
 import PanelAutoimp from "../lib/autoimp/PanelAutoimp";
 import useMarcas, { MarcaPunto, COLORES } from "../lib/marcas/useMarcas";
 import AyudaMemoria from "../lib/memoria/AyudaMemoria";
+import ChatBot from "../lib/chat/ChatBot";
 
 // ─── Tokens de marca Nubceo (tema C — Soft, portal de usuario) ───
 const T = {
@@ -3379,6 +3380,7 @@ function AdminPortal({ session, onLogout }) {
     return (
       <div>
         <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin extra={<AyudaMemoria codigo={sc} />} />
+        <ChatBot codigo={sc} />
         <div style={{ maxWidth: 940, margin: "0 auto", padding: "0 20px 60px" }}>
           <div style={{ position: "sticky", top: 61, zIndex: 5, background: T.bg, marginBottom: 14, padding: "14px 0 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Btn variant="ghost" size="sm" onClick={cerrarDetalle}>← Volver al listado</Btn>
@@ -3858,6 +3860,7 @@ function AdminPortal({ session, onLogout }) {
   return (
     <div>
       <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin extra={<AyudaMemoria codigo={sc} />} />
+      <ChatBot codigo={sc} />
       <div style={{ display: "flex" }}>
         <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); }} noLeidas={notifNoLeidas} />
         <div style={{ flex: 1, minWidth: 0, padding: "26px 24px 60px", maxWidth: 1180, margin: "0 auto" }}>
