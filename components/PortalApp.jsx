@@ -4,6 +4,7 @@ import { validarVentas, validarTabla, exportarNubceo } from "../lib/validadorVen
 import { convertirSucursales, exportarTemplateSucursales } from "../lib/sucursalesTemplate";
 import MailsCard from "./MailsCard";
 import PanelAutoimp from "../lib/autoimp/PanelAutoimp";
+import useMarcas, { MarcaPunto, COLORES } from "../lib/marcas/useMarcas";
 
 // ─── Tokens de marca Nubceo (tema C — Soft, portal de usuario) ───
 const T = {
@@ -2890,6 +2891,9 @@ function AdminPortal({ session, onLogout }) {
   const [panelData, setPanelData] = useState(null);
   const tableroRef = useRef(null);
   const sc = session.code;
+  // Marca de color por cliente, privada de cada implementador (solo en el listado).
+  const { marcas, ciclar } = useMarcas(sc);
+  const [filtroMarca, setFiltroMarca] = useState("");
 
   // Vuelta del OAuth de Google Calendar (?calendar=ok|error|sinpermiso|sinrefresh&responsable=…)
   useEffect(() => {
@@ -3845,6 +3849,7 @@ function AdminPortal({ session, onLogout }) {
     .filter((c) => !filtroImpl || c.implementadorId === filtroImpl)
     .filter((c) => !filtroDev || c.desarrolladorId === filtroDev)
     .filter((c) => !filtroVendedor || (c.comerciales || []).includes(filtroVendedor))
+    .filter((c) => !filtroMarca || (filtroMarca === "sin" ? !marcas[c.code] : marcas[c.code] === filtroMarca))
     .filter((c) => !busqueda.trim() || c.name.toLowerCase().includes(busqueda.trim().toLowerCase()) || c.code.toLowerCase().includes(busqueda.trim().toLowerCase()));
   const finanzasTeam = team.filter((m) => m.rol === "finanzas");
 
@@ -3969,7 +3974,13 @@ function AdminPortal({ session, onLogout }) {
                     <option value="">Todos los vendedores</option>
                     {vendedoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                   </select>
-                  {(busqueda || filtroImpl || filtroDev || filtroVendedor) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroDev(""); setFiltroVendedor(""); }}>Limpiar filtros</Btn>}
+                  <select value={filtroMarca} onChange={(e) => setFiltroMarca(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                    <option value="">Todas mis marcas</option>
+                    <option value="naranja">🟠 Tengo algo pendiente</option>
+                    <option value="rojo">🔴 Trabado o con problema</option>
+                    <option value="sin">Sin marca</option>
+                  </select>
+                  {(busqueda || filtroImpl || filtroDev || filtroVendedor || filtroMarca) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroDev(""); setFiltroVendedor(""); setFiltroMarca(""); }}>Limpiar filtros</Btn>}
                 </div>
 
                 {clients && clients.length > 0 && (
@@ -3997,6 +4008,7 @@ function AdminPortal({ session, onLogout }) {
                     const pct = Math.round((cli.completados / cli.totalPasos) * 100);
                     return (
                       <div key={cli.code} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, border: "1px solid " + T.n200, background: "#fff" }}>
+                        <MarcaPunto color={marcas[cli.code]} onClick={() => ciclar(cli.code)} />
                         <div onClick={() => abrir(cli.code)} style={{ width: 38, height: 38, borderRadius: 8, flexShrink: 0, cursor: "pointer", background: T.n50, border: "1px solid " + T.n200, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: T.n400 }}>
                           {cli.logo ? <img src={cli.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : cli.name.slice(0, 1).toUpperCase()}
                         </div>
