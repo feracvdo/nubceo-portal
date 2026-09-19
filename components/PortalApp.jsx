@@ -4008,7 +4008,10 @@ function AdminPortal({ session, onLogout }) {
                     const pct = Math.round((cli.completados / cli.totalPasos) * 100);
                     return (
                       <div key={cli.code} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, border: "1px solid " + T.n200, background: "#fff" }}>
-                        <MarcaPunto color={marcas[cli.code]} onClick={() => ciclar(cli.code)} />
+                        {/* La marca la pone solo quien tiene asignado ese cliente. */}
+                        {session.teamId && cli.implementadorId === session.teamId
+                          ? <MarcaPunto color={marcas[cli.code]} onClick={() => ciclar(cli.code)} />
+                          : <span style={{ width: 13, flexShrink: 0 }} />}
                         <div onClick={() => abrir(cli.code)} style={{ width: 38, height: 38, borderRadius: 8, flexShrink: 0, cursor: "pointer", background: T.n50, border: "1px solid " + T.n200, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: T.n400 }}>
                           {cli.logo ? <img src={cli.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : cli.name.slice(0, 1).toUpperCase()}
                         </div>
