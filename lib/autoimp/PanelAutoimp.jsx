@@ -277,7 +277,16 @@ export default function PanelAutoimp({ codigo }) {
   };
 
   if (cargando) return <div className="pn-emb"><style dangerouslySetInnerHTML={{ __html: CSS }} /><div className="vacio">Cargando…</div></div>;
-  if (error) return <div className="pn-emb"><style dangerouslySetInnerHTML={{ __html: CSS }} /><div className="vacio">{error}</div></div>;
+  if (error) return (
+    <div className="pn-emb">
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
+      <div className="pn-card" style={{ textAlign: "center", padding: "2.4rem 1.6rem" }}>
+        <div style={{ fontSize: 30, marginBottom: ".6rem" }}>🔒</div>
+        <h2 style={{ marginBottom: ".5rem" }}>No tenés acceso a este módulo</h2>
+        <div className="sub" style={{ maxWidth: 440, margin: "0 auto" }}>{error}</div>
+      </div>
+    </div>
+  );
 
   const todos = (datos && datos.clientes) || [];
   const comentarios = (datos && datos.comentarios) || [];
