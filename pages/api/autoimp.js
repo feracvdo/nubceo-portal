@@ -121,11 +121,22 @@ export default async function handler(req, res) {
     if (action && action.startsWith("panel")) {
       const { data: miembro } = await db
         .from("equipo")
-        .select("id, nombre, email")
+        .select("id, nombre, email, rol, tipo_usuario, es_superadmin")
         .eq("codigo", codigo)
         .maybeSingle();
 
       if (!miembro) return res.status(403).json({ error: "Código no válido." });
+
+      // Mismo criterio que el resto del portal: la solapa la ve todo el equipo,
+      // pero operar el autoimplementador es de implementaciones. Admins y
+      // superusers entran igual, porque administran todo el portal.
+      const tipo = miembro.tipo_usuario || (miembro.es_superadmin ? "superuser" : "");
+      const puede = miembro.rol === "implementador" || tipo === "admin" || tipo === "superuser";
+      if (!puede) {
+        return res.status(403).json({
+          error: "El autoimplementador lo maneja el equipo de Implementaciones. Si necesitás ver cómo viene un cliente, pedíselo a quien lo tenga asignado.",
+        });
+      }
 
       if (action === "panelEntrar") return res.json({ miembro });
 
