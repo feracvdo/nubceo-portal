@@ -12,6 +12,7 @@ import * as gcal from "../../lib/googleCalendar";
 import { generarPlantilla } from "../../lib/plantillasMail";
 import { calcularPasos, computarPasos, faseSugerida, NOMBRE_PASO } from "../../lib/pasos";
 import { hitosPara, calcularHitos, NOMBRE_HITO_GENERICO } from "../../lib/hitos";
+import { STEPS as AUTO_STEPS } from "../../lib/autoimp/contenido";
 import { procesarAvisoPlazo, enviarAvisosPendientesDeCliente } from "../../lib/avisosPlazos";
 import crypto from "crypto";
 
@@ -1322,6 +1323,38 @@ export default async function handler(req, res) {
       if (error) return res.status(500).json({ error: error.message });
       await addHistory(cli.id, who || "Equipo", "Actualizó los vendedores asignados");
       return res.json(await assemble(cli));
+    }
+
+    if (action === "getAutoProgreso") {
+      // Lectura del avance del autoimplementador (tablas auto_ de Fede). Solo lee, no escribe.
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      let prog = null;
+      try {
+        const r = await db.from("auto_progreso").select("*").eq("cliente_codigo", cli.codigo).maybeSingle();
+        prog = r.data || null;
+      } catch (e) { /* la tabla puede no existir aún en este entorno */ }
+      const pasosRaw = (prog && prog.pasos) || {};
+      const pasos = (AUTO_STEPS || []).map((st, i) => ({
+        n: i + 1,
+        nombre: st.nav || st.title || ("Paso " + (i + 1)),
+        hecho: !!(pasosRaw[i] && pasosRaw[i].hecho),
+        fecha: (pasosRaw[i] && pasosRaw[i].at) || null,
+      }));
+      return res.json({
+        existe: !!prog,
+        habilitado: !!(prog && prog.habilitado),
+        origen: prog ? prog.origen : null,
+        apiDesarrolla: prog ? prog.api_desarrolla : null,
+        iniciado: prog ? prog.iniciado_at : null,
+        finalizado: prog ? prog.finalizado_at : null,
+        actualizado: prog ? prog.actualizado_at : null,
+        consultasUsadas: prog ? (prog.consultas_usadas ?? 0) : 0,
+        consultasTotal: prog ? (prog.consultas_total ?? 20) : 20,
+        total: (AUTO_STEPS || []).length,
+        hechos: pasos.filter((p) => p.hecho).length,
+        pasos,
+      });
     }
 
     if (action === "setEstadoContrato") {
