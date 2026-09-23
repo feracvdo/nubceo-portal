@@ -41,7 +41,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.27.1";
+const APP_VERSION = "1.28.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -2876,6 +2876,8 @@ function AdminPortal({ session, onLogout }) {
   const [filtroVendedor, setFiltroVendedor] = useState("");
   const [newComerciales, setNewComerciales] = useState([]);
   const [editComerciales, setEditComerciales] = useState([]);
+  const [newAutoimp, setNewAutoimp] = useState(false);
+  const [editAutoimp, setEditAutoimp] = useState(false);
   const implementadoresTeam = team.filter((m) => m.rol === "implementador");
   const devsTeam = team.filter((m) => m.rol === "desarrollador");
   const vendedoresTeam = team.filter((m) => m.rol === "ventas");
@@ -3155,11 +3157,11 @@ function AdminPortal({ session, onLogout }) {
     try {
       await api("createClient", {
         sessionCode: sc, nombre: newName, codigo: newCode, tenant: newTenant, razonSocial: newRazonSocial, cuits: newCuits, logo: newLogo,
-        comerciales: newComerciales, goLiveEstimado: newGoLive, fechaIngreso: newFechaIngreso || null, erpPdv: newErpPdv, contactos: newContactos.filter((c) => c.nombre.trim()),
+        comerciales: newComerciales, autoimplementacion: newAutoimp, goLiveEstimado: newGoLive, fechaIngreso: newFechaIngreso || null, erpPdv: newErpPdv, contactos: newContactos.filter((c) => c.nombre.trim()),
       });
       flash("Cliente creado. Compartile el código " + newCode.trim().toUpperCase() + ". Al primer login se dispara el alta en Redmine y sus credenciales de API.", 5000);
       setNewName(""); setNewCode(""); setNewTenant(""); setNewRazonSocial(""); setNewCuits([]); setNewCuitInput(""); setNewLogo(null);
-      setNewComerciales([]); setNewGoLive(""); setNewFechaIngreso(""); setNewErpPdv([]); setNewErpPdvInput(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
+      setNewComerciales([]); setNewAutoimp(false); setNewGoLive(""); setNewFechaIngreso(""); setNewErpPdv([]); setNewErpPdvInput(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
       cargarListado();
     } catch (e) { flash(e.message); }
   };
@@ -3457,7 +3459,7 @@ function AdminPortal({ session, onLogout }) {
             <div style={{ marginTop: 18 }}><Stepper fase={meta.phase} /></div>
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid " + T.n100 }}>
               {!editandoInfo ? (
-                soloLectura ? null : (<span onClick={() => { setEditNombre(meta.name || ""); setEditCodigo(meta.codigo || ""); setEditTenant(meta.tenant || ""); setEditComerciales(meta.comerciales || []); setEditFechaIngreso(meta.fechaIngreso || ""); setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditErpPdv(meta.erpPdv || []); setEditErpPdvInput(""); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
+                soloLectura ? null : (<span onClick={() => { setEditNombre(meta.name || ""); setEditCodigo(meta.codigo || ""); setEditTenant(meta.tenant || ""); setEditComerciales(meta.comerciales || []); setEditAutoimp(!!meta.autoimplementacion); setEditFechaIngreso(meta.fechaIngreso || ""); setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditErpPdv(meta.erpPdv || []); setEditErpPdvInput(""); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
                   ✎ Editar datos del cliente
                 </span>)
               ) : (
@@ -3473,6 +3475,12 @@ function AdminPortal({ session, onLogout }) {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                     <div><Label>Tenant productivo</Label><Input value={editTenant} onChange={(e) => setEditTenant(e.target.value)} /></div>
                     <div><Label>Vendedor/es</Label><SelectorVendedores vendedores={vendedoresTeam} seleccion={editComerciales} onChange={setEditComerciales} /></div>
+                    <div><Label>Tipo de onboarding</Label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13.5, color: T.n800 }}>
+                        <input type="checkbox" checked={editAutoimp} onChange={(e) => setEditAutoimp(e.target.checked)} style={{ width: 16, height: 16, accentColor: "#6d28d9" }} />
+                        {editAutoimp ? "🚀 Autoimplementación" : "Implementación estándar"}
+                      </label>
+                    </div>
                     <div><Label>Fecha de ingreso (trato ganado)</Label><Input type="date" value={editFechaIngreso} onChange={(e) => setEditFechaIngreso(e.target.value)} /></div>
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1.4fr 2fr", gap: 10 }}>
@@ -3523,7 +3531,7 @@ function AdminPortal({ session, onLogout }) {
                     <ImageUpload value={editLogo} onChange={setEditLogo} label="logo" />
                     <div style={{ display: "flex", gap: 8 }}>
                       <Btn variant="ghost" size="sm" onClick={() => setEditandoInfo(false)}>Cancelar</Btn>
-                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, nombre: editNombre, codigo: editCodigo, tenant: editTenant, comerciales: editComerciales, fechaIngreso: editFechaIngreso || null, razonSocial: editRazonSocial, cuits: editCuits, erpPdv: editErpPdv, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); if (r.meta && r.meta.codigoNuevo) setSel(r.meta.codigoNuevo); setEditandoInfo(false); cargarListado(); flash("Datos actualizados ✓", 2000); } catch (e) { flash(e.message); } }}>Guardar</Btn>
+                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, nombre: editNombre, codigo: editCodigo, tenant: editTenant, comerciales: editComerciales, autoimplementacion: editAutoimp, fechaIngreso: editFechaIngreso || null, razonSocial: editRazonSocial, cuits: editCuits, erpPdv: editErpPdv, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); if (r.meta && r.meta.codigoNuevo) setSel(r.meta.codigoNuevo); setEditandoInfo(false); cargarListado(); flash("Datos actualizados ✓", 2000); } catch (e) { flash(e.message); } }}>Guardar</Btn>
                     </div>
                   </div>
                 </div>
@@ -3899,6 +3907,13 @@ function AdminPortal({ session, onLogout }) {
                     )}
                   </div>
                   <div><Label>Vendedor/es</Label><SelectorVendedores vendedores={vendedoresTeam} seleccion={newComerciales} onChange={setNewComerciales} /></div>
+                  <div>
+                    <Label>Tipo de onboarding</Label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13.5, color: T.n800, height: 38 }}>
+                      <input type="checkbox" checked={newAutoimp} onChange={(e) => setNewAutoimp(e.target.checked)} style={{ width: 16, height: 16, accentColor: "#6d28d9" }} />
+                      {newAutoimp ? "🚀 Autoimplementación" : "Implementación estándar"}
+                    </label>
+                  </div>
                 </div>
 
                 <div style={{ marginBottom: 14 }}>
