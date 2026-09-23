@@ -41,7 +41,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.29.0";
+const APP_VERSION = "1.30.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -2835,6 +2835,7 @@ function AdminPortal({ session, onLogout }) {
   const [sel, setSel] = useState(null); // código del cliente seleccionado
   const [selData, setSelData] = useState(null);
   const [selMeta, setSelMeta] = useState(null);
+  const [autoProg, setAutoProg] = useState(null);
   const [clients, setClients] = useState(null); // null = cargando
   const [team, setTeam] = useState([]);
   const [archivados, setArchivados] = useState([]);
@@ -3167,10 +3168,14 @@ function AdminPortal({ session, onLogout }) {
       setSel(code);
       setEditandoInfo(false);
       setEditandoFinanzas(false);
+      setAutoProg(null);
+      if (r.meta && r.meta.autoimplementacion) {
+        try { const ap = await api("getAutoProgreso", { sessionCode: sc, code }); setAutoProg(ap); } catch (e) { /* opcional */ }
+      }
     } catch (e) { flash(e.message); }
   };
 
-  const cerrarDetalle = () => { setSel(null); setSelData(null); setSelMeta(null); cargarListado(); };
+  const cerrarDetalle = () => { setSel(null); setSelData(null); setSelMeta(null); setAutoProg(null); cargarListado(); };
 
   const crearCliente = async () => {
     if (!newCode.trim() || !newName.trim()) return;
@@ -3454,6 +3459,38 @@ function AdminPortal({ session, onLogout }) {
                   </div>
                 </div>
               </div>
+              {meta.autoimplementacion && (
+                <Card style={{ marginTop: 16, borderColor: "#ddd0fb" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
+                    <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: 0 }}>🚀 Avances de la autoimplementación</h2>
+                    {autoProg && autoProg.existe && (autoProg.habilitado
+                      ? <Badge tone="green">Acceso a la guía habilitado</Badge>
+                      : <Badge tone="amber">Acceso a la guía deshabilitado</Badge>)}
+                  </div>
+                  {!autoProg ? <div style={{ color: T.n400, fontSize: 14, marginTop: 10 }}>Cargando avance…</div>
+                    : !autoProg.existe ? <div style={{ color: T.n400, fontSize: 14, marginTop: 10 }}>El cliente todavía no ingresó a la guía de autoimplementación.</div>
+                    : (<>
+                        <div style={{ display: "flex", gap: 20, flexWrap: "wrap", margin: "14px 0" }}>
+                          <div><div style={{ fontSize: 12, color: T.n400 }}>Progreso</div><div style={{ fontSize: 15, fontWeight: 700, color: T.n900 }}>{autoProg.hechos} / {autoProg.total} pasos</div></div>
+                          <div><div style={{ fontSize: 12, color: T.n400 }}>Origen de ventas</div><div style={{ fontSize: 15, fontWeight: 700, color: T.n900 }}>{autoProg.origen ? String(autoProg.origen).toUpperCase() : "—"}</div></div>
+                          <div><div style={{ fontSize: 12, color: T.n400 }}>Consultas usadas</div><div style={{ fontSize: 15, fontWeight: 700, color: T.n900 }}>{autoProg.consultasUsadas} / {autoProg.consultasTotal}</div></div>
+                          <div><div style={{ fontSize: 12, color: T.n400 }}>Inició</div><div style={{ fontSize: 15, fontWeight: 700, color: T.n900 }}>{autoProg.iniciado ? fmtDate(autoProg.iniciado) : "—"}</div></div>
+                          {autoProg.finalizado && <div><div style={{ fontSize: 12, color: T.n400 }}>Finalizó</div><div style={{ fontSize: 15, fontWeight: 700, color: T.okTx }}>{fmtDate(autoProg.finalizado)}</div></div>}
+                        </div>
+                        <div style={{ borderTop: "1px solid " + T.n100 }}>
+                          {autoProg.pasos.map((p) => (
+                            <div key={p.n} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid " + T.n100 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <span style={{ width: 22, height: 22, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, background: p.hecho ? T.okBg : T.n100, color: p.hecho ? T.okTx : T.n400 }}>{p.hecho ? "✓" : p.n}</span>
+                                <span style={{ fontSize: 14, color: p.hecho ? T.n900 : T.n600, fontWeight: p.hecho ? 600 : 500 }}>{p.nombre}</span>
+                              </div>
+                              <span style={{ fontSize: 12.5, color: p.hecho ? T.n600 : T.n400 }}>{p.hecho ? (p.fecha ? "Completado el " + fmtDate(p.fecha) : "Completado") : "Pendiente"}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>)}
+                </Card>
+              )}
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <div>
                   <Label>Implementador/a</Label>
