@@ -41,7 +41,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.28.0";
+const APP_VERSION = "1.28.1";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -2613,22 +2613,40 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
 // ─── Menú lateral del panel de equipo ───
 // Multiselect de vendedores (chips): elegís uno o varios de los usuarios tipo Comercial.
 function SelectorVendedores({ vendedores, seleccion, onChange }) {
-  const toggle = (id) => onChange(seleccion.includes(id) ? seleccion.filter((x) => x !== id) : [...seleccion, id]);
+  const [abierto, setAbierto] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setAbierto(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
   if (!vendedores.length) {
     return <div style={{ fontSize: 12.5, color: T.n400 }}>No hay vendedores cargados. Creá usuarios de tipo "Comercial" en el módulo Equipo.</div>;
   }
+  const toggle = (id) => onChange(seleccion.includes(id) ? seleccion.filter((x) => x !== id) : [...seleccion, id]);
+  const elegidos = vendedores.filter((v) => seleccion.includes(v.id));
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-      {vendedores.map((v) => {
-        const on = seleccion.includes(v.id);
-        return (
-          <span key={v.id} onClick={() => toggle(v.id)} style={{
-            cursor: "pointer", fontSize: 12.5, borderRadius: 100, padding: "5px 12px",
-            border: "1px solid " + (on ? T.primary : T.n200),
-            background: on ? T.primary50 : "#fff", color: on ? T.primary800 : T.n600, fontWeight: on ? 600 : 500,
-          }}>{on ? "✓ " : ""}{v.nombre}</span>
-        );
-      })}
+    <div ref={ref} style={{ position: "relative" }}>
+      <div onClick={() => setAbierto((o) => !o)} style={{ minHeight: 38, border: "1px solid " + T.n200, borderRadius: 8, padding: "5px 10px", cursor: "pointer", display: "flex", flexWrap: "wrap", gap: 5, alignItems: "center", background: "#fff" }}>
+        {elegidos.length === 0
+          ? <span style={{ color: T.n400, fontSize: 13.5 }}>Seleccionar…</span>
+          : elegidos.map((v) => (
+              <span key={v.id} style={{ fontSize: 12, background: T.primary50, color: T.primary800, border: "1px solid " + T.primary100, borderRadius: 100, padding: "2px 8px", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                {v.nombre}<span onClick={(e) => { e.stopPropagation(); toggle(v.id); }} style={{ cursor: "pointer" }}>✕</span>
+              </span>
+            ))}
+        <span style={{ marginLeft: "auto", color: T.n400, fontSize: 12 }}>▾</span>
+      </div>
+      {abierto && (
+        <div style={{ position: "absolute", zIndex: 30, top: "calc(100% + 4px)", left: 0, right: 0, background: "#fff", border: "1px solid " + T.n200, borderRadius: 8, boxShadow: "0 6px 20px rgba(13,17,32,0.12)", maxHeight: 220, overflowY: "auto", padding: 6 }}>
+          {vendedores.map((v) => (
+            <label key={v.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 6, cursor: "pointer", fontSize: 13.5, color: T.n800 }}>
+              <input type="checkbox" checked={seleccion.includes(v.id)} onChange={() => toggle(v.id)} style={{ accentColor: T.primary }} />
+              {v.nombre}
+            </label>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -3882,11 +3900,11 @@ function AdminPortal({ session, onLogout }) {
               <Card style={{ marginBottom: 16 }}>
                 <SectionHeader title="Dar de alta un cliente" />
                 <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1.2fr", gap: 10, marginBottom: 10 }}>
-                  <div><Label>Nombre del cliente</Label><Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ej: Freddo" /></div>
-                  <div><Label>Código de acceso</Label><Input value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="Ej: FREDDO26" /></div>
+                  <div><Label>Nombre del cliente <span style={{ color: "#dc2626" }}>*</span></Label><Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ej: Freddo" /></div>
+                  <div><Label>Código de acceso <span style={{ color: "#dc2626" }}>*</span></Label><Input value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="Ej: FREDDO26" /></div>
                   <div><Label>Tenant productivo</Label><Input value={newTenant} onChange={(e) => setNewTenant(e.target.value)} placeholder="Ej: freddo-prod" /></div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1.6fr 1fr", gap: 10, marginBottom: 14 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
                   <div><Label>Razón social</Label><Input value={newRazonSocial} onChange={(e) => setNewRazonSocial(e.target.value)} placeholder="Ej: Freddo S.A." /></div>
                   <div>
                     <Label>CUIT(s)</Label>
@@ -3906,13 +3924,15 @@ function AdminPortal({ session, onLogout }) {
                       </div>
                     )}
                   </div>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14, alignItems: "start" }}>
                   <div><Label>Vendedor/es</Label><SelectorVendedores vendedores={vendedoresTeam} seleccion={newComerciales} onChange={setNewComerciales} /></div>
                   <div>
                     <Label>Tipo de onboarding</Label>
-                    <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13.5, color: T.n800, height: 38 }}>
-                      <input type="checkbox" checked={newAutoimp} onChange={(e) => setNewAutoimp(e.target.checked)} style={{ width: 16, height: 16, accentColor: "#6d28d9" }} />
-                      {newAutoimp ? "🚀 Autoimplementación" : "Implementación estándar"}
-                    </label>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Btn variant={!newAutoimp ? "primary" : "secondary"} size="sm" onClick={() => setNewAutoimp(false)} style={{ flex: 1 }}>Estándar</Btn>
+                      <Btn variant={newAutoimp ? "primary" : "secondary"} size="sm" onClick={() => setNewAutoimp(true)} style={{ flex: 1 }}>🚀 Autoimplementación</Btn>
+                    </div>
                   </div>
                 </div>
 
