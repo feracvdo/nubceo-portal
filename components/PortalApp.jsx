@@ -41,7 +41,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.28.1";
+const APP_VERSION = "1.29.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -2581,6 +2581,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                       {(() => { const sg = semaforoGoLive(cli.goLiveEstimado); return sg ? <Badge tone={sg.tone}>🎯 {sg.txt}</Badge> : null; })()}
                       {(() => { const ci = contratoInfo(cli.estadoContrato); return <Badge tone={ci.tone}>📄 {ci.chip}</Badge>; })()}
+                      {cli.autoimplementacion && <span style={{ fontSize: 11, fontWeight: 700, background: "#efe7ff", color: "#6d28d9", border: "1px solid #ddd0fb", borderRadius: 100, padding: "2px 9px", whiteSpace: "nowrap" }}>🚀 Autoimpl.</span>}
                       {!cli.implementadorId && <Badge tone="amber">Sin asignar</Badge>}
                       {cli.estadoPago === "con_deuda" && <Badge tone="red">💰 Deuda {diasDesde(cli.deudaDesde)}d</Badge>}
                       {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
@@ -2892,6 +2893,7 @@ function AdminPortal({ session, onLogout }) {
   const [filtroImpl, setFiltroImpl] = useState("");
   const [filtroDev, setFiltroDev] = useState("");
   const [filtroVendedor, setFiltroVendedor] = useState("");
+  const [filtroAutoimp, setFiltroAutoimp] = useState("");
   const [newComerciales, setNewComerciales] = useState([]);
   const [editComerciales, setEditComerciales] = useState([]);
   const [newAutoimp, setNewAutoimp] = useState(false);
@@ -3432,6 +3434,7 @@ function AdminPortal({ session, onLogout }) {
                   )}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
                     <Badge tone={contratoInfo(meta.estadoContrato).tone}>📄 {contratoInfo(meta.estadoContrato).lbl}</Badge>
+                    {meta.autoimplementacion && <span style={{ fontSize: 12, fontWeight: 700, background: "#efe7ff", color: "#6d28d9", border: "1px solid #ddd0fb", borderRadius: 100, padding: "3px 10px" }}>🚀 Autoimplementación</span>}
                     <select
                       value={meta.estadoContrato || "sin_firmar"}
                       onChange={async (e) => {
@@ -3879,6 +3882,7 @@ function AdminPortal({ session, onLogout }) {
     .filter((c) => !filtroImpl || c.implementadorId === filtroImpl)
     .filter((c) => !filtroDev || c.desarrolladorId === filtroDev)
     .filter((c) => !filtroVendedor || (c.comerciales || []).includes(filtroVendedor))
+    .filter((c) => !filtroAutoimp || (filtroAutoimp === "si" ? c.autoimplementacion : !c.autoimplementacion))
     .filter((c) => !filtroMarca || (filtroMarca === "sin" ? !marcas[c.code] : marcas[c.code] === filtroMarca))
     .filter((c) => !busqueda.trim() || c.name.toLowerCase().includes(busqueda.trim().toLowerCase()) || c.code.toLowerCase().includes(busqueda.trim().toLowerCase()));
   const finanzasTeam = team.filter((m) => m.rol === "finanzas");
@@ -4014,13 +4018,18 @@ function AdminPortal({ session, onLogout }) {
                     <option value="">Todos los vendedores</option>
                     {vendedoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                   </select>
+                  <select value={filtroAutoimp} onChange={(e) => setFiltroAutoimp(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                    <option value="">Todo onboarding</option>
+                    <option value="si">🚀 Autoimplementación</option>
+                    <option value="no">Implementación estándar</option>
+                  </select>
                   <select value={filtroMarca} onChange={(e) => setFiltroMarca(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
                     <option value="">Todas mis marcas</option>
                     <option value="naranja">🟠 Tengo algo pendiente</option>
                     <option value="rojo">🔴 Trabado o con problema</option>
                     <option value="sin">Sin marca</option>
                   </select>
-                  {(busqueda || filtroImpl || filtroDev || filtroVendedor || filtroMarca) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroDev(""); setFiltroVendedor(""); setFiltroMarca(""); }}>Limpiar filtros</Btn>}
+                  {(busqueda || filtroImpl || filtroDev || filtroVendedor || filtroMarca || filtroAutoimp) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroDev(""); setFiltroVendedor(""); setFiltroMarca(""); setFiltroAutoimp(""); }}>Limpiar filtros</Btn>}
                 </div>
 
                 {clients && clients.length > 0 && (
@@ -4100,6 +4109,7 @@ function AdminPortal({ session, onLogout }) {
                           {pendRv && <Badge tone="amber">Relevamiento pendiente</Badge>}
                           {cli.omitioSucursales && <Badge tone="amber">Sucursales pendiente</Badge>}
                           {cli.estadoPago === "con_deuda" && <Badge tone="red">💰 Con deuda</Badge>}
+                          {cli.autoimplementacion && <span style={{ fontSize: 11, fontWeight: 700, background: "#efe7ff", color: "#6d28d9", border: "1px solid #ddd0fb", borderRadius: 100, padding: "2px 9px", whiteSpace: "nowrap" }}>🚀 Autoimpl.</span>}
                           {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
                         </div>
                         {session.tipoUsuario === "superuser" && <span onClick={(e) => { e.stopPropagation(); archivarCliente(cli.code, cli.name); }} title="Archivar cliente (se puede restaurar)" style={{ cursor: "pointer", color: T.n400, fontSize: 14, padding: 4 }}>📥</span>}
@@ -4131,7 +4141,12 @@ function AdminPortal({ session, onLogout }) {
                   <option value="">Todos los vendedores</option>
                   {vendedoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                 </select>
-                {(busqueda || filtroImpl || filtroVendedor) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroVendedor(""); }}>Limpiar filtros</Btn>}
+                <select value={filtroAutoimp} onChange={(e) => setFiltroAutoimp(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                  <option value="">Todo onboarding</option>
+                  <option value="si">🚀 Autoimplementación</option>
+                  <option value="no">Implementación estándar</option>
+                </select>
+                {(busqueda || filtroImpl || filtroVendedor || filtroAutoimp) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroVendedor(""); setFiltroAutoimp(""); }}>Limpiar filtros</Btn>}
               </div>
               <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} onCambiarColor={cambiarColor} onEnviarAvisos={enviarAvisosPendientes} enviandoAvisosDe={enviandoAvisosDe} />
         {/* Panel lateral rápido del tablero: se abre al hacer clic en una tarjeta */}
