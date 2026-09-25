@@ -10,9 +10,9 @@ import ChatBot from "../lib/chat/ChatBot";
 
 // ─── Tokens de marca Nubceo (tema C — Soft, portal de usuario) ───
 const T = {
-  bg: "#eef4ff",
+  bg: "#f0f4f8",
   card: "#ffffff",
-  cardBorder: "#c7dcfd",
+  cardBorder: "#e2e8f0",
   primary: "#0a6bf4",
   primary50: "#e8f1fe",
   primary100: "#b9d2fb",
@@ -20,13 +20,13 @@ const T = {
   primary800: "#033a8a",
   primary900: "#02265c",
   sky: "#38b6ff",
-  n50: "#f7f8fa",
-  n100: "#eef0f4",
-  n200: "#d8dce6",
-  n400: "#8e96a8",
-  n600: "#4b5468",
-  n800: "#1e2433",
-  n900: "#0d1120",
+  n50: "#f8fafc",
+  n100: "#f1f5f9",
+  n200: "#e2e8f0",
+  n400: "#94a3b8",
+  n600: "#475569",
+  n800: "#1e293b",
+  n900: "#0f172a",
   okBg: "#dcfce7", okTx: "#166534", okBorder: "#bbe8c9",
   warnBg: "#fef9c3", warnTx: "#854d0e", warnBorder: "#fde68a",
   errBg: "#fee2e2", errTx: "#991b1b", errBorder: "#fca5a5",
@@ -41,7 +41,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.32.0";
+const APP_VERSION = "1.33.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -153,7 +153,7 @@ function fmtRespuesta(q, rv) {
 // ─── UI base ───
 const Btn = ({ children, onClick, variant = "primary", size = "md", disabled, style, type = "button" }) => {
   const base = {
-    primary: { background: T.primary, color: "#fff", border: "none" },
+    primary: { background: T.primary, color: "#fff", border: "none", boxShadow: "0 1px 3px rgba(10,107,244,0.25)" },
     secondary: { background: T.primary50, color: T.primary800, border: "none" },
     ghost: { background: "transparent", color: T.n600, border: "1px solid " + T.n200 },
     outline: { background: "transparent", color: T.primary, border: "1.5px solid " + T.primary },
@@ -164,10 +164,13 @@ const Btn = ({ children, onClick, variant = "primary", size = "md", disabled, st
       type={type}
       onClick={onClick}
       disabled={disabled}
+      onMouseDown={(e) => { if (!disabled) e.currentTarget.style.transform = "scale(0.97)"; }}
+      onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
       style={{
         ...base, padding: pad, borderRadius: 8, fontSize: 14, fontWeight: 500,
         cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
-        fontFamily: "inherit", transition: "opacity .15s", ...style,
+        fontFamily: "inherit", transition: "all .15s ease", ...style,
       }}
     >
       {children}
@@ -184,14 +187,14 @@ const Badge = ({ children, tone = "blue" }) => {
     gray: [T.n100, T.n600],
   }[tone];
   return (
-    <span style={{ background: c[0], color: c[1], fontSize: 12, fontWeight: 500, padding: "3px 10px", borderRadius: 100, whiteSpace: "nowrap" }}>
+    <span style={{ background: c[0], color: c[1], fontSize: 11.5, fontWeight: 600, padding: "2px 8px", borderRadius: 6, whiteSpace: "nowrap", letterSpacing: "0.01em" }}>
       {children}
     </span>
   );
 };
 
 const Card = ({ children, style }) => (
-  <div style={{ background: T.card, border: "1px solid " + T.cardBorder, borderRadius: 16, padding: "1.75rem", ...style }}>
+  <div style={{ background: T.card, border: "1px solid " + T.cardBorder, borderRadius: 14, padding: "1.5rem", boxShadow: "0 1px 3px rgba(15,23,42,0.04), 0 1px 2px rgba(15,23,42,0.06)", ...style }}>
     {children}
   </div>
 );
@@ -249,7 +252,7 @@ const Input = (props) => (
     style={{
       height: 40, padding: "0 12px", border: "1px solid " + T.n200, borderRadius: 6,
       fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "inherit",
-      outline: "none", color: T.n800, background: "#fff", ...props.style,
+      outline: "none", color: T.n800, background: "#fff", transition: "border-color 0.15s, box-shadow 0.15s", ...props.style,
     }}
     onFocus={(e) => { e.target.style.border = "1px solid " + T.primary; e.target.style.boxShadow = "0 0 0 3px rgba(10,107,244,0.12)"; }}
     onBlur={(e) => { e.target.style.border = "1px solid " + T.n200; e.target.style.boxShadow = "none"; }}
@@ -716,13 +719,13 @@ const CLIENT_NAV_ITEMS = [
 ];
 function ClientSidebar({ activo, onCambiar }) {
   return (
-    <div style={{ width: 200, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+    <div style={{ width: 210, flexShrink: 0, background: "linear-gradient(180deg, #0a6bf4 0%, #0550c0 100%)", padding: "20px 14px", minHeight: "calc(100vh - 61px)", borderRadius: "0 16px 16px 0" }}>
       <div style={{ display: "grid", gap: 3 }}>
         {CLIENT_NAV_ITEMS.map(([id, icon, lbl]) => (
           <div key={id} onClick={() => onCambiar(id)} style={{
             display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, cursor: "pointer",
             fontSize: 13.5, fontWeight: activo === id ? 700 : 500,
-            background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
+            background: activo === id ? "rgba(255,255,255,0.18)" : "transparent", color: activo === id ? "#fff" : "rgba(255,255,255,0.72)", transition: "all 0.15s ease",
           }}>
             <span style={{ fontSize: 15 }}>{icon}</span>{lbl}
           </div>
@@ -2673,7 +2676,7 @@ function Sidebar({ activo, onCambiar, noLeidas = 0 }) {
           }}>
             <span style={{ fontSize: 15 }}>{icon}</span>{lbl}
             {id === "notificaciones" && noLeidas > 0 && (
-              <span style={{ marginLeft: "auto", background: "#ef4444", color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: 100, padding: "1px 7px", minWidth: 18, textAlign: "center" }}>{noLeidas > 99 ? "99+" : noLeidas}</span>
+              <span style={{ marginLeft: "auto", background: "#fff", color: T.primary, fontSize: 11, fontWeight: 700, borderRadius: 100, padding: "1px 7px", minWidth: 18, textAlign: "center" }}>{noLeidas > 99 ? "99+" : noLeidas}</span>
             )}
           </div>
         ))}
