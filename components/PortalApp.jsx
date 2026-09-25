@@ -41,7 +41,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.30.0";
+const APP_VERSION = "1.31.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
