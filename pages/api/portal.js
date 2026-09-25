@@ -11,7 +11,7 @@ import { buildDiagrama } from "../../lib/diagrama";
 import * as gcal from "../../lib/googleCalendar";
 import { generarPlantilla } from "../../lib/plantillasMail";
 import { calcularPasos, computarPasos, faseSugerida, NOMBRE_PASO } from "../../lib/pasos";
-import { hitosPara, calcularHitos, NOMBRE_HITO_GENERICO } from "../../lib/hitos";
+import { hitosPara, hitosAutoimpPara, calcularHitos, NOMBRE_HITO_GENERICO } from "../../lib/hitos";
 import { STEPS as AUTO_STEPS } from "../../lib/autoimp/contenido";
 import { procesarAvisoPlazo, enviarAvisosPendientesDeCliente } from "../../lib/avisosPlazos";
 import crypto from "crypto";
@@ -200,7 +200,7 @@ async function assemble(cliente) {
         cumplimiento: p.cumplimiento || null,
       }])),
       pasosCompletos,
-      hitos: hitosPara(respuestasObj),
+      hitos: cliente.autoimplementacion ? hitosAutoimpPara() : hitosPara(respuestasObj),
       hitosCompletos,
     },
   };
