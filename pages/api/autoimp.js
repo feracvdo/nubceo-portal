@@ -375,6 +375,8 @@ export default async function handler(req, res) {
         upd.api_desarrolla = req.body.apiDesarrolla || null;
         if (upd.api_desarrolla) await registrar(codigo, email, "api", null, upd.api_desarrolla);
       }
+      if (req.body.fecha_objetivo !== undefined) upd.fecha_objetivo = req.body.fecha_objetivo || null;
+      if (req.body.ambos_via !== undefined) upd.ambos_via = req.body.ambos_via || null;
 
       // Se considera terminado cuando están todos los pasos marcados.
       const totalPasos = Number(req.body.totalPasos) || 0;
