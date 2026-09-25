@@ -12,11 +12,12 @@ export default function MailsCard({
   implementador,
   desarrollador,
   lider,
+  esAutoimp = false,
 }) {
   const [mails, setMails] = useState([]);
   const [contactos, setContactos] = useState(involucradosIniciales || []);
   const [selectedContacts, setSelectedContacts] = useState([]);
-  const [plantilla, setPlantilla] = useState("bienvenida");
+  const [plantilla, setPlantilla] = useState(esAutoimp ? "bienvenida_auto" : "bienvenida");
   const [previewHtml, setPreviewHtml] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -169,11 +170,17 @@ export default function MailsCard({
           <strong>Plantilla</strong>
           <select value={plantilla} onChange={(e) => setPlantilla(e.target.value)}
             style={{ width: "100%", padding: 8, marginTop: 5, borderRadius: 4, border: "1px solid #c7dcfd", fontSize: 14 }}>
-            <option value="bienvenida">Mail de bienvenida</option>
-            <option value="recordatorio">Recordatorio</option>
-            <option value="vencido">Plazo vencido</option>
-            <option value="workshop">Invitación a workshop</option>
-            <option value="golive">Coordinación de go-live</option>
+            {esAutoimp ? (<>
+              <option value="bienvenida_auto">Bienvenida autoimplementación 🚀</option>
+              <option value="recordatorio_auto">Recordatorio autoimplementación 🚀</option>
+              <option value="vencido_auto">Plazo vencido autoimplementación 🚀</option>
+            </>) : (<>
+              <option value="bienvenida">Mail de bienvenida</option>
+              <option value="recordatorio">Recordatorio</option>
+              <option value="vencido">Plazo vencido</option>
+              <option value="workshop">Invitación a workshop</option>
+              <option value="golive">Coordinación de go-live</option>
+            </>)}
           </select>
         </label>
 
