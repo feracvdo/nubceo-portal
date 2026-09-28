@@ -18,7 +18,7 @@ async function api(action, payload = {}) {
     body: JSON.stringify({ action, ...payload }),
   });
   const j = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(j.error || "No pudimos conectarnos. Probá de nuevo.");
+  if (!res.ok) throw new Error(j.error || "No fue posible establecer la conexión. Por favor, intentá nuevamente.");
   return j;
 }
 
@@ -260,9 +260,7 @@ export default function Guia() {
   const [cur, setCur] = useState(0);
   const [done, setDone] = useState(() => STEPS.map(() => false));
   const [vidIdx, setVidIdx] = useState(0);
-  const [srcPath, setSrcPath] = useState(null); // null | 'csv' | 'api' | 'ambos'
-  const [ambosVia, setAmbosVia] = useState(null);
-  const [fechaObjetivo, setFechaObjetivo] = useState(null); // YYYY-MM-DD // null | 'csv' | 'api' (cuál mostrar primero en modo ambos)
+  const [srcPath, setSrcPath] = useState(null); // null | 'csv' | 'api'
   const [apiPath, setApiPath] = useState(null); // null | 'propio' | 'nubceo'
   const [fb, setFb] = useState(nuevoFb);
 
@@ -331,8 +329,6 @@ export default function Guia() {
       const pasos = (r.progreso && r.progreso.pasos) || {};
       setDone(STEPS.map((_, i) => !!(pasos[i] && pasos[i].hecho)));
       setSrcPath((r.progreso && r.progreso.origen) || null);
-      setAmbosVia((r.progreso && r.progreso.ambos_via) || null);
-      setFechaObjetivo((r.progreso && r.progreso.fecha_objetivo) || null);
       setApiPath((r.progreso && r.progreso.api_desarrolla) || null);
       const base = nuevoFb();
       (r.comentarios || []).forEach((c2) => {
@@ -377,11 +373,6 @@ export default function Guia() {
   const elegirSrc = (k) => {
     setSrcPath(k); setApiPath(null); setVidIdx(0);
     guardar({ origen: k, apiDesarrolla: null });
-    if (k === "ambos") setAmbosVia(null);
-  };
-  const guardarFechaObjetivo = (f) => {
-    setFechaObjetivo(f);
-    guardar({ fecha_objetivo: f });
   };
   const elegirApi = (k) => { setApiPath(k); guardar({ apiDesarrolla: k }); };
 
@@ -456,7 +447,7 @@ export default function Guia() {
         <div className="ai-fbbox sent">
           <div className="ai-fbthanks">✓ Gracias, lo registramos</div>
           <p className="ai-small" style={{ color: "var(--ok-tx)", margin: ".5rem 0 0" }}>
-            Nos dijiste que este paso te resultó <b>{n ? n.l.toLowerCase() : "sin calificar"}</b>. Tu implementador lo
+            Indicaste que este paso te resultó <b>{n ? n.l.toLowerCase() : "sin calificar"}</b>. Tu referente de implementación lo
             va a ver y nos sirve para mejorar la guía.{" "}
             <span className="ai-link" style={{ color: "var(--ok-tx)", borderColor: "var(--ok-tx)" }}
               onClick={() => patchFb(i, "enviado", false)}>Editar</span>
@@ -467,7 +458,7 @@ export default function Guia() {
     return (
       <div className="ai-fbbox">
         <div className="ai-fbl">¿Cómo te resultó este paso?</div>
-        <div className="ai-fbs">Nos ayuda a saber qué explicar mejor. Lo lee tu implementador de Nubceo.</div>
+        <div className="ai-fbs">Tu valoración nos ayuda a mejorar la guía. Esta información es revisada por tu referente de implementación en Nubceo.</div>
         <div className="ai-fbchips">
           {NIVELES.map((n) => (
             <span key={n.k}
@@ -478,7 +469,7 @@ export default function Guia() {
           ))}
         </div>
         <textarea
-          placeholder="¿Algo te confundió o faltó explicar? Contanos con tus palabras (opcional)"
+          placeholder="¿Algo te generó dudas o faltó explicar? Describí brevemente tu experiencia (opcional)"
           value={f.texto}
           onChange={(e) => patchFb(i, "texto", e.target.value)}
         />
@@ -489,7 +480,7 @@ export default function Guia() {
           }}>
             Enviar comentario
           </button>
-          {!f.nivel && <span className="ai-small ai-muted">Elegí una opción para poder enviarlo.</span>}
+          {!f.nivel && <span className="ai-small ai-muted">Seleccioná una opción para poder enviar tu valoración.</span>}
         </div>
       </div>
     );
@@ -500,9 +491,9 @@ export default function Guia() {
       return (
         <>
           <h3>{s.fork.q}</h3>
-          <div className="ai-pickhint"><span className="ai-pd" /> Elegí una opción para continuar</div>
+          <div className="ai-pickhint"><span className="ai-pd" /> Seleccioná una opción para continuar</div>
           <div className="ai-forkgrid">
-            {["csv", "api", "ambos"].filter((k) => s.fork[k]).map((k) => (
+            {["csv", "api"].map((k) => (
               <div key={k} className="ai-forkcard" onClick={() => elegirSrc(k)}>
                 <span className={"ai-fb " + (k === "csv" ? "ai-fb-self" : "ai-fb-impl")}>{s.fork[k].b}</span>
                 <div className="ft">{s.fork[k].t}</div>
@@ -512,35 +503,8 @@ export default function Guia() {
           </div>
           <p className="ai-small ai-muted" style={{ marginTop: ".9rem" }}>
             ¿No sabés cuál es tu caso? Consultalo con quien maneja tu sistema de gestión, o{" "}
-            <span className="ai-link" onClick={() => pedirAyuda()}>preguntale a tu implementador</span>.
+            <span className="ai-link" onClick={() => pedirAyuda()}>consultá con tu referente de implementación</span>.
           </p>
-        </>
-      );
-    }
-    if (srcPath === "ambos") {
-      return (
-        <>
-          <div className="ai-forkcard sel" style={{ marginTop: "1.2rem" }}>
-            <span className="ai-fb ai-fb-self">Mixto</span>
-            <div className="ft">✓ Parte por API y parte por CSV</div>
-            <p className="ai-small ai-muted" style={{ margin: ".5rem 0 0" }}>
-              <span className="ai-link" onClick={() => elegirSrc(null)}>Elegí otra opción</span>
-            </p>
-          </div>
-          <div style={{ marginTop: "1.2rem" }}>
-            <h3>¿Con cuál querés empezar?</h3>
-            <p className="ai-small ai-muted">Hacé los dos a tu ritmo. Elegí con cuál capacitarte primero.</p>
-            <div className="ai-forkgrid">
-              <div className={"ai-forkcard" + (ambosVia === "csv" ? " sel" : "")} onClick={() => { setAmbosVia("csv"); guardar({ ambos_via: "csv" }); }}>
-                <div className="ft">{ambosVia === "csv" ? "✓ " : ""}Empezar por CSV</div>
-                <div className="fd">Subís el archivo de ventas. Es más rápido y no necesita desarrollo.</div>
-              </div>
-              <div className={"ai-forkcard" + (ambosVia === "api" ? " sel" : "")} onClick={() => { setAmbosVia("api"); guardar({ ambos_via: "api" }); }}>
-                <div className="ft">{ambosVia === "api" ? "✓ " : ""}Empezar por API</div>
-                <div className="fd">Coordinás la integración técnica con un implementador.</div>
-              </div>
-            </div>
-          </div>
         </>
       );
     }
@@ -550,7 +514,7 @@ export default function Guia() {
         <span className={"ai-fb " + (srcPath === "csv" ? "ai-fb-self" : "ai-fb-impl")}>{c.b}</span>
         <div className="ft">✓ {c.t}</div>
         <p className="ai-small ai-muted" style={{ margin: ".5rem 0 0" }}>
-          <span className="ai-link" onClick={() => elegirSrc(null)}>Elegí otra opción</span>
+          <span className="ai-link" onClick={() => elegirSrc(null)}>Cambiar la opción seleccionada</span>
         </p>
       </div>
     );
@@ -571,10 +535,10 @@ export default function Guia() {
           {s4 && renderVideo(s4.videosApi)}
           {s4 && renderDescargas(s4, "api")}
           <h3>¿Quién desarrolla la integración?</h3>
-          <div className="ai-pickhint"><span className="ai-pd" /> Elegí una opción para continuar</div>
+          <div className="ai-pickhint"><span className="ai-pd" /> Seleccioná una opción para continuar</div>
           <div className="ai-forkgrid">
             <div className="ai-forkcard" onClick={() => elegirApi("propio")}>
-              <span className="ai-fb ai-fb-self">Sin costo de desarrollo</span>
+              <span className="ai-fb ai-fb-self">Sin costo adicional de desarrollo</span>
               <div className="ft">La desarrolla mi equipo o mi punto de venta</div>
               <div className="fd">Te entregamos la especificación técnica y acompañamos las pruebas. El desarrollo lo
                 hace tu equipo de sistemas o el proveedor de tu punto de venta.</div>
@@ -618,26 +582,26 @@ export default function Guia() {
           {pasos.map((t, k) => (<li key={k}><span className="ai-num">{k + 1}</span><span>{t}</span></li>))}
         </ul>
         {!propio && (
-          <div className="ai-callout"><b>El relevamiento no tiene costo.</b> La cotización depende de qué sistema uses y
-            de cómo permita acceder a los datos, así que no podemos darte un número antes de mirarlo.</div>
+          <div className="ai-callout"><b>El relevamiento no tiene costo.</b> La cotización depende del sistema de gestión que utilices y
+            de cómo permita acceder a los datos, por lo que no es posible proporcionar un presupuesto sin analizarlo previamente.</div>
         )}
         <h3>{propio ? "Para aprovechar la reunión, tené a mano" : "Para el relevamiento, tené a mano"}</h3>
         <ul className="ai-todo">
           {llevar.map((t, k) => (<li key={k}><span className="ai-num">·</span><span>{t}</span></li>))}
         </ul>
         <div className="ai-verify">
-          <div className="vl">✓ Mientras tanto no te quedes parado</div>
+          <div className="vl">✓ Mientras tanto, podés seguir avanzando</div>
           <p>Podés avanzar igual con el <b>paso 5</b> (reglas y secuencias) y el <b>paso 7</b> (tu rutina). El paso 6 lo
             vas a hacer cuando la integración esté lista y entren tus primeras ventas.</p>
         </div>
         <div style={{ marginTop: "1.5rem", display: "flex", gap: ".7rem", flexWrap: "wrap" }}>
           <button className="ai-btn ai-btn-p" onClick={() => pedirAyuda()}>
-            {propio ? "Coordinar reunión con un implementador" : "Pedir el relevamiento y la cotización"}
+            {propio ? "Coordinar reunión con un referente de implementación" : "Solicitar el relevamiento y la cotización"}
           </button>
-          <button className="ai-btn ai-btn-g" onClick={() => pedirAyuda()}>Tengo dudas antes de avanzar</button>
+          <button className="ai-btn ai-btn-g" onClick={() => pedirAyuda()}>Necesito aclarar algunas dudas antes de continuar</button>
         </div>
         <p className="ai-small ai-muted" style={{ marginTop: "1.2rem" }}>
-          <span className="ai-link" onClick={() => elegirApi(null)}>Elegí la otra opción</span>
+          <span className="ai-link" onClick={() => elegirApi(null)}>Cambiar la opción seleccionada</span>
         </p>
       </>
     );
@@ -646,50 +610,30 @@ export default function Guia() {
   const renderBienvenida = () => (
     <section className="ai-panel">
       <div className="ai-kicker">Bienvenida</div>
-      <h1>Tu cuenta ya está creada. Te enseñamos a configurarla.</h1>
-      <p className="ai-lead">Esta guía te acompaña con videos cortos mientras configurás tu Conciliador dentro de
-        Nubceo. Mirás el video, hacés el paso en la plataforma, lo marcás como hecho y seguís. A tu ritmo, sin
-        reuniones.</p>
+      <h1>Tu cuenta ya está creada. Te guiamos en la configuración.</h1>
+      <p className="ai-lead">Esta guía te acompaña paso a paso con videos breves mientras configurás tu Conciliador dentro de
+        Nubceo. Mirás el video, realizás el paso en la plataforma, lo marcás como completado y avanzás al siguiente. A tu ritmo, sin necesidad de coordinar reuniones.</p>
 
       {renderVideo([VIDEO_BIENVENIDA])}
 
       <div className="ai-boundary">
         <div className="ai-bcol cx">
-          <div className="bt">Listo — lo hizo tu referente</div>
+          <div className="bt">Completado — lo gestionó tu referente de Nubceo</div>
           <ul><li>✓ Empresa y datos fiscales</li><li>✓ Credenciales de procesadoras</li></ul>
         </div>
         <div className="ai-arrow">→</div>
         <div className="ai-bcol self">
-          <div className="bt">Ahora — lo hacés vos en Nubceo</div>
+          <div className="bt">Tu tarea — lo configurás vos dentro de Nubceo</div>
           <ul>{STEPS.map((s, i) => (<li key={i}>{i + 1}. {s.nav}</li>))}</ul>
         </div>
       </div>
 
-      <div className="ai-callout"><b>Esta guía configura tu Conciliador transaccional</b> — el cruce de las ventas de tu
-        sistema contra lo que te liquidan las procesadoras.</div>
-      <div className="ai-callout"><b>Tiempo estimado: un mes o menos.</b> No es una sola sentada: avanzá a tu ritmo,
-        salí y retomá donde lo dejaste.</div>
-
-      <div className="ai-callout">
-        <b>📅 ¿Para cuándo necesitás tenerlo listo?</b>
-        <p style={{ margin: ".4rem 0 0", fontSize: "13.5px", color: "var(--n600)" }}>
-          Poné tu fecha objetivo y en cada paso te mostramos cuántos días te quedan. Si no la sabés, seguí sin llenarla.
-        </p>
-        <input type="date" value={fechaObjetivo || ""}
-          onChange={(e) => guardarFechaObjetivo(e.target.value || null)}
-          style={{ marginTop: ".6rem", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--n200)", fontSize: "14px", fontFamily: "inherit", color: "var(--n800)" }}
-        />
-        {fechaObjetivo && (() => {
-          const dias = Math.ceil((new Date(fechaObjetivo + "T23:59:59") - new Date()) / 86400000);
-          return <span style={{ marginLeft: ".8rem", fontSize: "13px", color: dias < 0 ? "var(--err)" : dias <= 7 ? "var(--warn-tx)" : "var(--ok-tx)", fontWeight: 600 }}>
-            {dias < 0 ? "Venció hace " + Math.abs(dias) + " día" + (Math.abs(dias) !== 1 ? "s" : "") : dias + " día" + (dias !== 1 ? "s" : "") + " restante" + (dias !== 1 ? "s" : "")}
-          </span>;
-        })()}
-      </div>
+      <div className="ai-callout"><b>Esta guía configura tu Conciliador transaccional</b> — el cruce de las ventas registradas en tu sistema de gestión \u2139\uFE0F (tu software de punto de venta) contra lo que te liquidan las procesadoras de pagos.</div>
+      <div className="ai-callout"><b>Tiempo estimado: un mes o menos.</b> No es necesario completarlo en una sola sesión: avanzá a tu ritmo, salí y retomá desde donde lo dejaste.</div>
 
       <div className="ai-pfoot">
-        <button className="ai-btn ai-btn-p" onClick={() => go(1)}>Empezar →</button>
-        <span className="ai-help" onClick={() => pedirAyuda()}>Prefiero hacerlo acompañado</span>
+        <button className="ai-btn ai-btn-p" onClick={() => go(1)}>Comenzar →</button>
+        <span className="ai-help" onClick={() => pedirAyuda()}>Prefiero contar con asistencia personalizada</span>
       </div>
     </section>
   );
@@ -697,30 +641,17 @@ export default function Guia() {
   const renderPaso = (i) => {
     const s = STEPS[i];
     const soloFork = s.fork && srcPath === null;
-    const esAmbos = s.fork && srcPath === "ambos";
-    const esApi = s.fork && (srcPath === "api" || (srcPath === "ambos" && ambosVia === "api"));
+    const esApi = s.fork && srcPath === "api";
     return (
       <section className="ai-panel">
-        <div className="ai-kicker" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-          <span>Paso {i + 1} de {STEPS.length} · {s.nav}</span>
-          {fechaObjetivo && !done[i] && (() => {
-            const diasTotales = Math.max(1, Math.ceil((new Date(fechaObjetivo + "T23:59:59") - new Date(cliente?.iniciadoAt || new Date())) / 86400000));
-            const diasPorPaso = Math.max(1, Math.floor(diasTotales / STEPS.length));
-            const diasLimite = Math.ceil((new Date(fechaObjetivo + "T23:59:59") - new Date()) / 86400000);
-            const diasRestPaso = Math.max(0, diasLimite - (STEPS.length - 1 - i) * diasPorPaso);
-            return <span style={{ fontSize: "11px", fontWeight: 600, color: diasRestPaso <= 0 ? "var(--err)" : diasRestPaso <= 3 ? "var(--warn-tx)" : "var(--ok-tx)" }}>
-              {diasRestPaso <= 0 ? "⚠ Plazo vencido" : diasRestPaso + " día" + (diasRestPaso !== 1 ? "s" : "") + " para este paso"}
-            </span>;
-          })()}
-          {done[i] && <span style={{ fontSize: "11px", fontWeight: 600, color: "var(--ok-tx)" }}>✓ Completado</span>}
-        </div>
+        <div className="ai-kicker">Paso {i + 1} de {STEPS.length} · {s.nav}</div>
         <h1>{s.title}</h1>
         <p className="ai-lead">{s.lead}</p>
 
         {s.fork && renderFork(s)}
         {esApi && renderRamaApi()}
 
-        {!soloFork && !esApi && (esAmbos ? ambosVia === 'csv' : true) && (
+        {!soloFork && !esApi && (
           <>
             {renderVideo(s.videos)}
 
@@ -747,32 +678,6 @@ export default function Guia() {
             <ul className="ai-todo">
               {s.todo.map((t, k) => (<li key={k}><span className="ai-num">{k + 1}</span><span>{t}</span></li>))}
             </ul>
-
-            {s.ejemplo && (
-              <div className="ai-callout" style={{ marginTop: "1.2rem" }}>
-                <b>{s.ejemplo.titulo}</b>
-                <table style={{ width: "100%", borderCollapse: "collapse", marginTop: ".8rem", fontSize: "13px" }}>
-                  <thead>
-                    <tr>{s.ejemplo.columnas.map((c, k) => (<th key={k} style={{ textAlign: "left", padding: "6px 8px", borderBottom: "2px solid var(--n200)", color: "var(--n600)", fontWeight: 600, fontSize: "12px" }}>{c}</th>))}</tr>
-                  </thead>
-                  <tbody>
-                    {s.ejemplo.filas.map((fila, k) => (
-                      <tr key={k} style={{ background: k % 2 === 0 ? "var(--n50)" : "transparent" }}>
-                        {fila.map((cel, j) => (<td key={j} style={{ padding: "5px 8px", borderBottom: "1px solid var(--n100)" }}>{cel}</td>))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <p className="ai-small ai-muted" style={{ marginTop: ".6rem" }} dangerouslySetInnerHTML={{ __html: s.ejemplo.nota }} />
-              </div>
-            )}
-
-            {s.casoEspecial && (
-              <div className="ai-callout warn" style={{ marginTop: "1rem" }}>
-                <b>{s.casoEspecial.titulo}</b>
-                <p style={{ margin: ".4rem 0 0" }} dangerouslySetInnerHTML={{ __html: s.casoEspecial.texto }} />
-              </div>
-            )}
 
             <div className="ai-verify">
               <div className="vl">✓ Cómo saber que salió bien</div>
@@ -820,7 +725,7 @@ export default function Guia() {
     <section className="ai-panel">
       <div className="ai-hero">
         <div className="ai-circ">✓</div>
-        <h1>Terminaste tu puesta en marcha</h1>
+        <h1>Completaste tu puesta en marcha</h1>
         <p className="ai-lead" style={{ margin: "0 auto" }}>Configuraste tu Conciliador por tu cuenta y ya sabés
           operarlo. Desde acá, lo importante es sostener la rutina.</p>
       </div>
@@ -991,7 +896,7 @@ export default function Guia() {
                     </div>
                   )}
                   <div className="ai-verify" style={{ marginTop: "1rem" }}>
-                    <div className="vl">✓ Tu archivo está listo</div>
+                    <div className="vl">✓ Tu archivo está listo para cargar</div>
                     <p>Descargalo en el formato exacto de Nubceo y subilo desde la plataforma. Es el mismo contenido, ordenado como lo espera el importador.</p>
                   </div>
                   <button className="ai-btn ai-btn-p" style={{ marginTop: "1rem" }} onClick={descargarNormalizado}>
