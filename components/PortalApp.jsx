@@ -41,7 +41,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.33.0";
+const APP_VERSION = "1.33.1";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -378,6 +378,18 @@ export default function PortalImplementacion() {
         setSession({ code: c, who: r.name, teamId: r.teamId || null, teamRol: r.teamRol || null, tipoUsuario: r.tipoUsuario || (r.superadmin ? "superuser" : "admin"), superadmin: !!r.superadmin });
         setScreen("admin");
       } else {
+        // Si es autoimplementado, seteamos la sesión de la guía de Fede en localStorage
+        // (autoimp_codigo + vencimiento de 1 hora) y redirigimos a /guia. La guía lee
+        // esos valores al cargar y entra directo, sin pedirle que se loguee de nuevo.
+        if (r.autoimplementacion) {
+          try {
+            localStorage.setItem("autoimp_codigo", c);
+            localStorage.setItem("autoimp_vence", String(Date.now() + 3600000));
+            localStorage.setItem("nubceo_session", JSON.stringify({ code: c, who: who || "" }));
+          } catch (e2) {}
+          window.location.href = "/guia";
+          return;
+        }
         setSession({ code: c, name: r.name, who });
         setScreen("client");
       }
