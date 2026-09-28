@@ -351,7 +351,7 @@ export default async function handler(req, res) {
       const cli = await getCliente(sc);
       if (cli) {
         if (cli.archivado_at) return res.status(403).json({ error: "Este acceso fue archivado. Si es un cliente nuevo con el mismo código, pedile al Superuser que elimine el archivado." });
-        return res.json({ role: "client", name: cli.nombre });
+        return res.json({ role: "client", name: cli.nombre, autoimplementacion: !!cli.autoimplementacion });
       }
       return res.status(404).json({ error: "Código no encontrado" });
     }
