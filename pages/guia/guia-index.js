@@ -18,7 +18,7 @@ async function api(action, payload = {}) {
     body: JSON.stringify({ action, ...payload }),
   });
   const j = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(j.error || "No fue posible establecer la conexión. Por favor, intentá nuevamente.");
+  if (!res.ok) throw new Error(j.error || "No pudimos conectarnos. Probá de nuevo.");
   return j;
 }
 
@@ -297,8 +297,22 @@ export default function Guia() {
     const vigente = vence > Date.now();
     if (!vigente) limpiarSesion();
 
-    const guardado = vigente ? (localStorage.getItem("autoimp_codigo") || "") : "";
+    let guardado = vigente ? (localStorage.getItem("autoimp_codigo") || "") : "";
     const mail = vigente ? (localStorage.getItem("autoimp_email") || "") : "";
+
+    // Si no hay sesión propia de la guía pero sí hay una del portal (login unificado),
+    // la adoptamos para que el cliente no tenga que loguearse dos veces.
+    if (!guardado && !delLink) {
+      try {
+        const portalSess = JSON.parse(localStorage.getItem("nubceo_session") || "null");
+        if (portalSess && portalSess.code) {
+          guardado = portalSess.code.trim().toUpperCase();
+          localStorage.setItem("autoimp_codigo", guardado);
+          localStorage.setItem("autoimp_vence", String(Date.now() + 3600000));
+        }
+      } catch (e) {}
+    }
+
     const c = delLink || guardado.trim().toUpperCase();
 
     setEmail(mail);
@@ -447,7 +461,7 @@ export default function Guia() {
         <div className="ai-fbbox sent">
           <div className="ai-fbthanks">✓ Gracias, lo registramos</div>
           <p className="ai-small" style={{ color: "var(--ok-tx)", margin: ".5rem 0 0" }}>
-            Indicaste que este paso te resultó <b>{n ? n.l.toLowerCase() : "sin calificar"}</b>. Tu referente de implementación lo
+            Nos dijiste que este paso te resultó <b>{n ? n.l.toLowerCase() : "sin calificar"}</b>. Tu implementador lo
             va a ver y nos sirve para mejorar la guía.{" "}
             <span className="ai-link" style={{ color: "var(--ok-tx)", borderColor: "var(--ok-tx)" }}
               onClick={() => patchFb(i, "enviado", false)}>Editar</span>
@@ -458,7 +472,7 @@ export default function Guia() {
     return (
       <div className="ai-fbbox">
         <div className="ai-fbl">¿Cómo te resultó este paso?</div>
-        <div className="ai-fbs">Tu valoración nos ayuda a mejorar la guía. Esta información es revisada por tu referente de implementación en Nubceo.</div>
+        <div className="ai-fbs">Nos ayuda a saber qué explicar mejor. Lo lee tu implementador de Nubceo.</div>
         <div className="ai-fbchips">
           {NIVELES.map((n) => (
             <span key={n.k}
@@ -469,7 +483,7 @@ export default function Guia() {
           ))}
         </div>
         <textarea
-          placeholder="¿Algo te generó dudas o faltó explicar? Describí brevemente tu experiencia (opcional)"
+          placeholder="¿Algo te confundió o faltó explicar? Contanos con tus palabras (opcional)"
           value={f.texto}
           onChange={(e) => patchFb(i, "texto", e.target.value)}
         />
@@ -480,7 +494,7 @@ export default function Guia() {
           }}>
             Enviar comentario
           </button>
-          {!f.nivel && <span className="ai-small ai-muted">Seleccioná una opción para poder enviar tu valoración.</span>}
+          {!f.nivel && <span className="ai-small ai-muted">Elegí una opción para poder enviarlo.</span>}
         </div>
       </div>
     );
@@ -491,7 +505,7 @@ export default function Guia() {
       return (
         <>
           <h3>{s.fork.q}</h3>
-          <div className="ai-pickhint"><span className="ai-pd" /> Seleccioná una opción para continuar</div>
+          <div className="ai-pickhint"><span className="ai-pd" /> Elegí una opción para continuar</div>
           <div className="ai-forkgrid">
             {["csv", "api"].map((k) => (
               <div key={k} className="ai-forkcard" onClick={() => elegirSrc(k)}>
@@ -503,7 +517,7 @@ export default function Guia() {
           </div>
           <p className="ai-small ai-muted" style={{ marginTop: ".9rem" }}>
             ¿No sabés cuál es tu caso? Consultalo con quien maneja tu sistema de gestión, o{" "}
-            <span className="ai-link" onClick={() => pedirAyuda()}>consultá con tu referente de implementación</span>.
+            <span className="ai-link" onClick={() => pedirAyuda()}>preguntale a tu implementador</span>.
           </p>
         </>
       );
@@ -514,7 +528,7 @@ export default function Guia() {
         <span className={"ai-fb " + (srcPath === "csv" ? "ai-fb-self" : "ai-fb-impl")}>{c.b}</span>
         <div className="ft">✓ {c.t}</div>
         <p className="ai-small ai-muted" style={{ margin: ".5rem 0 0" }}>
-          <span className="ai-link" onClick={() => elegirSrc(null)}>Cambiar la opción seleccionada</span>
+          <span className="ai-link" onClick={() => elegirSrc(null)}>Elegí otra opción</span>
         </p>
       </div>
     );
@@ -535,10 +549,10 @@ export default function Guia() {
           {s4 && renderVideo(s4.videosApi)}
           {s4 && renderDescargas(s4, "api")}
           <h3>¿Quién desarrolla la integración?</h3>
-          <div className="ai-pickhint"><span className="ai-pd" /> Seleccioná una opción para continuar</div>
+          <div className="ai-pickhint"><span className="ai-pd" /> Elegí una opción para continuar</div>
           <div className="ai-forkgrid">
             <div className="ai-forkcard" onClick={() => elegirApi("propio")}>
-              <span className="ai-fb ai-fb-self">Sin costo adicional de desarrollo</span>
+              <span className="ai-fb ai-fb-self">Sin costo de desarrollo</span>
               <div className="ft">La desarrolla mi equipo o mi punto de venta</div>
               <div className="fd">Te entregamos la especificación técnica y acompañamos las pruebas. El desarrollo lo
                 hace tu equipo de sistemas o el proveedor de tu punto de venta.</div>
@@ -582,26 +596,26 @@ export default function Guia() {
           {pasos.map((t, k) => (<li key={k}><span className="ai-num">{k + 1}</span><span>{t}</span></li>))}
         </ul>
         {!propio && (
-          <div className="ai-callout"><b>El relevamiento no tiene costo.</b> La cotización depende del sistema de gestión que utilices y
-            de cómo permita acceder a los datos, por lo que no es posible proporcionar un presupuesto sin analizarlo previamente.</div>
+          <div className="ai-callout"><b>El relevamiento no tiene costo.</b> La cotización depende de qué sistema uses y
+            de cómo permita acceder a los datos, así que no podemos darte un número antes de mirarlo.</div>
         )}
         <h3>{propio ? "Para aprovechar la reunión, tené a mano" : "Para el relevamiento, tené a mano"}</h3>
         <ul className="ai-todo">
           {llevar.map((t, k) => (<li key={k}><span className="ai-num">·</span><span>{t}</span></li>))}
         </ul>
         <div className="ai-verify">
-          <div className="vl">✓ Mientras tanto, podés seguir avanzando</div>
+          <div className="vl">✓ Mientras tanto no te quedes parado</div>
           <p>Podés avanzar igual con el <b>paso 5</b> (reglas y secuencias) y el <b>paso 7</b> (tu rutina). El paso 6 lo
             vas a hacer cuando la integración esté lista y entren tus primeras ventas.</p>
         </div>
         <div style={{ marginTop: "1.5rem", display: "flex", gap: ".7rem", flexWrap: "wrap" }}>
           <button className="ai-btn ai-btn-p" onClick={() => pedirAyuda()}>
-            {propio ? "Coordinar reunión con un referente de implementación" : "Solicitar el relevamiento y la cotización"}
+            {propio ? "Coordinar reunión con un implementador" : "Pedir el relevamiento y la cotización"}
           </button>
-          <button className="ai-btn ai-btn-g" onClick={() => pedirAyuda()}>Necesito aclarar algunas dudas antes de continuar</button>
+          <button className="ai-btn ai-btn-g" onClick={() => pedirAyuda()}>Tengo dudas antes de avanzar</button>
         </div>
         <p className="ai-small ai-muted" style={{ marginTop: "1.2rem" }}>
-          <span className="ai-link" onClick={() => elegirApi(null)}>Cambiar la opción seleccionada</span>
+          <span className="ai-link" onClick={() => elegirApi(null)}>Elegí la otra opción</span>
         </p>
       </>
     );
@@ -610,30 +624,33 @@ export default function Guia() {
   const renderBienvenida = () => (
     <section className="ai-panel">
       <div className="ai-kicker">Bienvenida</div>
-      <h1>Tu cuenta ya está creada. Te guiamos en la configuración.</h1>
-      <p className="ai-lead">Esta guía te acompaña paso a paso con videos breves mientras configurás tu Conciliador dentro de
-        Nubceo. Mirás el video, realizás el paso en la plataforma, lo marcás como completado y avanzás al siguiente. A tu ritmo, sin necesidad de coordinar reuniones.</p>
+      <h1>Tu cuenta ya está creada. Te enseñamos a configurarla.</h1>
+      <p className="ai-lead">Esta guía te acompaña con videos cortos mientras configurás tu Conciliador dentro de
+        Nubceo. Mirás el video, hacés el paso en la plataforma, lo marcás como hecho y seguís. A tu ritmo, sin
+        reuniones.</p>
 
       {renderVideo([VIDEO_BIENVENIDA])}
 
       <div className="ai-boundary">
         <div className="ai-bcol cx">
-          <div className="bt">Completado — lo gestionó tu referente de Nubceo</div>
+          <div className="bt">Listo — lo hizo tu referente</div>
           <ul><li>✓ Empresa y datos fiscales</li><li>✓ Credenciales de procesadoras</li></ul>
         </div>
         <div className="ai-arrow">→</div>
         <div className="ai-bcol self">
-          <div className="bt">Tu tarea — lo configurás vos dentro de Nubceo</div>
+          <div className="bt">Ahora — lo hacés vos en Nubceo</div>
           <ul>{STEPS.map((s, i) => (<li key={i}>{i + 1}. {s.nav}</li>))}</ul>
         </div>
       </div>
 
-      <div className="ai-callout"><b>Esta guía configura tu Conciliador transaccional</b> — el cruce de las ventas registradas en tu sistema de gestión \u2139\uFE0F (tu software de punto de venta) contra lo que te liquidan las procesadoras de pagos.</div>
-      <div className="ai-callout"><b>Tiempo estimado: un mes o menos.</b> No es necesario completarlo en una sola sesión: avanzá a tu ritmo, salí y retomá desde donde lo dejaste.</div>
+      <div className="ai-callout"><b>Esta guía configura tu Conciliador transaccional</b> — el cruce de las ventas de tu
+        sistema contra lo que te liquidan las procesadoras.</div>
+      <div className="ai-callout"><b>Tiempo estimado: un mes o menos.</b> No es una sola sentada: avanzá a tu ritmo,
+        salí y retomá donde lo dejaste.</div>
 
       <div className="ai-pfoot">
-        <button className="ai-btn ai-btn-p" onClick={() => go(1)}>Comenzar →</button>
-        <span className="ai-help" onClick={() => pedirAyuda()}>Prefiero contar con asistencia personalizada</span>
+        <button className="ai-btn ai-btn-p" onClick={() => go(1)}>Empezar →</button>
+        <span className="ai-help" onClick={() => pedirAyuda()}>Prefiero hacerlo acompañado</span>
       </div>
     </section>
   );
@@ -725,7 +742,7 @@ export default function Guia() {
     <section className="ai-panel">
       <div className="ai-hero">
         <div className="ai-circ">✓</div>
-        <h1>Completaste tu puesta en marcha</h1>
+        <h1>Terminaste tu puesta en marcha</h1>
         <p className="ai-lead" style={{ margin: "0 auto" }}>Configuraste tu Conciliador por tu cuenta y ya sabés
           operarlo. Desde acá, lo importante es sostener la rutina.</p>
       </div>
@@ -896,7 +913,7 @@ export default function Guia() {
                     </div>
                   )}
                   <div className="ai-verify" style={{ marginTop: "1rem" }}>
-                    <div className="vl">✓ Tu archivo está listo para cargar</div>
+                    <div className="vl">✓ Tu archivo está listo</div>
                     <p>Descargalo en el formato exacto de Nubceo y subilo desde la plataforma. Es el mismo contenido, ordenado como lo espera el importador.</p>
                   </div>
                   <button className="ai-btn ai-btn-p" style={{ marginTop: "1rem" }} onClick={descargarNormalizado}>
@@ -1003,7 +1020,7 @@ export default function Guia() {
           <section className="ai-panel">
             <div className="ai-kicker">Acceso</div>
             <h1>Entrá a tu guía</h1>
-            <p className="ai-lead">Usá el mismo código que te compartió tu referente de Nubceo.</p>
+            <p className="ai-lead">Usá el mismo código que te compartió tu referente de Nubceo. También podés ingresar desde el <a href="/" style={{ color: "var(--primary)", fontWeight: 600 }}>portal principal</a>.</p>
 
             <div style={{ marginTop: "1.5rem" }}>
               <label className="ai-fbl" htmlFor="ai-cod">Tu código de acceso</label>
