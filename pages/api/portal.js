@@ -345,12 +345,23 @@ export default async function handler(req, res) {
       if (sc === ADMIN_CODE) return res.json({ role: "team", name: who || "Equipo Nubceo", superadmin: true });
       const { data: impl } = await db.from("equipo").select("id, nombre, rol, tipo_usuario, es_superadmin").eq("codigo", sc).maybeSingle();
       if (impl) {
+        const nombreIngresado = (who || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        const nombreReal = (impl.nombre || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        if (!nombreIngresado || nombreIngresado !== nombreReal) {
+          return res.status(401).json({ error: "El nombre no coincide con el código ingresado." });
+        }
         const tu = impl.tipo_usuario || (impl.es_superadmin ? "superuser" : "admin");
         return res.json({ role: "team", name: impl.nombre, teamId: impl.id, teamRol: impl.rol, tipoUsuario: tu, superadmin: tu === "superuser" });
       }
       const cli = await getCliente(sc);
       if (cli) {
         if (cli.archivado_at) return res.status(403).json({ error: "Este acceso fue archivado. Si es un cliente nuevo con el mismo código, pedile al Superuser que elimine el archivado." });
+        // Validar que el nombre proporcionado coincida con el del cliente (comparación flexible).
+        const nombreIngresado = (who || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        const nombreReal = (cli.nombre || "").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        if (!nombreIngresado || !nombreReal || nombreIngresado !== nombreReal) {
+          return res.status(401).json({ error: "El nombre del cliente no coincide con el código ingresado." });
+        }
         return res.json({ role: "client", name: cli.nombre, autoimplementacion: !!cli.autoimplementacion });
       }
       return res.status(404).json({ error: "Código no encontrado" });
