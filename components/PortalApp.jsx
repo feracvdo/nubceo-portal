@@ -41,7 +41,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.33.1";
+const APP_VERSION = "1.34.0";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -367,7 +367,7 @@ export default function PortalImplementacion() {
   const [err, setErr] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
 
-  const login = async (code, who) => {
+  const login = async (code) => {
     setErr("");
     const c = code.trim().toUpperCase();
     if (!c) return;
@@ -378,23 +378,11 @@ export default function PortalImplementacion() {
         setSession({ code: c, who: r.name, teamId: r.teamId || null, teamRol: r.teamRol || null, tipoUsuario: r.tipoUsuario || (r.superadmin ? "superuser" : "admin"), superadmin: !!r.superadmin });
         setScreen("admin");
       } else {
-        // Si es autoimplementado, seteamos la sesión de la guía de Fede en localStorage
-        // (autoimp_codigo + vencimiento de 1 hora) y redirigimos a /guia. La guía lee
-        // esos valores al cargar y entra directo, sin pedirle que se loguee de nuevo.
-        if (r.autoimplementacion) {
-          try {
-            localStorage.setItem("autoimp_codigo", c);
-            localStorage.setItem("autoimp_vence", String(Date.now() + 3600000));
-            localStorage.setItem("nubceo_session", JSON.stringify({ code: c, who: who || "" }));
-          } catch (e2) {}
-          window.location.href = "/guia";
-          return;
-        }
-        setSession({ code: c, name: r.name, who });
+        setSession({ code: c, name: r.name, who: r.name });
         setScreen("client");
       }
       // Persistimos la sesión para que refrescar la página no cierre la sesión.
-      try { localStorage.setItem("nubceo_session", JSON.stringify({ code: c, who: who || "" })); } catch (e) {}
+      try { localStorage.setItem("nubceo_session", JSON.stringify({ code: c })); } catch (e) {}
     } catch (e) {
       try { localStorage.removeItem("nubceo_session"); } catch (e2) {}
       setErr(e.message === "Código no encontrado" ? "Código no encontrado. Verificá el código que te envió tu implementador." : e.message);
@@ -414,7 +402,7 @@ export default function PortalImplementacion() {
     let guardada = null;
     try { guardada = JSON.parse(localStorage.getItem("nubceo_session") || "null"); } catch (e) {}
     if (guardada && guardada.code) {
-      login(guardada.code, guardada.who || "").finally(() => setRehidratando(false));
+      login(guardada.code).finally(() => setRehidratando(false));
     } else {
       setRehidratando(false);
     }
@@ -437,9 +425,8 @@ export default function PortalImplementacion() {
 // ══════════════════════════ LOGIN ══════════════════════════
 function Login({ onLogin, err, loggingIn }) {
   const [code, setCode] = useState("");
-  const [who, setWho] = useState("");
   const [verCodigo, setVerCodigo] = useState(false);
-  const submit = (e) => { e.preventDefault(); onLogin(code, who); };
+  const submit = (e) => { e.preventDefault(); onLogin(code); };
   return (
     <div style={{ maxWidth: 440, margin: "0 auto", padding: "9vh 20px 40px" }}>
       <div style={{ display: "flex", justifyContent: "center", marginBottom: SP.xl }}>
@@ -448,27 +435,22 @@ function Login({ onLogin, err, loggingIn }) {
       <Card>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: T.n900, margin: "0 0 6px" }}>Portal de implementación</h1>
         <p style={{ fontSize: 14, color: T.n600, margin: "0 0 24px", lineHeight: 1.55 }}>
-          Acompañá tu implementación del Conciliador: completá los pasos pendientes y seguí en qué instancia está tu proyecto.
+          Ingresá con el código de acceso que te compartió tu referente de Nubceo.
         </p>
-        {/* Formulario real: así el navegador ofrece guardar y autocompletar las credenciales */}
         <form onSubmit={submit}>
-          <div style={{ marginBottom: 16 }}>
-            <Label>Tu nombre</Label>
-            <Input name="username" autoComplete="username" placeholder="Para el registro de actividad" value={who} onChange={(e) => setWho(e.target.value)} />
-          </div>
           <div style={{ marginBottom: 20 }}>
             <Label>Código de acceso</Label>
             <div style={{ position: "relative" }}>
-              <Input name="password" type={verCodigo ? "text" : "password"} autoComplete="current-password" placeholder="El código que te envió tu implementador" value={code} onChange={(e) => setCode(e.target.value)} style={{ paddingRight: 74 }} />
+              <Input name="password" type={verCodigo ? "text" : "password"} autoComplete="current-password" placeholder="Ej: FREDDO26" value={code} onChange={(e) => setCode(e.target.value)} style={{ paddingRight: 74 }} />
               <span onClick={() => setVerCodigo(!verCodigo)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer", userSelect: "none" }}>{verCodigo ? "Ocultar" : "Mostrar"}</span>
             </div>
           </div>
           {err && <Alert tone="error" style={{ marginBottom: 16 }}>{err}</Alert>}
-          <Btn type="submit" disabled={loggingIn} style={{ width: "100%" }}>{loggingIn ? "Entrando…" : "Entrar"}</Btn>
+          <Btn type="submit" disabled={loggingIn || !code.trim()} style={{ width: "100%" }}>{loggingIn ? "Ingresando…" : "Ingresar"}</Btn>
         </form>
         <ActionBar style={{ marginTop: 20, paddingTop: 16 }}>
           <div style={{ fontSize: 12, color: T.n400, lineHeight: 1.55 }}>
-            Ingresá con el código que te compartió tu implementador — el navegador te va a ofrecer recordarlo. ¿Sos del equipo de Nubceo? Usá tu código de implementador.
+            ¿Sos del equipo de Nubceo? Ingresá con tu código de implementador.
           </div>
         </ActionBar>
       </Card>
