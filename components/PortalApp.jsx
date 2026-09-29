@@ -41,7 +41,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.34.0";
+const APP_VERSION = "1.34.1";
 const APP_VERSION_FECHA = "2026-07-20";
 
 const FASES = [
@@ -367,7 +367,7 @@ export default function PortalImplementacion() {
   const [err, setErr] = useState("");
   const [loggingIn, setLoggingIn] = useState(false);
 
-  const login = async (code) => {
+  const login = async (code, who) => {
     setErr("");
     const c = code.trim().toUpperCase();
     if (!c) return;
@@ -378,11 +378,11 @@ export default function PortalImplementacion() {
         setSession({ code: c, who: r.name, teamId: r.teamId || null, teamRol: r.teamRol || null, tipoUsuario: r.tipoUsuario || (r.superadmin ? "superuser" : "admin"), superadmin: !!r.superadmin });
         setScreen("admin");
       } else {
-        setSession({ code: c, name: r.name, who: r.name });
+        setSession({ code: c, name: r.name, who: who || r.name });
         setScreen("client");
       }
       // Persistimos la sesión para que refrescar la página no cierre la sesión.
-      try { localStorage.setItem("nubceo_session", JSON.stringify({ code: c })); } catch (e) {}
+      try { localStorage.setItem("nubceo_session", JSON.stringify({ code: c, who: who || "" })); } catch (e) {}
     } catch (e) {
       try { localStorage.removeItem("nubceo_session"); } catch (e2) {}
       setErr(e.message === "Código no encontrado" ? "Código no encontrado. Verificá el código que te envió tu implementador." : e.message);
@@ -402,7 +402,7 @@ export default function PortalImplementacion() {
     let guardada = null;
     try { guardada = JSON.parse(localStorage.getItem("nubceo_session") || "null"); } catch (e) {}
     if (guardada && guardada.code) {
-      login(guardada.code).finally(() => setRehidratando(false));
+      login(guardada.code, guardada.who || "").finally(() => setRehidratando(false));
     } else {
       setRehidratando(false);
     }
@@ -425,8 +425,9 @@ export default function PortalImplementacion() {
 // ══════════════════════════ LOGIN ══════════════════════════
 function Login({ onLogin, err, loggingIn }) {
   const [code, setCode] = useState("");
+  const [who, setWho] = useState("");
   const [verCodigo, setVerCodigo] = useState(false);
-  const submit = (e) => { e.preventDefault(); onLogin(code); };
+  const submit = (e) => { e.preventDefault(); onLogin(code, who); };
   return (
     <div style={{ maxWidth: 440, margin: "0 auto", padding: "9vh 20px 40px" }}>
       <div style={{ display: "flex", justifyContent: "center", marginBottom: SP.xl }}>
@@ -435,9 +436,13 @@ function Login({ onLogin, err, loggingIn }) {
       <Card>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: T.n900, margin: "0 0 6px" }}>Portal de implementación</h1>
         <p style={{ fontSize: 14, color: T.n600, margin: "0 0 24px", lineHeight: 1.55 }}>
-          Ingresá con el código de acceso que te compartió tu referente de Nubceo.
+          Ingresá con el nombre de tu empresa y el código de acceso que te compartió tu referente de Nubceo.
         </p>
         <form onSubmit={submit}>
+          <div style={{ marginBottom: 16 }}>
+            <Label>Nombre del cliente</Label>
+            <Input name="username" autoComplete="username" placeholder="Ej: Freddo" value={who} onChange={(e) => setWho(e.target.value)} />
+          </div>
           <div style={{ marginBottom: 20 }}>
             <Label>Código de acceso</Label>
             <div style={{ position: "relative" }}>
@@ -446,11 +451,11 @@ function Login({ onLogin, err, loggingIn }) {
             </div>
           </div>
           {err && <Alert tone="error" style={{ marginBottom: 16 }}>{err}</Alert>}
-          <Btn type="submit" disabled={loggingIn || !code.trim()} style={{ width: "100%" }}>{loggingIn ? "Ingresando…" : "Ingresar"}</Btn>
+          <Btn type="submit" disabled={loggingIn || !code.trim() || !who.trim()} style={{ width: "100%" }}>{loggingIn ? "Ingresando…" : "Ingresar"}</Btn>
         </form>
         <ActionBar style={{ marginTop: 20, paddingTop: 16 }}>
           <div style={{ fontSize: 12, color: T.n400, lineHeight: 1.55 }}>
-            ¿Sos del equipo de Nubceo? Ingresá con tu código de implementador.
+            ¿Sos del equipo de Nubceo? Ingresá con tu nombre y código de implementador.
           </div>
         </ActionBar>
       </Card>
