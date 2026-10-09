@@ -409,13 +409,14 @@ export default function Guia() {
     const v = videos[Math.min(vidIdx, videos.length - 1)];
     return (
       <div className="ai-player">
-        {v.id ? (
+        {v.yt ? (
           <div className="ai-frame">
             <iframe
-              key={v.id}
-              src={"https://www.loom.com/embed/" + v.id + "?hideOwner=true&hide_share=true"}
+              key={v.yt}
+              src={"https://www.youtube-nocookie.com/embed/" + v.yt + "?rel=0&modestbranding=1"}
               title={v.t}
               frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
             />
           </div>
@@ -503,7 +504,7 @@ export default function Guia() {
           </div>
           <p className="ai-small ai-muted" style={{ marginTop: ".9rem" }}>
             ¿No sabés cuál es tu caso? Consultalo con quien maneja tu sistema de gestión, o{" "}
-            <span className="ai-link" onClick={() => pedirAyuda()}>preguntale a tu implementador</span>.
+            <span className="ai-link" onClick={pedirAyuda}>preguntale a tu implementador</span>.
           </p>
         </>
       );
@@ -595,10 +596,10 @@ export default function Guia() {
             vas a hacer cuando la integración esté lista y entren tus primeras ventas.</p>
         </div>
         <div style={{ marginTop: "1.5rem", display: "flex", gap: ".7rem", flexWrap: "wrap" }}>
-          <button className="ai-btn ai-btn-p" onClick={() => pedirAyuda()}>
+          <button className="ai-btn ai-btn-p" onClick={pedirAyuda}>
             {propio ? "Coordinar reunión con un implementador" : "Pedir el relevamiento y la cotización"}
           </button>
-          <button className="ai-btn ai-btn-g" onClick={() => pedirAyuda()}>Tengo dudas antes de avanzar</button>
+          <button className="ai-btn ai-btn-g" onClick={pedirAyuda}>Tengo dudas antes de avanzar</button>
         </div>
         <p className="ai-small ai-muted" style={{ marginTop: "1.2rem" }}>
           <span className="ai-link" onClick={() => elegirApi(null)}>Elegí la otra opción</span>
@@ -636,7 +637,7 @@ export default function Guia() {
 
       <div className="ai-pfoot">
         <button className="ai-btn ai-btn-p" onClick={() => go(1)}>Empezar →</button>
-        <span className="ai-help" onClick={() => pedirAyuda()}>Prefiero hacerlo acompañado</span>
+        <span className="ai-help" onClick={pedirAyuda}>Prefiero hacerlo acompañado</span>
       </div>
     </section>
   );
@@ -699,17 +700,16 @@ export default function Guia() {
               </div>
             )}
 
+            <div className={"ai-mark" + (done[i] ? " on" : "")} onClick={() => toggleDone(i)}>
+              <span className="ai-box">✓</span>
+              <span>
+                <span className="mt">{done[i] ? "Paso completado" : "Ya lo hice en Nubceo"}</span><br />
+                <span className="ms">{done[i] ? "Podés desmarcarlo si necesitás volver." : "Marcalo cuando termines para llevar tu progreso."}</span>
+              </span>
+            </div>
+
             {renderFeedback(i)}
           </>
-        )}
-        {!soloFork && (
-          <div className={"ai-mark" + (done[i] ? " on" : "")} onClick={() => toggleDone(i)}>
-            <span className="ai-box">✓</span>
-            <span>
-              <span className="mt">{done[i] ? "Paso completado" : "Ya lo hice en Nubceo"}</span><br />
-              <span className="ms">{done[i] ? "Podés desmarcarlo si necesitás volver." : "Marcalo cuando termines para llevar tu progreso."}</span>
-            </span>
-          </div>
         )}
 
         <div className="ai-pfoot">
