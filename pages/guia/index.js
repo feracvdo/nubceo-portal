@@ -247,6 +247,63 @@ const CSS = `
 .ai-desc{margin-top:1.4rem;border:1px solid var(--n200);border-radius:12px;padding:1rem 1.15rem;background:var(--n50)}
 .ai-desc .dt{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--n400);margin-bottom:.6rem}
 .ai-desc .dl{display:flex;gap:.5rem;flex-wrap:wrap}
+/* Mapa del recorrido, en la bienvenida */
+.ai-mapa{margin-top:1.5rem;border:1px solid var(--primary-100);border-radius:14px;padding:1.1rem 1.2rem;background:var(--primary-50)}
+.ai-mapa .bt{font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--primary);margin-bottom:.8rem}
+.ai-mapagrid{display:flex;flex-wrap:wrap;gap:.5rem}
+.ai-mapaitem{display:inline-flex;align-items:center;gap:.5rem;background:#fff;border:1px solid var(--primary-100);
+  border-radius:100px;padding:6px 14px 6px 6px;font-size:13px;color:var(--primary-900);cursor:pointer;
+  animation:aiPop .45s cubic-bezier(.2,.8,.3,1) both;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.ai-mapaitem b{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;
+  background:var(--primary);color:#fff;font-size:11.5px;font-weight:700}
+.ai-mapaitem:hover{transform:translateY(-2px);border-color:var(--primary);box-shadow:0 6px 16px rgba(10,107,244,.16)}
+@keyframes aiPop{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1;transform:none}}
+
+/* Procesadoras: una ficha por plataforma, con el video adentro */
+.ai-procs{margin-top:1.5rem;display:grid;gap:.6rem}
+.ai-proc{border:1px solid var(--n200);border-radius:14px;overflow:hidden;background:#fff;
+  transition:border-color .18s ease,box-shadow .18s ease}
+.ai-proc:hover{border-color:var(--primary-200);box-shadow:0 4px 14px rgba(2,38,92,.07)}
+.ai-proc.on{border-color:var(--primary);box-shadow:0 8px 24px rgba(10,107,244,.14)}
+.ai-prochead{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.1rem;cursor:pointer;user-select:none}
+.ai-procsig{width:38px;height:38px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:13px;font-weight:700;letter-spacing:.02em;overflow:hidden}
+.ai-procsig img{width:100%;height:100%;object-fit:contain;background:#fff}
+.ai-procnom{flex:1;font-size:14.5px;font-weight:600;color:var(--n800)}
+.ai-procver{font-size:12.5px;font-weight:600;color:var(--primary);display:flex;align-items:center;gap:.4rem;white-space:nowrap}
+.ai-procver .ch{display:inline-block;transition:transform .25s ease}
+.ai-proc.on .ai-procver .ch{transform:rotate(180deg)}
+.ai-proccuerpo{overflow:hidden;animation:aiAbrir .32s cubic-bezier(.2,.8,.3,1) both}
+.ai-proccuerpo .in{padding:0 1.1rem 1.1rem}
+@keyframes aiAbrir{from{opacity:0;max-height:0}to{opacity:1;max-height:620px}}
+
+/* Movimiento general */
+.ai-root button,.ai-btn{transition:transform .14s ease,background .16s ease,box-shadow .16s ease,opacity .16s ease}
+.ai-btn-p:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 16px rgba(10,107,244,.3)}
+.ai-btn-p:active:not(:disabled),.ai-btn-o:active:not(:disabled){transform:translateY(1px)}
+.ai-panel{transition:box-shadow .3s ease}
+.ai-steplist li{transition:background .15s ease,padding-left .15s ease}
+.ai-steplist li:hover{padding-left:.85rem}
+.ai-bullet{transition:background .25s ease,border-color .25s ease,color .25s ease,transform .25s ease}
+.ai-steplist li.done .ai-bullet{transform:scale(1.06)}
+.ai-fill{position:relative;overflow:hidden}
+.ai-fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.55),transparent);
+  animation:aiBrillo 2.4s ease-in-out infinite}
+@keyframes aiBrillo{0%{transform:translateX(-100%)}60%,100%{transform:translateX(220%)}}
+.ai-todo li{transition:padding-left .15s ease,color .15s ease}
+.ai-todo li:hover{padding-left:.6rem;color:var(--n800)}
+.ai-mark{transition:border-color .18s ease,background .18s ease,transform .14s ease}
+.ai-mark:active{transform:scale(.995)}
+.ai-mark.on .ai-box{animation:aiTick .35s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes aiTick{from{transform:scale(.4);opacity:0}to{transform:none;opacity:1}}
+.ai-player{transition:box-shadow .25s ease}
+.ai-player:hover{box-shadow:0 10px 28px rgba(2,38,92,.1)}
+.ai-ptab{transition:background .15s ease,border-color .15s ease,transform .14s ease}
+.ai-ptab:hover{transform:translateY(-1px)}
+@media(prefers-reduced-motion:reduce){
+  .ai-root *{animation-duration:.01ms!important;transition-duration:.01ms!important}
+  .ai-fill::after{display:none}}
+
 .ai-hero{text-align:center;padding:1.5rem 0 .5rem}
 .ai-circ{width:64px;height:64px;border-radius:50%;background:var(--ok-bg);color:var(--ok-tx);display:flex;
   align-items:center;justify-content:center;font-size:30px;margin:0 auto 1rem}
@@ -274,6 +331,7 @@ export default function Guia() {
 
   // Portada: el logo entra desenfocado, se enfoca y la pantalla se disuelve.
   const [ayuda, setAyuda] = useState(null);
+  const [procAbierta, setProcAbierta] = useState(null);
   const [val, setVal] = useState(null);       // null | {cargando} | {error} | resultado
   const [valFix, setValFix] = useState(true);
   const [valNombre, setValNombre] = useState("");
@@ -362,6 +420,7 @@ export default function Guia() {
   const go = (n) => {
     setCur(Math.max(0, Math.min(total + 1, n)));
     setVidIdx(0);
+    setProcAbierta(null);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const toggleDone = (i) => {
@@ -611,22 +670,22 @@ export default function Guia() {
   const renderBienvenida = () => (
     <section className="ai-panel">
       <div className="ai-kicker">Bienvenida</div>
-      <h1>Tu cuenta ya está creada. Te enseñamos a configurarla.</h1>
-      <p className="ai-lead">Esta guía te acompaña con videos cortos mientras configurás tu Conciliador dentro de
-        Nubceo. Mirás el video, hacés el paso en la plataforma, lo marcás como hecho y seguís. A tu ritmo, sin
-        reuniones.</p>
+      <h1>Vamos a poner en marcha tu Conciliador.</h1>
+      <p className="ai-lead">Esta guía te acompaña con videos cortos mientras configurás Nubceo de punta a punta,
+        desde cargar tu empresa hasta dejar la conciliación andando sola. Mirás el video, hacés el paso en la
+        plataforma, lo marcás como hecho y seguís. A tu ritmo, sin reuniones.</p>
 
       {renderVideo([VIDEO_BIENVENIDA])}
 
-      <div className="ai-boundary">
-        <div className="ai-bcol cx">
-          <div className="bt">Listo — lo hizo tu referente</div>
-          <ul><li>✓ Empresa y datos fiscales</li><li>✓ Credenciales de procesadoras</li></ul>
-        </div>
-        <div className="ai-arrow">→</div>
-        <div className="ai-bcol self">
-          <div className="bt">Ahora — lo hacés vos en Nubceo</div>
-          <ul>{STEPS.map((s, i) => (<li key={i}>{i + 1}. {s.nav}</li>))}</ul>
+      <div className="ai-mapa">
+        <div className="bt">El recorrido completo</div>
+        <div className="ai-mapagrid">
+          {STEPS.map((s, i) => (
+            <span key={i} className="ai-mapaitem" style={{ animationDelay: (i * 55) + "ms" }}
+              onClick={() => go(i + 1)}>
+              <b>{i + 1}</b> {s.nav}
+            </span>
+          ))}
         </div>
       </div>
 
@@ -673,6 +732,8 @@ export default function Guia() {
             {s.nota && srcPath && (
               <div className="ai-callout">{s.nota[srcPath]}</div>
             )}
+
+            {s.procesadoras && renderProcesadoras(s)}
 
             {renderDescargas(s, srcPath)}
 
@@ -791,6 +852,44 @@ export default function Guia() {
       alert("No pudimos generar el archivo.");
     }
   };
+
+  // Una ficha por plataforma: se despliega y muestra su video adentro.
+  // `logo` es opcional: mientras no esté, se usa la inicial sobre el color.
+  const renderProcesadoras = (s) => (
+    <div className="ai-procs">
+      {s.procesadoras.map((p, k) => {
+        const abierta = procAbierta === k;
+        return (
+          <div key={p.nombre} className={"ai-proc" + (abierta ? " on" : "")}>
+            <div className="ai-prochead" onClick={() => setProcAbierta(abierta ? null : k)}>
+              <span className="ai-procsig" style={{ background: p.logo ? "#fff" : p.color }}>
+                {p.logo ? <img src={p.logo} alt={p.nombre} /> : p.nombre.slice(0, 2).toUpperCase()}
+              </span>
+              <span className="ai-procnom">{p.nombre}</span>
+              <span className="ai-procver">
+                {abierta ? "Cerrar" : "Cómo vincularla"} <span className="ch">▾</span>
+              </span>
+            </div>
+            {abierta && (
+              <div className="ai-proccuerpo">
+                <div className="in">
+                  <div className="ai-frame" style={{ borderRadius: 12, overflow: "hidden" }}>
+                    <iframe
+                      src={"https://www.youtube-nocookie.com/embed/" + p.yt + "?rel=0&modestbranding=1"}
+                      title={"Vincular " + p.nombre}
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 
   const renderDescargas = (s, via) => {
     const items = (s.descargas || []).filter((x) => !x.via || x.via === via);
@@ -1077,12 +1176,7 @@ export default function Guia() {
 
       <div className="ai-wrap">
         <aside className="ai-side">
-          <h4>Ya configurado por Nubceo</h4>
-          <ul className="ai-cxlist">
-            <li><span className="ai-lock">✓</span> Datos de la empresa</li>
-            <li><span className="ai-lock">✓</span> Procesadoras vinculadas</li>
-          </ul>
-          <h4 className="second">Tu puesta en marcha</h4>
+          <h4>Tu puesta en marcha</h4>
           <ul className="ai-steplist">
             {navs.map((n, i) => {
               const hecho = i > 0 && i <= total && done[i - 1];
