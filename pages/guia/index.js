@@ -268,7 +268,8 @@ const CSS = `
 .ai-prochead{display:flex;align-items:center;gap:.9rem;padding:.85rem 1.1rem;cursor:pointer;user-select:none}
 .ai-procsig{width:38px;height:38px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
   color:#fff;font-size:13px;font-weight:700;letter-spacing:.02em;overflow:hidden}
-.ai-procsig img{width:100%;height:100%;object-fit:contain;background:#fff}
+.ai-procsig img{width:100%;height:100%;object-fit:contain;background:#fff;padding:3px}
+.ai-procsig{border:1px solid var(--n100)}
 .ai-procnom{flex:1;font-size:14.5px;font-weight:600;color:var(--n800)}
 .ai-procver{font-size:12.5px;font-weight:600;color:var(--primary);display:flex;align-items:center;gap:.4rem;white-space:nowrap}
 .ai-procver .ch{display:inline-block;transition:transform .25s ease}
@@ -332,6 +333,7 @@ export default function Guia() {
   // Portada: el logo entra desenfocado, se enfoca y la pantalla se disuelve.
   const [ayuda, setAyuda] = useState(null);
   const [procAbierta, setProcAbierta] = useState(null);
+  const [logoRoto, setLogoRoto] = useState({});
   const [val, setVal] = useState(null);       // null | {cargando} | {error} | resultado
   const [valFix, setValFix] = useState(true);
   const [valNombre, setValNombre] = useState("");
@@ -862,8 +864,12 @@ export default function Guia() {
         return (
           <div key={p.nombre} className={"ai-proc" + (abierta ? " on" : "")}>
             <div className="ai-prochead" onClick={() => setProcAbierta(abierta ? null : k)}>
-              <span className="ai-procsig" style={{ background: p.logo ? "#fff" : p.color }}>
-                {p.logo ? <img src={p.logo} alt={p.nombre} /> : p.nombre.slice(0, 2).toUpperCase()}
+              <span className="ai-procsig"
+                style={{ background: p.logo && !logoRoto[p.nombre] ? "#fff" : p.color }}>
+                {p.logo && !logoRoto[p.nombre]
+                  ? <img src={p.logo} alt={p.nombre}
+                      onError={() => setLogoRoto((r) => ({ ...r, [p.nombre]: true }))} />
+                  : p.nombre.slice(0, 2).toUpperCase()}
               </span>
               <span className="ai-procnom">{p.nombre}</span>
               <span className="ai-procver">
