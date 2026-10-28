@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { CONECTORES, ESTADOS_PROCESADORA, DOCS, COLUMNAS_OBLIGATORIAS, TEMPLATE_SUCURSALES } from "../lib/nubceo";
+import * as XLSX from "xlsx";
+import { CONECTORES, ESTADOS_PROCESADORA, DOCS, COLUMNAS_OBLIGATORIAS, TEMPLATE_SUCURSALES, PLATFORM_CODES_VALIDOS, PREFIJO_OTRA, codigoOtra } from "../lib/nubceo";
 import { validarVentas, validarTabla, exportarNubceo } from "../lib/validadorVentas";
 import { convertirSucursales, exportarTemplateSucursales } from "../lib/sucursalesTemplate";
 import MailsCard from "./MailsCard";
@@ -41,8 +42,8 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.34.1";
-const APP_VERSION_FECHA = "2026-07-20";
+const APP_VERSION = "1.35.0";
+const APP_VERSION_FECHA = "2026-10-28";
 
 const FASES = [
   "Vinculación",
@@ -896,57 +897,81 @@ function ClientPortal({ session, onLogout }) {
 }
 
 // ── Paso 1: Procesadoras ──
+// Cada país trae su lista oficial de conectores + una opción "Otra" con texto libre
+// (codigo otro_<país>), para que el cliente nunca se quede sin poder declarar la suya.
 function TabProcesadoras({ data, act, saving }) {
-  const inicial = {};
-  (data.procesadoras || []).forEach((p) => { inicial[p.codigo] = p.estado; });
+  const inicial = {}, inicialOtras = {};
+  (data.procesadoras || []).forEach((p) => {
+    inicial[p.codigo] = p.estado;
+    if ((p.codigo || "").startsWith(PREFIJO_OTRA)) inicialOtras[p.codigo] = (p.nombre || "").replace(/^Otra:\s*/i, "");
+  });
   const [sel, setSel] = useState(inicial);
+  const [otras, setOtras] = useState(inicialOtras); // codigo otro_xx → texto que escribió el cliente
   const toggle = (code) => setSel((s) => { const n = { ...s }; if (n[code] !== undefined) delete n[code]; else n[code] = "no_conectado"; return n; });
   const setEstado = (code, estado) => setSel((s) => ({ ...s, [code]: estado }));
+  const otrasSinTexto = Object.keys(sel).filter((c) => c.startsWith(PREFIJO_OTRA) && !(otras[c] || "").trim());
   const guardar = () => {
     const lista = [];
     for (const [pais, conns] of Object.entries(CONECTORES)) {
       for (const c of conns) if (sel[c.code] !== undefined) lista.push({ codigo: c.code, nombre: c.nombre, pais, estado: sel[c.code] });
+      const co = codigoOtra(conns);
+      if (sel[co] !== undefined) lista.push({ codigo: co, nombre: "Otra: " + otras[co].trim(), pais, estado: sel[co] });
     }
     act("saveProcesadoras", { lista, log: "Actualizó sus procesadoras (" + lista.length + ") y el estado de conexión de cada una" });
   };
   const cant = Object.keys(sel).length;
+
+  const fila = (code, nombre, esOtra) => {
+    const activo = sel[code] !== undefined;
+    return (
+      <div key={code} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, border: "1px solid " + (activo ? T.primary100 : T.n200), background: activo ? T.primary50 : "#fff" }}>
+        <div onClick={() => toggle(code)} style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer", flex: "1 0 200px" }}>
+          <span style={{ width: 18, height: 18, borderRadius: 5, border: "2px solid " + (activo ? T.primary : T.n200), background: activo ? T.primary : "#fff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{activo ? "✓" : ""}</span>
+          <span style={{ fontSize: 14, fontWeight: activo ? 600 : 400, color: activo ? T.primary900 : T.n600 }}>{nombre}</span>
+        </div>
+        {activo && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {ESTADOS_PROCESADORA.map(([v, lbl]) => (
+              <span key={v} onClick={() => setEstado(code, v)} style={{
+                fontSize: 12, padding: "4px 10px", borderRadius: 100, cursor: "pointer", fontWeight: sel[code] === v ? 700 : 400,
+                background: sel[code] === v ? (v === "conectado" ? T.okBg : v === "en_espera" ? T.warnBg : T.errBg) : "#fff",
+                color: sel[code] === v ? (v === "conectado" ? T.okTx : v === "en_espera" ? T.warnTx : T.errTx) : T.n400,
+                border: "1px solid " + T.n200,
+              }}>{lbl}</span>
+            ))}
+          </div>
+        )}
+        {esOtra && activo && (
+          <input
+            value={otras[code] || ""}
+            onChange={(e) => setOtras((o) => ({ ...o, [code]: e.target.value }))}
+            placeholder="¿Cuál? Ej: Banco Macro, Modo, Payway Link… (si son varias, separalas con coma)"
+            style={{ flex: "1 0 100%", fontSize: 13.5, padding: "8px 10px", borderRadius: 8, border: "1px solid " + ((otras[code] || "").trim() ? T.n200 : "#fca5a5"), outline: "none", boxSizing: "border-box" }}
+          />
+        )}
+      </div>
+    );
+  };
+
   return (
     <Card>
       <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>¿Con qué procesadoras y plataformas cobran?</h2>
       <p style={{ fontSize: 13.5, color: T.n600, lineHeight: 1.55, margin: "0 0 18px" }}>
-        Marcá todas las que usen y contanos en qué estado está cada conexión. "En espera" significa que ya la pediste pero falta documentación o credenciales. Si usan alguna que no está en la lista, avisale a tu implementador para verificar el conector.
+        Marcá todas las que usen y contanos en qué estado está cada conexión. "En espera" significa que ya la pediste pero falta documentación o credenciales. Si usan alguna que no está en la lista, marcá <b>Otra</b> en el país que corresponda y escribí cuál es: tu implementador verifica el conector.
       </p>
       {Object.entries(CONECTORES).map(([pais, conns]) => (
         <div key={pais} style={{ marginBottom: 18 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: T.primary, margin: "0 0 10px", paddingBottom: 6, borderBottom: "1px solid " + T.primary50 }}>{pais}</div>
           <div style={{ display: "grid", gap: 8 }}>
-            {conns.map((c) => {
-              const activo = sel[c.code] !== undefined;
-              return (
-                <div key={c.code} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, border: "1px solid " + (activo ? T.primary100 : T.n200), background: activo ? T.primary50 : "#fff" }}>
-                  <div onClick={() => toggle(c.code)} style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer", flex: "1 0 200px" }}>
-                    <span style={{ width: 18, height: 18, borderRadius: 5, border: "2px solid " + (activo ? T.primary : T.n200), background: activo ? T.primary : "#fff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{activo ? "✓" : ""}</span>
-                    <span style={{ fontSize: 14, fontWeight: activo ? 600 : 400, color: activo ? T.primary900 : T.n600 }}>{c.nombre}</span>
-                  </div>
-                  {activo && (
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      {ESTADOS_PROCESADORA.map(([v, lbl]) => (
-                        <span key={v} onClick={() => setEstado(c.code, v)} style={{
-                          fontSize: 12, padding: "4px 10px", borderRadius: 100, cursor: "pointer", fontWeight: sel[c.code] === v ? 700 : 400,
-                          background: sel[c.code] === v ? (v === "conectado" ? T.okBg : v === "en_espera" ? T.warnBg : T.errBg) : "#fff",
-                          color: sel[c.code] === v ? (v === "conectado" ? T.okTx : v === "en_espera" ? T.warnTx : T.errTx) : T.n400,
-                          border: "1px solid " + T.n200,
-                        }}>{lbl}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {conns.map((c) => fila(c.code, c.nombre, false))}
+            {fila(codigoOtra(conns), "Otra", true)}
           </div>
         </div>
       ))}
-      <Btn onClick={guardar} disabled={saving || !cant}>Guardar ({cant} seleccionada{cant === 1 ? "" : "s"})</Btn>
+      {otrasSinTexto.length > 0 && (
+        <Alert tone="warning" style={{ marginBottom: 12 }}>Indicá cuál es la procesadora en cada opción "Otra" que marcaste para poder guardar.</Alert>
+      )}
+      <Btn onClick={guardar} disabled={saving || !cant || otrasSinTexto.length > 0}>Guardar ({cant} seleccionada{cant === 1 ? "" : "s"})</Btn>
     </Card>
   );
 }
@@ -1476,6 +1501,9 @@ function TabSucursales({ data, meta, persist, act, saving }) {
   const [errores, setErrores] = useState([]);
   const [datosValidos, setDatosValidos] = useState([]);
   const [cargando, setCargando] = useState(false);
+  const [archivoDataUrl, setArchivoDataUrl] = useState(null);
+  const [msgGuardado, setMsgGuardado] = useState("");
+  const yaCargado = data.sucursalesArchivo;
 
   const COLUMNAS_REQUERIDAS = [
     "Nombre de la empresa",
@@ -1487,22 +1515,24 @@ function TabSucursales({ data, meta, persist, act, saving }) {
     "Código de plataforma"
   ];
 
-  const PLATAFORMAS_VALIDAS = [
-    "accor_ar", "amex_ar", "bilsantafe_ar", "cabal_ar", "firstdata_ar", "getnet_ar", "gocuotas_ar",
-    "italcred_ar", "mercadopago_ar", "naranja_ar", "pedidosya_ar", "prisma_ar", "rappi_ar", "tiendanube_ar",
-    "citi_co", "colpatria_co", "didi_co", "diners_co", "mercadopago_co", "rappi_co",
-    "amex_uy", "anda_uy", "cabal_uy", "cdirectos_uy", "creditel_uy", "dlocal_uy", "edenred_uy",
-    "firstdata_uy", "mercadopago_uy", "oca_uy", "passcard_uy", "pedidosya_uy", "rappi_uy", "visanet_uy"
-  ];
+  // Lista viva de lib/nubceo (incluye los conectores nuevos, ej. Unicobros, Tuya, Bancard)
+  const PLATAFORMAS_VALIDAS = PLATFORM_CODES_VALIDOS.map((c) => c.toLowerCase());
 
   const validarArchivo = async (file) => {
     if (!file) return;
     setCargando(true);
     setErrores([]);
     setDatosValidos([]);
+    setArchivoDataUrl(null);
+    setMsgGuardado("");
 
     try {
       const buffer = await file.arrayBuffer();
+      // Guardamos el archivo original (si es razonablemente chico) para que el equipo pueda descargarlo
+      if (file.size <= 700 * 1024) {
+        const dataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); });
+        setArchivoDataUrl(dataUrl);
+      }
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const datos = XLSX.utils.sheet_to_json(sheet, { defval: "" });
@@ -1539,7 +1569,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
 
           if (col === "Código de plataforma") {
             if (!PLATAFORMAS_VALIDAS.includes(valor.toLowerCase())) {
-              erroresFila.push({ columna: col, error: "Plataforma inválida", fila: nroFila });
+              erroresFila.push({ columna: col, error: "Código de plataforma inválido: '" + valor + "' (ej. válido: prisma_ar, bancard_py)", fila: nroFila });
             }
           }
         });
@@ -1571,36 +1601,46 @@ function TabSucursales({ data, meta, persist, act, saving }) {
     }
   };
 
+  // Usa act(): manda el código de sesión correcto y refresca data/meta con la respuesta,
+  // así el paso queda completo y se habilita "Siguiente" sin recargar.
   const guardarSucursales = async () => {
     setCargando(true);
-    try {
-      const resp = await fetch("/api/portal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "guardarSucursalesMasivo",
-          sessionCode: meta.sessionCode,
-          code: data.codigo,
-          sucursales: datosValidos,
-          who: "Cliente"
-        }),
-      });
-      const json = await resp.json();
-      if (!resp.ok) throw new Error(json.error);
-      alert(json.mensaje || "Sucursales guardadas correctamente");
-      setOpcionSeleccionada(null);
-      setMostrarUpload(false);
-      setArchivo(null);
-      setDatosValidos([]);
-    } catch (e) {
-      alert("Error: " + e.message);
-    } finally {
-      setCargando(false);
+    const r = await act("guardarSucursalesMasivo", {
+      sucursales: datosValidos,
+      archivo: archivo ? { name: archivo.name, size: archivo.size, dataUrl: archivoDataUrl } : null,
+    });
+    setCargando(false);
+    if (r) {
+      setMsgGuardado(datosValidos.length + " sucursal(es) guardada(s). Ya podés pasar al siguiente paso.");
+      setMostrarUpload(false); setArchivo(null); setDatosValidos([]); setArchivoDataUrl(null);
     }
+  };
+
+  const marcarManual = async () => {
+    if (!window.confirm("¿Confirmás que ya cargaste todas tus sucursales directamente en Nubceo?")) return;
+    const r = await act("marcarSucursalesManual", {});
+    if (r) setMsgGuardado("Registramos que cargaste las sucursales en Nubceo. Ya podés pasar al siguiente paso.");
   };
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      {msgGuardado && <Alert tone="success">{msgGuardado}</Alert>}
+      {yaCargado && !msgGuardado && (
+        <Alert tone="success">
+          Paso completo: {yaCargado.validacion?.manual ? "cargaste las sucursales directamente en Nubceo" : <>subiste <b>{yaCargado.name}</b></>} ({new Date(yaCargado.ts).toLocaleDateString("es-AR")}). Si cambió algo, podés volver a subir el archivo.
+        </Alert>
+      )}
+      {!yaCargado && (
+        <Card>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 13, color: T.n600, flex: "1 1 280px" }}>¿Ya cargaste tus sucursales directamente en Nubceo, o todavía no tenés el archivo?</span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Btn variant="ghost" onClick={marcarManual} disabled={saving}>Ya las cargué en Nubceo</Btn>
+              {!meta.sucursalesOmitido && <Btn variant="ghost" onClick={() => act("omitirSucursales", {})} disabled={saving}>Omitir por ahora</Btn>}
+            </div>
+          </div>
+        </Card>
+      )}
       
       {/* INTRODUCCIÓN */}
       <Card>
@@ -1872,11 +1912,11 @@ function TabSucursales({ data, meta, persist, act, saving }) {
             onDrop={(e) => {
               e.preventDefault();
               const f = e.dataTransfer.files[0];
-              if (f && (f.type === "application/vnd.ms-excel" || f.name.endsWith(".xls"))) {
+              if (f && /\.(xls|xlsx|csv)$/i.test(f.name)) {
                 setArchivo(f);
                 validarArchivo(f);
               } else {
-                alert("Por favor sube un archivo .xls válido");
+                alert("Subí un archivo .xls, .xlsx o .csv");
               }
             }}
             style={{
@@ -1886,14 +1926,16 @@ function TabSucursales({ data, meta, persist, act, saving }) {
               textAlign: "center",
               background: "#eef4ff",
               cursor: "pointer",
-              marginBottom: 20
+              marginBottom: 20,
+              position: "relative",
+              overflow: "hidden"
             }}
           >
             <p style={{ margin: "0 0 8px 0", fontSize: 16, fontWeight: 600, color: T.primary }}>📁 Arrastra tu archivo aquí</p>
-            <p style={{ margin: 0, fontSize: 13, color: T.n400 }}>o haz click para seleccionar</p>
+            <p style={{ margin: 0, fontSize: 13, color: T.n400 }}>o hacé click para seleccionar (.xls, .xlsx o .csv)</p>
             <input
               type="file"
-              accept=".xls"
+              accept=".xls,.xlsx,.csv"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) {
@@ -1901,7 +1943,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
                   validarArchivo(f);
                 }
               }}
-              style={{ position: "absolute", opacity: 0, width: "100%", height: "100%", cursor: "pointer" }}
+              style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }}
             />
           </div>
 
@@ -1942,7 +1984,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
           {datosValidos.length > 0 && !errores.length && (
             <div style={{ marginBottom: 20 }}>
               <h4 style={{ color: "#059669", marginBottom: 12, fontSize: 13 }}>✓ Vista previa:</h4>
-              <p style={{ fontSize: 12, color: T.n600, marginBottom: 12 }}>Se guardaron <strong>{datosValidos.length} sucursal(es)</strong> válida(s)</p>
+              <p style={{ fontSize: 12, color: T.n600, marginBottom: 12 }}><strong>{datosValidos.length} sucursal(es)</strong> válida(s), listas para guardar</p>
               <div style={{ overflowX: "auto", border: "1px solid " + T.n200, borderRadius: 6 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
@@ -3777,7 +3819,7 @@ function AdminPortal({ session, onLogout }) {
                       <div style={{ fontSize: 13, fontWeight: 600, color: T.okTx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selData.sucursalesArchivo.name}</div>
                       <div style={{ fontSize: 11.5, color: T.okTx, opacity: 0.8 }}>{fmtDate(selData.sucursalesArchivo.ts)}</div>
                     </div>
-                    <a href={selData.sucursalesArchivo.dataUrl} download={selData.sucursalesArchivo.name} style={{ fontSize: 12.5, fontWeight: 600, color: T.okTx }}>Descargar</a>
+                    {selData.sucursalesArchivo.dataUrl && <a href={selData.sucursalesArchivo.dataUrl} download={selData.sucursalesArchivo.name} style={{ fontSize: 12.5, fontWeight: 600, color: T.okTx }}>Descargar</a>}
                   </div>
                 )}
                 {(selData.sucursales || []).length
