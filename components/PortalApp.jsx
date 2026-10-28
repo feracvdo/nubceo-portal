@@ -42,7 +42,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.35.0";
+const APP_VERSION = "1.36.0";
 const APP_VERSION_FECHA = "2026-10-28";
 
 const FASES = [
@@ -2736,15 +2736,23 @@ function TicketsRedmineCard({ sel, sc, session, tieneFeature }) {
   const [usuarios, setUsuarios] = useState("");
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
-  const [trackerName, setTrackerName] = useState("");
-  const [trackers, setTrackers] = useState([]);
+  const [asignadoId, setAsignadoId] = useState("");
+  const [queryType, setQueryType] = useState("Otro");
+  const [desarrolladores, setDesarrolladores] = useState([
+    { id: 241, nombre: "Eduardo André" }, { id: 254, nombre: "Adrián Quintana" }, { id: 258, nombre: "Santiago Suarez" },
+  ]);
+  const [queryTypes, setQueryTypes] = useState(["Creación sandbox", "Migración ventas", "Migración reglas y secuencias", "Eliminación de datos", "Credenciales", "Usuarios y permisos", "Flags y configuración", "Actualización de datos", "Otro"]);
   const [creando, setCreando] = useState(false);
   const [msg, setMsg] = useState(null);
 
   useEffect(() => {
     if (!sel) return;
     (async () => {
-      try { const r = await api("listarTrackersRedmine", { sessionCode: sc, code: sel }); setTrackers(r.trackers || []); } catch (e) { /* opcional, cae al tracker por defecto */ }
+      try {
+        const r = await api("listarTrackersRedmine", { sessionCode: sc, code: sel });
+        if (r.desarrolladores?.length) setDesarrolladores(r.desarrolladores);
+        if (r.queryTypes?.length) setQueryTypes(r.queryTypes);
+      } catch (e) { /* opcional: quedan las listas por defecto */ }
     })();
   }, [sel, sc]);
 
@@ -2754,13 +2762,13 @@ function TicketsRedmineCard({ sel, sc, session, tieneFeature }) {
   const crear = async () => {
     setCreando(true); setMsg(null);
     try {
-      const body = { sessionCode: sc, code: sel, who: session.who, plantilla, trackerName: trackerName || undefined };
+      const body = { sessionCode: sc, code: sel, who: session.who, plantilla, asignadoId: asignadoId ? Number(asignadoId) : undefined };
       if (plantilla === "migracion_ventas") { body.desde = desde; body.hasta = hasta; }
       if (plantilla === "eliminar_pos") { body.entorno = entorno; }
       if (plantilla === "cambio_rol_admin") { body.usuarios = usuarios; }
-      if (plantilla === "libre") { body.subject = subject; body.description = description; }
+      if (plantilla === "libre") { body.subject = subject; body.description = description; body.queryType = queryType; }
       const r = await api("crearTicketRedmine", body);
-      setMsg({ ok: true, texto: "Ticket creado" + (r.issueId ? " — #" + r.issueId : "") + " ✓" });
+      setMsg({ ok: true, texto: "Solicitud creada" + (r.issueId ? " — #" + r.issueId : "") });
       setDesde(""); setHasta(""); setUsuarios(""); setSubject(""); setDescription("");
     } catch (e) {
       setMsg({ ok: false, texto: e.message });
@@ -2769,8 +2777,8 @@ function TicketsRedmineCard({ sel, sc, session, tieneFeature }) {
 
   return (
     <Card style={{ marginBottom: 16 }}>
-      <SectionHeader title="Crear ticket en Redmine" subtitle="Tickets a demanda para este cliente puntual, sin que tenga que entrar al portal — quedan colgados de su Feature de alta." />
-      {!tieneFeature && <Alert tone="warning" style={{ marginBottom: 14 }}>Este cliente todavía no tiene la Feature de alta creada en Redmine — primero hace falta un alta exitosa (arriba) antes de poder colgarle tickets nuevos.</Alert>}
+      <SectionHeader title="Crear Solicitud en Redmine" subtitle="Pedidos a IT para este cliente puntual, sin que tenga que entrar al portal — quedan como Solicitud colgada de su Implementación." />
+      {!tieneFeature && <Alert tone="warning" style={{ marginBottom: 14 }}>Este cliente todavía no tiene la Implementación creada en Redmine — primero hace falta un alta exitosa (arriba) antes de poder colgarle Solicitudes.</Alert>}
 
       <div style={{ marginBottom: 14 }}>
         <Label>Plantilla</Label>
@@ -2778,7 +2786,7 @@ function TicketsRedmineCard({ sel, sc, session, tieneFeature }) {
           <option value="migracion_ventas">Migración de ventas de plataforma (Sales)</option>
           <option value="eliminar_pos">Eliminar pos_sales y pos_payments</option>
           <option value="cambio_rol_admin">Cambio de rol a Administrador</option>
-          <option value="libre">Ticket libre</option>
+          <option value="libre">Solicitud libre</option>
         </select>
       </div>
 
@@ -2809,23 +2817,27 @@ function TicketsRedmineCard({ sel, sc, session, tieneFeature }) {
       {plantilla === "libre" && (
         <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
           <div><Label>Asunto</Label><Input value={subject} onChange={(e) => setSubject(e.target.value)} /></div>
-          <div><Label>Descripción</Label><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} style={taStyle} /></div>
+          <div><Label>Descripción</Label><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Qué hacer, sobre qué tenant (sandbox o productivo) y cómo validar que quedó hecho" style={taStyle} /></div>
+          <div style={{ maxWidth: 300 }}>
+            <Label>Tipo de pedido (Query type)</Label>
+            <select value={queryType} onChange={(e) => setQueryType(e.target.value)} style={selStyle}>
+              {queryTypes.map((q) => <option key={q} value={q}>{q}</option>)}
+            </select>
+          </div>
         </div>
       )}
 
-      {trackers.length > 0 && (
-        <div style={{ marginBottom: 14, maxWidth: 260 }}>
-          <Label>Tracker (opcional)</Label>
-          <select value={trackerName} onChange={(e) => setTrackerName(e.target.value)} style={selStyle}>
-            <option value="">Task (por defecto)</option>
-            {trackers.map((t) => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
-          </select>
-        </div>
-      )}
+      <div style={{ marginBottom: 14, maxWidth: 300 }}>
+        <Label>Asignar a</Label>
+        <select value={asignadoId} onChange={(e) => setAsignadoId(e.target.value)} disabled={!tieneFeature} style={selStyle}>
+          <option value="">Sin asignar (lo reparte IT)</option>
+          {desarrolladores.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+        </select>
+      </div>
 
       {msg && <Alert tone={msg.ok ? "success" : "error"} style={{ marginBottom: 14 }}>{msg.texto}</Alert>}
       <ActionBar>
-        <Btn onClick={crear} disabled={!tieneFeature || creando}>{creando ? "Creando…" : "Crear ticket"}</Btn>
+        <Btn onClick={crear} disabled={!tieneFeature || creando}>{creando ? "Creando…" : "Crear Solicitud"}</Btn>
       </ActionBar>
     </Card>
   );
@@ -3742,13 +3754,13 @@ function AdminPortal({ session, onLogout }) {
             )}
             {selData.redmine?.featureIssueId && cfg.url && (
               <div style={{ display: "flex", gap: 14, marginTop: 8, flexWrap: "wrap" }}>
-                <a href={cfg.url.replace(/\/+$/, "") + "/issues/" + selData.redmine.featureIssueId} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 600, color: T.primary }}>Feature #{selData.redmine.featureIssueId} →</a>
-                {selData.redmine.userStoryIssueId && <a href={cfg.url.replace(/\/+$/, "") + "/issues/" + selData.redmine.userStoryIssueId} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 600, color: T.primary }}>User Story #{selData.redmine.userStoryIssueId} →</a>}
+                <a href={cfg.url.replace(/\/+$/, "") + "/issues/" + selData.redmine.featureIssueId} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 600, color: T.primary }}>Implementación #{selData.redmine.featureIssueId} →</a>
+                {selData.redmine.userStoryIssueId && <a href={cfg.url.replace(/\/+$/, "") + "/issues/" + selData.redmine.userStoryIssueId} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, fontWeight: 600, color: T.primary }}>Solicitud sandbox #{selData.redmine.userStoryIssueId} →</a>}
               </div>
             )}
             {selData.redmine && !selData.redmine.featureIssueId && (
               <Alert tone="warning" style={{ marginTop: 10 }}>
-                <div style={{ marginBottom: 8 }}>Este cliente tiene un alta hecha, pero el portal no guardó el número real del ticket (pasa con altas de antes de esta actualización). Si ya existe en Redmine, pegá acá su número para vincularlo — de paso, si había quedado con el tracker por defecto, se corrige a "Feature".</div>
+                <div style={{ marginBottom: 8 }}>Este cliente tiene un alta hecha, pero el portal no guardó el número real del ticket (pasa con altas de antes de esta actualización). Si ya existe en Redmine, pegá acá su número para vincularlo — de paso, si había quedado con el tracker por defecto, se corrige a "Implementación".</div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <Input value={featureIdManual} onChange={(e) => setFeatureIdManual(e.target.value)} placeholder="Ej: 20450" style={{ maxWidth: 160 }} />
                   <Btn variant="secondary" size="sm" onClick={vincularTicket} disabled={vinculando || !featureIdManual.trim()}>{vinculando ? "Vinculando…" : "Vincular"}</Btn>
@@ -4077,7 +4089,7 @@ function AdminPortal({ session, onLogout }) {
                   <Btn onClick={crearCliente}>Crear</Btn>
                 </ActionBar>
                 <div style={{ marginTop: 12, fontSize: 12.5, color: T.n400, lineHeight: 1.5 }}>
-                  Al primer login del cliente, el portal dispara el alta en Redmine (Feature del cliente con su tenant original + US de tenant sandbox) y genera sus credenciales de API sandbox.
+                  Al primer login del cliente, el portal dispara el alta en Redmine (Implementación del cliente con su tenant original + Solicitud de tenant sandbox) y genera sus credenciales de API sandbox.
                 </div>
               </Card>
               )}
@@ -4441,7 +4453,7 @@ function AdminPortal({ session, onLogout }) {
                     <Label>Ticket padre por defecto (opcional)</Label>
                     <Input value={cfg.parentIssueId || ""} onChange={(e) => setCfg({ ...cfg, parentIssueId: e.target.value })} placeholder="Ej: 20450" />
                     <div style={{ fontSize: 11.5, color: T.n400, marginTop: 4 }}>
-                      Número del ticket que va a quedar como "tarea padre" de la Feature de alta (y por lo tanto de toda la cadena). Cargalo solo si tu Redmine exige tarea padre en el tracker raíz — si no, dejalo vacío.
+                      Número del ticket que va a quedar como "tarea padre" de las Solicitudes de alta. La Implementación nunca lleva padre (es la raíz en Redmine), así que normalmente esto queda vacío.
                     </div>
                   </div>
                   <Btn variant="secondary" onClick={guardarConfig}>Guardar</Btn>
