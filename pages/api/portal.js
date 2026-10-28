@@ -1417,56 +1417,58 @@ export default async function handler(req, res) {
 
 
     if (action === "guardarSucursalesMasivo") {
-      // Guardar múltiples sucursales desde upload de Excel
-      const { sucursales } = req.body || {};
-      
+      // Fix v1.35: antes llamaba a getTeam() (no existe) e insertaba en una tabla
+      // inexistente (sucursales_cabecera), así que fallaba siempre y el paso nunca se
+      // completaba. Ahora: guarda las sucursales en la tabla sucursales, registra el
+      // archivo en archivos (tipo "sucursales" = lo que marca el paso como completo)
+      // y devuelve el cliente armado para que el portal se refresque.
+      const { sucursales, archivo } = req.body || {};
       if (!Array.isArray(sucursales) || sucursales.length === 0) {
         return res.status(400).json({ error: "No hay sucursales para guardar" });
       }
-
       try {
         const cli = await getCliente(cc);
-        const team = await getTeam(sc);
-        
-        // Preparar datos para insertar
-        const datosInsert = sucursales.map((s) => ({
+        if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+        await db.from("sucursales").delete().eq("cliente_id", cli.id);
+        const { error: errSuc } = await db.from("sucursales").insert(sucursales.map((s) => ({
           cliente_id: cli.id,
-          team_id: team.id,
-          nombre: s.nombre || "",
-          codigo_pdv: s.codigopdv || "",
-          numero_comercio: s.numercomercio || "",
-          nombre_comercio: s.nombrecomercio || "",
-          plataforma: s.plataforma || "",
-          cuit: s.cuit || "",
-          empresa: s.empresa || "",
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }));
-
-        // Insertar en tabla sucursales_cabecera
-        const { data, error } = await db
-          .from("sucursales_cabecera")
-          .insert(datosInsert);
-
-        if (error) {
-          console.error("Error insertando sucursales:", error.message);
-          return res.status(500).json({ error: "Error al guardar: " + error.message });
-        }
-
-        // Log de auditoría
-        await addHistory(
-          cli.id,
-          who || "Cliente",
-          `Cargó ${sucursales.length} sucursal(es) masivamente`
-        ).catch(() => {});
-
-        return res.json({ 
-          success: true, 
-          cantidad: sucursales.length,
-          mensaje: `${sucursales.length} sucursal(es) guardada(s) correctamente`
-        });
+          nombre: String(s.nombre || "").trim() || "(sin nombre)",
+          localidad: [s.codigopdv ? "PDV " + s.codigopdv : "", s.plataforma || ""].filter(Boolean).join(" · ") || null,
+          nro_comercio: String(s.numercomercio || "").trim() || null,
+        })));
+        if (errSuc) throw new Error("Error al guardar sucursales: " + errSuc.message);
+        const a = archivo || {};
+        const { error: errArch } = await db.from("archivos").upsert({
+          cliente_id: cli.id, tipo: "sucursales",
+          nombre: a.name || "sucursales.xlsx", tamanio: Number(a.size) || 0,
+          contenido: typeof a.dataUrl === "string" ? a.dataUrl : null,
+          validacion: { ok: true, filas: sucursales.length, origen: "excel" },
+          subido_at: new Date().toISOString(),
+        }, { onConflict: "cliente_id,tipo" });
+        if (errArch) throw new Error("Error al registrar el archivo: " + errArch.message);
+        await addHistory(cli.id, who || "Cliente", "Cargó " + sucursales.length + " sucursal(es) desde " + (a.name || "Excel")).catch(() => {});
+        return res.json(await assemble(cli));
       } catch (e) {
         console.error("Error en guardarSucursalesMasivo:", e.message);
+        return res.status(500).json({ error: e.message });
+      }
+    }
+
+    if (action === "marcarSucursalesManual") {
+      // Opción 3: el cliente cargó las sucursales a mano en Nubceo. Registramos un
+      // archivo "virtual" (sin contenido) para que el paso quede completo.
+      try {
+        const cli = await getCliente(cc);
+        if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+        const { error } = await db.from("archivos").upsert({
+          cliente_id: cli.id, tipo: "sucursales", nombre: "Carga manual en Nubceo", tamanio: 0,
+          contenido: null, validacion: { ok: true, manual: true }, subido_at: new Date().toISOString(),
+        }, { onConflict: "cliente_id,tipo" });
+        if (error) throw new Error(error.message);
+        await addHistory(cli.id, who || "Cliente", "Indicó que cargó las sucursales manualmente en Nubceo").catch(() => {});
+        return res.json(await assemble(cli));
+      } catch (e) {
+        console.error("Error en marcarSucursalesManual:", e.message);
         return res.status(500).json({ error: e.message });
       }
     }
