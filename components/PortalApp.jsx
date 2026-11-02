@@ -11,7 +11,9 @@ import {
   MousePointer, MessageCircle, BarChart3, Download, X, Mail,
   Building2, CreditCard, Clipboard, ExternalLink, ChevronDown,
   ChevronUp, MoreVertical, Trash2, Edit3, Copy, Check, RefreshCw,
-  LogOut, Home, Send, Upload, Link2
+  LogOut, Home, Send, Upload, Link2,
+  BookOpen, MapPin, DollarSign, StickyNote, Archive, Package,
+  Lock, Unlock, XCircle, Maximize2, Pencil, FolderOpen, ImageIcon, Ticket
 } from "lucide-react";
 
 // ─── Tokens de marca Nubceo (tema C — Soft, portal de usuario) ───
@@ -196,8 +198,8 @@ const Badge = ({ children, tone = "blue" }) => {
   );
 };
 
-const Card = ({ children, style }) => (
-  <div style={{ background: T.card, border: "1px solid " + T.cardBorder, borderRadius: 16, padding: "1.75rem", transition: "box-shadow .25s, transform .25s", ...style }}>
+const Card = ({ children, style, className }) => (
+  <div className={"anim-fade-in" + (className ? " " + className : "")} style={{ background: T.card, border: "1px solid " + T.cardBorder, borderRadius: 16, padding: "1.75rem", transition: "box-shadow .25s, transform .25s", ...style }}>
     {children}
   </div>
 );
@@ -655,7 +657,7 @@ function Agendador({ session, tipo, nota, invitadosDefault = [], onDone }) {
                   padding: "8px 14px", borderRadius: 8, fontSize: 13.5, cursor: "pointer",
                   border: "1.5px solid " + T.primary, color: T.primary800, background: T.primary50,
                 }}>
-                  {new Date(s.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} hs · {s.responsable}{s.calendarioReal ? " 📅" : ""}
+                  {new Date(s.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} hs · {s.responsable}{s.calendarioReal ? " (cal)" : ""}
                 </div>
               ))}
             </div>
@@ -675,7 +677,7 @@ const EventoLinea = ({ e }) => (
       </div>
       {e.google_event_link && (
         <a href={e.google_event_link} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 600, color: T.primary, marginTop: 4, display: "inline-block" }}>
-          📅 Ver en Google Calendar →
+          <Calendar size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Ver en Google Calendar →
         </a>
       )}
     </div>
@@ -690,21 +692,23 @@ const fmtDateSolo = (iso) => {
 
 // ─── Menú lateral del portal del cliente ───
 const CLIENT_NAV_ITEMS = [
-  ["implementacion", "📋", "Implementación"],
-  ["cronograma", "🗓", "Cronograma"],
-  ["perfil", "🏢", "Mi Perfil"],
+  ["implementacion", Clipboard, "Implementación"],
+  ["cronograma", Calendar, "Cronograma"],
+  ["perfil", Building2, "Mi Perfil"],
 ];
 function ClientSidebar({ activo, onCambiar }) {
   return (
-    <div style={{ width: 200, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
-      <div style={{ display: "grid", gap: 3 }}>
-        {CLIENT_NAV_ITEMS.map(([id, icon, lbl]) => (
-          <div key={id} onClick={() => onCambiar(id)} style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, cursor: "pointer",
-            fontSize: 13.5, fontWeight: activo === id ? 700 : 500,
+    <div style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: "var(--font-display)", textTransform: "uppercase", letterSpacing: ".06em", color: T.n400, padding: "0 12px 10px", marginBottom: 2 }}>Portal</div>
+      <div style={{ display: "grid", gap: 2 }}>
+        {CLIENT_NAV_ITEMS.map(([id, Icon, lbl]) => (
+          <div key={id} onClick={() => onCambiar(id)} className="nub-nav-item" style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, cursor: "pointer",
+            fontSize: 13.5, fontWeight: activo === id ? 700 : 500, fontFamily: "var(--font-body)",
             background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
+            transition: "background .15s, color .15s",
           }}>
-            <span style={{ fontSize: 15 }}>{icon}</span>{lbl}
+            <Icon size={16} strokeWidth={activo === id ? 2.2 : 1.8} />{lbl}
           </div>
         ))}
       </div>
@@ -824,7 +828,7 @@ function ClientPortal({ session, onLogout }) {
                         color: activo ? "#fff" : ok ? T.okTx : pendiente ? T.warnTx : T.n600,
                         border: "1px solid " + (activo ? T.primary : ok ? "#bbe8c9" : pendiente ? "#fde68a" : T.n200),
                       }}>
-                        <span style={{ fontWeight: 700 }}>{ok ? "✓" : pendiente ? "!" : !libre ? "🔒" : ""}</span> {i + 1}. {p.n}{pendiente ? " (pendiente)" : ""}
+                        <span style={{ fontWeight: 700 }}>{ok ? "✓" : pendiente ? "!" : !libre ? "●" : ""}</span> {i + 1}. {p.n}{pendiente ? " (pendiente)" : ""}
                       </div>
                     );
                   })}
@@ -1372,7 +1376,7 @@ function TabRelevamiento({ data, persist, saving, rvOK, session, setAll }) {
       <Card>
         <SectionHeader
           title="Relevamiento de procesos"
-          badge={rvOK ? <Badge tone="green">Enviado el {fmtDate(data.relevamientoEnviado)} · 🔒 Bloqueado</Badge> : <Badge tone="blue">{respondidas} de {visibles} respondidas</Badge>}
+          badge={rvOK ? <Badge tone="green">Enviado el {fmtDate(data.relevamientoEnviado)} · <Lock size={11} style={{ display: "inline", verticalAlign: "-1px" }} /> Bloqueado</Badge> : <Badge tone="blue">{respondidas} de {visibles} respondidas</Badge>}
           subtitle={rvOK
             ? "Ya está enviado, así que quedó bloqueado para que el equipo trabaje sobre una versión estable — podés revisar tus respuestas abajo, pero no editarlas. Si necesitás corregir algo, escribile a tu implementador con el botón de arriba."
             : <>Completar todo el formulario es necesario para avanzar: con tus respuestas armamos el mapa de tu operación y preparamos el workshop a medida. Al lado de cada pregunta hay un botón <b style={{ fontStyle: "italic", fontFamily: "Georgia, serif" }}>i</b> con la explicación en lenguaje simple. Podés guardar borrador y seguir después, sin necesidad de completar todo todavía.</>}
@@ -1582,7 +1586,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
       
       {/* INTRODUCCIÓN */}
       <Card>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: T.n900, margin: "0 0 12px 0" }}>📚 Contexto: Carga de Sucursales</h2>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: T.n900, margin: "0 0 12px 0" }}><BookOpen size={18} style={{ display: "inline", verticalAlign: "-3px", marginRight: 6 }} />Contexto: Carga de Sucursales</h2>
         <p style={{ margin: "0 0 14px 0", fontSize: 13.5, color: T.n600, lineHeight: 1.6 }}>
           La carga de sucursales en Nubceo cumple dos funciones importantes:
         </p>
@@ -1631,7 +1635,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
             marginTop: 8
           }}
         >
-          📖 Ver manual de carga completo
+          <BookOpen size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Ver manual de carga completo
         </a>
         <p style={{ margin: "12px 0 0 0", fontSize: 12, color: T.n400, fontStyle: "italic" }}>
           (Este paso se puede omitir si ya consultaste el manual)
@@ -1653,19 +1657,19 @@ function TabSucursales({ data, meta, persist, act, saving }) {
             transition: "all 0.2s"
           }}
         >
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: T.primary, margin: "0 0 8px 0" }}>✅ Opción 1: Plataformas VINCULADAS</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: T.primary, margin: "0 0 8px 0" }}><CheckCircle2 size={15} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />Opción 1: Plataformas VINCULADAS</h3>
           <p style={{ fontSize: 12.5, color: T.n600, margin: "0 0 12px 0", lineHeight: 1.6 }}>
             Ya vinculaste tus procesadoras
           </p>
           
           {opcionSeleccionada === "vinculada" && (
             <div style={{ background: "#fff", padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
-              <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}>📍 Ruta en Nubceo:</p>
+              <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}><MapPin size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Ruta en Nubceo:</p>
               <p style={{ margin: "0 0 12px 0", fontFamily: "monospace", color: T.n600, fontSize: 11 }}>
                 Dashboard → Mi negocio → Sucursales cabecera → Crear masivamente
               </p>
               
-              <p style={{ margin: "0 0 8px 0", fontWeight: 600, color: T.n900 }}>📄 Cómo funciona:</p>
+              <p style={{ margin: "0 0 8px 0", fontWeight: 600, color: T.n900 }}><FileText size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Cómo funciona:</p>
               <p style={{ margin: "0 0 12px 0", color: T.n600, lineHeight: 1.5 }}>
                 Descargá la plantilla con sucursales huérfanas (tiene los números de comercio, código de procesadora, nombre de empresa y CUIT, solo debes completar código de PDV y nombre de sucursal)
               </p>
@@ -1704,7 +1708,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
                     fontSize: 13
                   }}
                 >
-                  📤 Usar esta opción
+                  <Upload size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Usar esta opción
                 </button>
               )}
             </div>
@@ -1723,19 +1727,19 @@ function TabSucursales({ data, meta, persist, act, saving }) {
             transition: "all 0.2s"
           }}
         >
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#dc2626", margin: "0 0 8px 0" }}>❌ Opción 2: SIN Plataformas</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#dc2626", margin: "0 0 8px 0" }}><XCircle size={15} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />Opción 2: SIN Plataformas</h3>
           <p style={{ fontSize: 12.5, color: T.n600, margin: "0 0 12px 0", lineHeight: 1.6 }}>
             Aún no vinculaste procesadoras
           </p>
           
           {opcionSeleccionada === "sin_vincular" && (
             <div style={{ background: "#fff", padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
-              <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}>📍 Ruta en Nubceo:</p>
+              <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}><MapPin size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Ruta en Nubceo:</p>
               <p style={{ margin: "0 0 12px 0", fontFamily: "monospace", color: T.n600, fontSize: 11 }}>
                 Dashboard → Mi negocio → Sucursales cabecera → Crear masivamente
               </p>
               
-              <p style={{ margin: "0 0 8px 0", fontWeight: 600, color: T.n900 }}>📄 Cómo funciona:</p>
+              <p style={{ margin: "0 0 8px 0", fontWeight: 600, color: T.n900 }}><FileText size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Cómo funciona:</p>
               <p style={{ margin: "0 0 12px 0", color: T.n600, lineHeight: 1.5 }}>
                 Descargá la plantilla vacía (todas las 7 columnas vacías) y completá CON TODA tu información manualmente
               </p>
@@ -1774,7 +1778,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
                     fontSize: 13
                   }}
                 >
-                  📤 Usar esta opción
+                  <Upload size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Usar esta opción
                 </button>
               )}
             </div>
@@ -1793,19 +1797,19 @@ function TabSucursales({ data, meta, persist, act, saving }) {
             transition: "all 0.2s"
           }}
         >
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#059669", margin: "0 0 8px 0" }}>🎯 Opción 3: Carga MANUAL</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: "#059669", margin: "0 0 8px 0" }}><Target size={15} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />Opción 3: Carga MANUAL</h3>
           <p style={{ fontSize: 12.5, color: T.n600, margin: "0 0 12px 0", lineHeight: 1.6 }}>
             Una sucursal a la vez en Nubceo
           </p>
           
           {opcionSeleccionada === "manual" && (
             <div style={{ background: "#fff", padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
-              <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}>📍 Ruta en Nubceo:</p>
+              <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}><MapPin size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Ruta en Nubceo:</p>
               <p style={{ margin: "0 0 12px 0", fontFamily: "monospace", color: T.n600, fontSize: 11 }}>
                 Dashboard → Mi negocio → Sucursales cabecera → Crear sucursal cabecera
               </p>
               
-              <p style={{ margin: "0 0 8px 0", fontWeight: 600, color: T.n900 }}>📄 Cómo funciona:</p>
+              <p style={{ margin: "0 0 8px 0", fontWeight: 600, color: T.n900 }}><FileText size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Cómo funciona:</p>
               <p style={{ margin: "0 0 12px 0", color: T.n600, lineHeight: 1.5 }}>
                 Ingresás a Nubceo directamente, clickeás "Crear sucursal cabecera", completás formulario con datos y asignás números de comercio manualmente. Repetís para cada sucursal.
               </p>
@@ -1833,7 +1837,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
                   textAlign: "center"
                 }}
               >
-                🔗 Ir a Nubceo
+                <Link2 size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Ir a Nubceo
               </a>
             </div>
           )}
@@ -1843,7 +1847,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
       {/* UPLOAD CUANDO SELECCIONA OPCIÓN 1 O 2 */}
       {mostrarUpload && (opcionSeleccionada === "vinculada" || opcionSeleccionada === "sin_vincular") && (
         <Card>
-          <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 16px 0" }}>📤 Subir archivo Excel</h3>
+          <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 16px 0" }}><Upload size={15} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />Subir archivo Excel</h3>
           
           <div
             onDragOver={(e) => e.preventDefault()}
@@ -1867,7 +1871,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
               marginBottom: 20
             }}
           >
-            <p style={{ margin: "0 0 8px 0", fontSize: 16, fontWeight: 600, color: T.primary }}>📁 Arrastra tu archivo aquí</p>
+            <p style={{ margin: "0 0 8px 0", fontSize: 16, fontWeight: 600, color: T.primary }}><Upload size={16} style={{ display: "inline", verticalAlign: "-3px", marginRight: 4 }} />Arrastra tu archivo aquí</p>
             <p style={{ margin: 0, fontSize: 13, color: T.n400 }}>o haz click para seleccionar</p>
             <input
               type="file"
@@ -1893,7 +1897,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
 
           {errores.length > 0 && !cargando && (
             <div style={{ marginBottom: 20 }}>
-              <h4 style={{ color: "#dc2626", marginBottom: 12, fontSize: 13 }}>❌ Errores detectados:</h4>
+              <h4 style={{ color: "#dc2626", marginBottom: 12, fontSize: 13 }}><XCircle size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />Errores detectados:</h4>
               <div style={{ overflowX: "auto", border: "1px solid " + T.n200, borderRadius: 6 }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                   <thead>
@@ -2067,11 +2071,11 @@ function SeccionApi({ data, session, setAll, titulo }) {
           </>
         ) : <div style={{ color: T.n400, fontSize: 14 }}>Generando credenciales…</div>}
         <div style={{ marginTop: 16 }}>
-          <a href={DOCS.apiVentas} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 14, fontWeight: 600, color: T.primary }}>📘 Documentación de la API de ventas →</a>
+          <a href={DOCS.apiVentas} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 14, fontWeight: 600, color: T.primary }}><BookOpen size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Documentación de la API de ventas →</a>
         </div>
       </Card>
       <Card>
-        <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}>🗓 Reunión técnica con nuestro equipo</h2>
+        <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 6px" }}><Calendar size={17} style={{ display: "inline", verticalAlign: "-3px", marginRight: 4 }} />Reunión técnica con nuestro equipo</h2>
         {reunion ? <EventoLinea e={reunion} /> : (
           <>
             <p style={{ fontSize: 13.5, color: T.n600, lineHeight: 1.55, margin: "0 0 14px" }}>
@@ -2290,7 +2294,7 @@ function TabCapacitacion({ data, session, setAll }) {
     <div style={{ display: "grid", gap: SP.lg }}>
       <Card>
         <SectionHeader icon={<FileText size={16} />} title="Manuales de Nubceo" subtitle="Toda la documentación del producto está en los manuales oficiales: primeros pasos, carga de datos, reglas y secuencias de conciliación, reportes y más. Es la mejor referencia para consultar entre capacitaciones." />
-        <a href={DOCS.conciliador} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 14, fontWeight: 600, color: T.primary }}>📘 Abrir los manuales del Conciliador →</a>
+        <a href={DOCS.conciliador} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 14, fontWeight: 600, color: T.primary }}><BookOpen size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Abrir los manuales del Conciliador →</a>
       </Card>
       <Card>
         <SectionHeader icon={<Calendar size={16} />} title="Solicitar una capacitación" subtitle="Las capacitaciones las da Mariana Macri y son para todo tu equipo. Elegí cuál necesitás y un horario disponible — antes de confirmar podés editar a quién se invita." />
@@ -2401,7 +2405,7 @@ const ImageUpload = ({ value, onChange, label, round }) => {
         width: 44, height: 44, borderRadius: round ? "50%" : 8, flexShrink: 0, background: T.n50, border: "1px solid " + T.n200,
         display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
       }}>
-        {value ? <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ fontSize: 16, color: T.n400 }}>🖼</span>}
+        {value ? <img src={value} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <ImageIcon size={16} color={T.n400} />}
       </div>
       <div>
         <label style={{ cursor: "pointer" }}>
@@ -2465,9 +2469,11 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                     onDragStart={(e) => { e.dataTransfer.setData("text/plain", cli.code); setArrastrando(cli.code); }}
                     onDragEnd={() => setArrastrando(null)}
                     onClick={() => onAbrir(cli.code)}
+                    className="kanban-card"
                     style={{
                       background: "#fff", border: "1px solid " + T.n200, borderRadius: 10, padding: 10, cursor: "grab",
-                      opacity: arrastrando === cli.code ? 0.4 : 1, boxShadow: "0 1px 2px rgba(13,17,32,0.04)",
+                      opacity: arrastrando === cli.code ? 0.4 : 1, boxShadow: "0 1px 3px rgba(13,17,32,0.06)",
+                      transition: "transform .2s cubic-bezier(.16,1,.3,1), box-shadow .2s",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -2476,18 +2482,18 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: T.n900, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cli.name}</div>
                     </div>
-                    <div style={{ height: 4, borderRadius: 100, background: T.n100, overflow: "hidden", marginBottom: 7 }}>
-                      <div style={{ width: pct + "%", height: "100%", background: pct === 100 ? "#22c55e" : T.primary, borderRadius: 100 }} />
+                    <div className="nub-progress" style={{ height: 4, borderRadius: 100, background: T.n100, overflow: "hidden", marginBottom: 7 }}>
+                      <div style={{ width: pct + "%", height: "100%", background: pct === 100 ? "#22c55e" : T.primary, borderRadius: 100, transition: "width .4s cubic-bezier(.16,1,.3,1)" }} />
                     </div>
                     <div style={{ fontSize: 10.5, color: T.n400, marginBottom: 6 }}>
                       {cli.implementadorNombre || "Sin implementador/a"}{cli.desarrolladorNombre ? " · " + cli.desarrolladorNombre + " (dev)" : ""}
                     </div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                      {(() => { const sg = semaforoGoLive(cli.goLiveEstimado); return sg ? <Badge tone={sg.tone}>🎯 {sg.txt}</Badge> : null; })()}
+                      {(() => { const sg = semaforoGoLive(cli.goLiveEstimado); return sg ? <Badge tone={sg.tone}><Target size={11} style={{ display: "inline", verticalAlign: "-1px", marginRight: 2 }} />{sg.txt}</Badge> : null; })()}
                       {!cli.implementadorId && <Badge tone="amber">Sin asignar</Badge>}
-                      {cli.estadoPago === "con_deuda" && <Badge tone="red">💰 Deuda {diasDesde(cli.deudaDesde)}d</Badge>}
+                      {cli.estadoPago === "con_deuda" && <Badge tone="red"><DollarSign size={11} style={{ display: "inline", verticalAlign: "-1px", marginRight: 1 }} />Deuda {diasDesde(cli.deudaDesde)}d</Badge>}
                       {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
-                      {cli.notasCount > 0 && <Badge tone="gray">📝 {cli.notasCount}</Badge>}
+                      {cli.notasCount > 0 && <Badge tone="gray"><StickyNote size={11} style={{ display: "inline", verticalAlign: "-1px", marginRight: 2 }} />{cli.notasCount}</Badge>}
                     </div>
                     {onEnviarAvisos && (
                       <div
@@ -2495,7 +2501,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                         title="Mandar ahora el recordatorio o aviso de incumplimiento que corresponda, si hay alguno pendiente"
                         style={{ marginTop: 8, paddingTop: 7, borderTop: "1px solid " + T.n100, fontSize: 11, fontWeight: 600, color: enviandoAvisosDe === cli.code ? T.n400 : T.primary, cursor: enviandoAvisosDe === cli.code ? "default" : "pointer" }}
                       >
-                        {enviandoAvisosDe === cli.code ? "Enviando…" : "✉️ Enviar avisos pendientes"}
+                        {enviandoAvisosDe === cli.code ? "Enviando…" : <><Mail size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Enviar avisos pendientes</>}
                       </div>
                     )}
                   </div>
@@ -2513,23 +2519,25 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
 
 // ─── Menú lateral del panel de equipo ───
 const NAV_ITEMS = [
-  ["clientes", "🗂", "Clientes"],
-  ["tablero", "▦", "Tablero"],
-  ["equipo", "👥", "Equipo"],
-  ["config", "⚙", "Configuración"],
-  ["perfil", "🙂", "Mi perfil"],
+  ["clientes", FolderOpen, "Clientes"],
+  ["tablero", LayoutGrid, "Tablero"],
+  ["equipo", Users, "Equipo"],
+  ["config", Settings, "Configuración"],
+  ["perfil", User, "Mi perfil"],
 ];
 function Sidebar({ activo, onCambiar }) {
   return (
-    <div style={{ width: 200, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
-      <div style={{ display: "grid", gap: 3 }}>
-        {NAV_ITEMS.map(([id, icon, lbl]) => (
-          <div key={id} onClick={() => onCambiar(id)} style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, cursor: "pointer",
-            fontSize: 13.5, fontWeight: activo === id ? 700 : 500,
+    <div style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: "var(--font-display)", textTransform: "uppercase", letterSpacing: ".06em", color: T.n400, padding: "0 12px 10px", marginBottom: 2 }}>Equipo</div>
+      <div style={{ display: "grid", gap: 2 }}>
+        {NAV_ITEMS.map(([id, Icon, lbl]) => (
+          <div key={id} onClick={() => onCambiar(id)} className="nub-nav-item" style={{
+            display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, cursor: "pointer",
+            fontSize: 13.5, fontWeight: activo === id ? 700 : 500, fontFamily: "var(--font-body)",
             background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
+            transition: "background .15s, color .15s",
           }}>
-            <span style={{ fontSize: 15 }}>{icon}</span>{lbl}
+            <Icon size={16} strokeWidth={activo === id ? 2.2 : 1.8} />{lbl}
           </div>
         ))}
       </div>
@@ -2654,7 +2662,7 @@ function EquipoLista({ miembros, esSuperuser, onEliminar, onSetTipoUsuario, miCo
         return (
           <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: "1px solid " + T.n200, background: "#fff" }}>
             <div style={{ width: 34, height: 34, borderRadius: "50%", overflow: "hidden", background: T.n50, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: T.n400 }}>
-              {m.foto ? <img src={m.foto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : "🙂"}
+              {m.foto ? <img src={m.foto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} />}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: T.n800, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -2671,7 +2679,7 @@ function EquipoLista({ miembros, esSuperuser, onEliminar, onSetTipoUsuario, miCo
                   <option value="admin">Admin</option>
                   <option value="superuser">Superuser</option>
                 </select>
-                {m.codigo !== miCodigo && <Btn variant="ghost" size="sm" onClick={() => onEliminar(m.id, m.nombre)} style={{ color: T.errTx }}>🗑 Eliminar</Btn>}
+                {m.codigo !== miCodigo && <Btn variant="ghost" size="sm" onClick={() => onEliminar(m.id, m.nombre)} style={{ color: T.errTx }}><Trash2 size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Eliminar</Btn>}
               </div>
             )}
           </div>
@@ -3168,7 +3176,7 @@ function AdminPortal({ session, onLogout }) {
         <div style={{ maxWidth: 940, margin: "0 auto", padding: "0 20px 60px" }}>
           <div style={{ position: "sticky", top: 61, zIndex: 5, background: T.bg, marginBottom: 14, padding: "14px 0 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Btn variant="ghost" size="sm" onClick={cerrarDetalle}>← Volver al listado</Btn>
-            {session.tipoUsuario === "superuser" && <Btn variant="ghost" size="sm" onClick={() => archivarCliente(sel, meta.name)} style={{ color: T.n600 }}>📥 Archivar cliente</Btn>}
+            {session.tipoUsuario === "superuser" && <Btn variant="ghost" size="sm" onClick={() => archivarCliente(sel, meta.name)} style={{ color: T.n600 }}><Archive size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Archivar cliente</Btn>}
           </div>
           <Card style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
@@ -3218,7 +3226,7 @@ function AdminPortal({ session, onLogout }) {
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid " + T.n100 }}>
               {!editandoInfo ? (
                 <span onClick={() => { setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
-                  ✎ Editar razón social / CUITs / logo / fecha de go-live
+                  <Pencil size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Editar razón social / CUITs / logo / fecha de go-live
                 </span>
               ) : (
                 <div style={{ display: "grid", gap: 10 }}>
@@ -3246,7 +3254,7 @@ function AdminPortal({ session, onLogout }) {
                   <div style={{ maxWidth: 240 }}>
                     <Label>Fecha estimada de go-live</Label>
                     <Input type="date" value={editGoLive} onChange={(e) => setEditGoLive(e.target.value)} />
-                    <div style={{ fontSize: 11.5, color: T.n400, marginTop: 4 }}>Alimenta el semáforo 🎯 del tablero.</div>
+                    <div style={{ fontSize: 11.5, color: T.n400, marginTop: 4 }}>Alimenta el semáforo del tablero.</div>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
                     <ImageUpload value={editLogo} onChange={setEditLogo} label="logo" />
@@ -3262,7 +3270,7 @@ function AdminPortal({ session, onLogout }) {
 
           <Card style={{ marginBottom: 16 }}>
             <SectionHeader
-              title="💰 Información financiera"
+              title={<><DollarSign size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Información financiera</>}
               badge={meta.finanzas?.estadoPago === "con_deuda"
                 ? <Badge tone="red">Con deuda{meta.finanzas.deudaDesde ? " desde hace " + diasDesde(meta.finanzas.deudaDesde) + " días" : ""}</Badge>
                 : <Badge tone="green">Al día</Badge>}
@@ -3292,7 +3300,7 @@ function AdminPortal({ session, onLogout }) {
                   setFinFee(meta.finanzas?.fee ?? ""); setFinMoneda(meta.finanzas?.moneda || "ARS"); setFinCosto(meta.finanzas?.costoImplementacion ?? "");
                   setFinEstado(meta.finanzas?.estadoPago || "al_dia"); setFinDeudaDesde(meta.finanzas?.deudaDesde || ""); setFinNotas(meta.finanzas?.notas || "");
                   setEditandoFinanzas(true);
-                }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>✎ Editar datos financieros</span>
+                }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}><Pencil size={11} style={{ display: "inline", verticalAlign: "-2px", marginRight: 2 }} />Editar datos financieros</span>
               </>
             ) : (
               <div style={{ display: "grid", gap: 10 }}>
@@ -3333,7 +3341,7 @@ function AdminPortal({ session, onLogout }) {
 
           {alertas.length > 0 && (
             <Card style={{ marginBottom: 16, borderColor: "#fca5a5" }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: T.errTx, margin: "0 0 10px" }}>⚠ Casos borde detectados en el relevamiento</h3>
+              <h3 style={{ fontSize: 15, fontWeight: 700, color: T.errTx, margin: "0 0 10px" }}><AlertTriangle size={15} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />Casos borde detectados en el relevamiento</h3>
               <div style={{ display: "grid", gap: 8 }}>
                 {alertas.map((a, i) => (
                   <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
@@ -3415,7 +3423,7 @@ function AdminPortal({ session, onLogout }) {
                 ? <>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <Badge tone="green">Enviado {fmtDate(selData.relevamientoEnviado)}</Badge>
-                      <span onClick={reabrirRelevamiento} style={{ fontSize: 12, fontWeight: 600, color: T.primary, cursor: "pointer" }}>🔓 Reabrir para que lo edite el cliente</span>
+                      <span onClick={reabrirRelevamiento} style={{ fontSize: 12, fontWeight: 600, color: T.primary, cursor: "pointer" }}><Unlock size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Reabrir para que lo edite el cliente</span>
                     </div>
                     <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
                       {RV_PREGUNTAS.filter((q) => q.id && fmtRespuesta(q, selData.relevamiento)).map((q) => (
@@ -3433,7 +3441,7 @@ function AdminPortal({ session, onLogout }) {
                 <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 8px" }}>Sucursales ({(selData.sucursales || []).length})</h3>
                 {selData.sucursalesArchivo && (
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, background: T.okBg, border: "1px solid #bbe8c9", marginBottom: 10 }}>
-                    <span style={{ fontSize: 16 }}>📄</span>
+                    <FileText size={16} color={T.n400} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: T.okTx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selData.sucursalesArchivo.name}</div>
                       <div style={{ fontSize: 11.5, color: T.okTx, opacity: 0.8 }}>{fmtDate(selData.sucursalesArchivo.ts)}</div>
@@ -3454,7 +3462,7 @@ function AdminPortal({ session, onLogout }) {
                 {selData.ventasArchivo ? (
                   <>
                     <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, background: selData.ventasArchivo.validacion?.ok === false ? T.errBg : T.okBg, border: "1px solid " + (selData.ventasArchivo.validacion?.ok === false ? "#fca5a5" : "#bbe8c9"), marginBottom: 10 }}>
-                      <span style={{ fontSize: 16 }}>📄</span>
+                      <FileText size={16} color={T.n400} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: selData.ventasArchivo.validacion?.ok === false ? T.errTx : T.okTx, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selData.ventasArchivo.name}</div>
                         <div style={{ fontSize: 11.5, color: selData.ventasArchivo.validacion?.ok === false ? T.errTx : T.okTx, opacity: 0.8 }}>{fmtDate(selData.ventasArchivo.ts)}</div>
@@ -3729,10 +3737,10 @@ function AdminPortal({ session, onLogout }) {
                           {!cli.implementadorId && <Badge tone="amber">Sin asignar</Badge>}
                           {pendRv && <Badge tone="amber">Relevamiento pendiente</Badge>}
                           {cli.omitioSucursales && <Badge tone="amber">Sucursales pendiente</Badge>}
-                          {cli.estadoPago === "con_deuda" && <Badge tone="red">💰 Con deuda</Badge>}
+                          {cli.estadoPago === "con_deuda" && <Badge tone="red"><DollarSign size={11} style={{ display: "inline", verticalAlign: "-1px", marginRight: 1 }} />Con deuda</Badge>}
                           {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
                         </div>
-                        {session.tipoUsuario === "superuser" && <span onClick={(e) => { e.stopPropagation(); archivarCliente(cli.code, cli.name); }} title="Archivar cliente (se puede restaurar)" style={{ cursor: "pointer", color: T.n400, fontSize: 14, padding: 4 }}>📥</span>}
+                        {session.tipoUsuario === "superuser" && <span onClick={(e) => { e.stopPropagation(); archivarCliente(cli.code, cli.name); }} title="Archivar cliente (se puede restaurar)" style={{ cursor: "pointer", color: T.n400, fontSize: 14, padding: 4 }}><Archive size={14} /></span>}
                       </div>
                     );
                   })}
@@ -3749,7 +3757,7 @@ function AdminPortal({ session, onLogout }) {
                   <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: 0 }}>Tablero de implementación</h2>
                   <p style={{ fontSize: 12.5, color: T.n400, margin: "4px 0 0" }}>La fase avanza sola a medida que se completan los pasos — arrastrá una tarjeta para pisarlo a mano.</p>
                 </div>
-                <Btn variant="secondary" size="sm" onClick={toggleFullscreen}>{tableroFull ? "✕ Salir de pantalla completa" : "⛶ Pantalla completa (para reuniones)"}</Btn>
+                <Btn variant="secondary" size="sm" onClick={toggleFullscreen}>{tableroFull ? <><X size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Salir de pantalla completa</> : <><Maximize2 size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Pantalla completa (para reuniones)</>}</Btn>
               </div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
                 <Input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre o código…" style={{ maxWidth: 240 }} />
@@ -3796,7 +3804,7 @@ function AdminPortal({ session, onLogout }) {
                   </div>
 
                   <div style={{ borderTop: "1px solid " + T.n100, paddingTop: 14, marginBottom: 18 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: T.n600, marginBottom: 8 }}>💰 Facturación</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: T.n600, marginBottom: 8 }}><DollarSign size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: 2 }} />Facturación</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <div>
                         <div style={{ fontSize: 11, color: T.n400, textTransform: "uppercase" }}>Fee</div>
@@ -3872,7 +3880,7 @@ function AdminPortal({ session, onLogout }) {
                 <Card style={{ marginTop: 16 }}>
                   <div onClick={() => { const nuevo = !mostrarArchivados; setMostrarArchivados(nuevo); if (nuevo) cargarArchivados(); }} style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
                     <div>
-                      <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n800, margin: 0 }}>📦 Clientes archivados</h3>
+                      <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n800, margin: 0 }}><Package size={15} style={{ display: "inline", verticalAlign: "-2px", marginRight: 4 }} />Clientes archivados</h3>
                       <div style={{ fontSize: 12, color: T.n400, marginTop: 2 }}>Solo visible para Superuser · Los datos se conservan y se pueden restaurar en cualquier momento.</div>
                     </div>
                     <span style={{ fontSize: 13, fontWeight: 600, color: T.primary }}>{mostrarArchivados ? "Ocultar ▲" : "Ver ▼"}</span>
@@ -3929,7 +3937,7 @@ function AdminPortal({ session, onLogout }) {
               <Card>
                 <SectionHeader
                   title="Mails automáticos de plazos"
-                  subtitle="El cron diario (10:00 AR) manda solo el recordatorio y el aviso de incumplimiento cuando corresponde. Mientras lo estás probando, dejalo apagado y usá el botón ✉️ de la tarjeta de cada cliente (en el tablero) o 'Enviar aviso ahora' en Plazos y recordatorios para mandarlos vos, a demanda."
+                  subtitle="El cron diario (10:00 AR) manda solo el recordatorio y el aviso de incumplimiento cuando corresponde. Mientras lo estás probando, dejalo apagado y usá el botón de la tarjeta de cada cliente (en el tablero) o 'Enviar aviso ahora' en Plazos y recordatorios para mandarlos vos, a demanda."
                 />
                 <div onClick={() => toggleAvisosAutomaticos(!avisosAutomaticos)} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", userSelect: "none" }}>
                   <span style={{
@@ -3976,7 +3984,7 @@ function AdminPortal({ session, onLogout }) {
                   <div style={{ display: "grid", gap: 10 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "10px 14px", borderRadius: 10, border: "1px solid " + T.n200 }}>
                       <div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: T.n800 }}>📅 Mi Google Calendar</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: T.n800 }}><Calendar size={14} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Mi Google Calendar</div>
                         <div style={{ fontSize: 12, color: T.n400 }}>{calStatus?.conectado ? "Conectado — " + calStatus.conectado.google_email : "No conectado"}</div>
                       </div>
                       {calStatus?.conectado
@@ -3985,7 +3993,7 @@ function AdminPortal({ session, onLogout }) {
                     </div>
 
                     <div style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid " + T.n200 }}>
-                      <Label>🗓 Mi disponibilidad semanal (opcional)</Label>
+                      <Label><Calendar size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Mi disponibilidad semanal (opcional)</Label>
                       <div style={{ fontSize: 11.5, color: T.n400, marginBottom: 8 }}>
                         {calStatus?.conectado
                           ? "Con tu Google Calendar conectado, no hace falta cargar nada acá: el portal ya ofrece de 10 a 17hs (lun a vie) descartando automáticamente lo que tengas ocupado en tu calendario real. Cargá esto solo si querés acotar más esos horarios (ej: solo mañanas)."
@@ -4011,7 +4019,7 @@ function AdminPortal({ session, onLogout }) {
                     </div>
 
                     <div style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid " + T.n200 }}>
-                      <Label>🎫 Mi API key de Redmine (opcional)</Label>
+                      <Label><Ticket size={13} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Mi API key de Redmine (opcional)</Label>
                       <div style={{ fontSize: 11.5, color: T.n400, marginBottom: 6 }}>Si la cargás, los tickets de tus clientes se crean con esta key en vez de la genérica del servidor.</div>
                       <div style={{ display: "flex", gap: 8 }}>
                         <Input type="password" value={miRedmineKey} onChange={(e) => setMiRedmineKey(e.target.value)} placeholder="Tu API key personal de Redmine" />
@@ -4112,7 +4120,7 @@ function AdminEvento({ e, onMinuta }) {
         <div style={{ fontSize: 12, color: T.n400, marginTop: 4 }}>Invitados: {(e.invitados || []).map((p) => p.nombre).join(", ")}</div>
       )}
       {e.google_event_link && (
-        <a href={e.google_event_link} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 600, color: T.primary, marginTop: 4, display: "inline-block" }}>📅 Ver en Google Calendar →</a>
+        <a href={e.google_event_link} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 600, color: T.primary, marginTop: 4, display: "inline-block" }}><Calendar size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Ver en Google Calendar →</a>
       )}
       {realizado && e.minuta && !editando && (
         <div style={{ marginTop: 8, fontSize: 13, color: T.n800, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{e.minuta}</div>

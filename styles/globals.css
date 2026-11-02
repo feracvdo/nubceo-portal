@@ -243,6 +243,11 @@ body {
   animation: pulse 2.5s ease infinite;
 }
 
+/* — Nav items — */
+.nub-nav-item:hover {
+  background: var(--nub-n50) !important;
+}
+
 /* — Focus states — */
 input:focus, select:focus, textarea:focus {
   outline: none;
