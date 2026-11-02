@@ -768,7 +768,32 @@ function ClientPortal({ session, onLogout }) {
     finally { setSaving(false); }
   };
 
-  if (!data || !meta) return <div style={{ padding: 60, textAlign: "center", color: T.n400 }}>Cargando…</div>;
+  if (!data || !meta) return (
+    <div>
+      <Nav name="" who={session.who} onLogout={onLogout} />
+      <div style={{ display: "flex" }}>
+        <div style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+          <div className="nub-skeleton" style={{ width: 60, height: 10, marginBottom: 18, marginLeft: 12 }} />
+          {[1,2,3].map(i => <div key={i} className="nub-skeleton" style={{ height: 36, marginBottom: 6, borderRadius: 8 }} />)}
+        </div>
+        <div style={{ flex: 1, maxWidth: 900, margin: "0 auto", padding: "26px 20px 60px" }}>
+          <div className="anim-fade-in" style={{ background: T.card, border: "1px solid " + T.cardBorder, borderRadius: 16, padding: "1.75rem" }}>
+            <div className="nub-skeleton" style={{ width: 120, height: 12, marginBottom: 12 }} />
+            <div className="nub-skeleton" style={{ width: 260, height: 22, marginBottom: 16 }} />
+            <div className="nub-skeleton" style={{ width: "100%", maxWidth: 320, height: 6, marginBottom: 20, borderRadius: 100 }} />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {[1,2,3,4,5].map(i => <div key={i} className="nub-skeleton" style={{ width: 100 + i * 15, height: 38, borderRadius: 10 }} />)}
+            </div>
+          </div>
+          <div className="anim-fade-in" style={{ background: T.card, border: "1px solid " + T.cardBorder, borderRadius: 16, padding: "1.75rem", marginTop: 24 }}>
+            <div className="nub-skeleton" style={{ width: 200, height: 16, marginBottom: 12 }} />
+            <div className="nub-skeleton" style={{ width: "100%", height: 14, marginBottom: 8 }} />
+            <div className="nub-skeleton" style={{ width: "80%", height: 14 }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   const rv = data.relevamiento || {};
   const eventos = data.eventos || [];
@@ -810,29 +835,51 @@ function ClientPortal({ session, onLogout }) {
                     <Label>Tu implementación</Label>
                     <div style={{ fontSize: 21, fontWeight: 700, color: T.n900 }}>{completados} de {PASOS.length} pasos completados</div>
                   </div>
-                  <div style={{ fontSize: 13, color: T.okTx, fontWeight: 700, minHeight: 18 }}>{savedMsg}</div>
+                  <div style={{ fontSize: 13, color: T.okTx, fontWeight: 700, minHeight: 18, display: "flex", alignItems: "center", gap: 4, transition: "opacity .3s", opacity: savedMsg ? 1 : 0 }}>{savedMsg && <Check size={14} />}{savedMsg}</div>
                 </div>
-                <div style={{ height: 6, borderRadius: 100, background: T.n100, overflow: "hidden", marginBottom: 16, maxWidth: 320 }}>
-                  <div style={{ width: Math.round((completados / PASOS.length) * 100) + "%", height: "100%", background: completados === PASOS.length ? "#22c55e" : T.primary, borderRadius: 100, transition: "width .3s" }} />
+                <div className="nub-progress" style={{ height: 6, borderRadius: 100, background: T.n100, overflow: "hidden", marginBottom: 16, maxWidth: 320 }}>
+                  <div style={{ width: Math.round((completados / PASOS.length) * 100) + "%", height: "100%", background: completados === PASOS.length ? "#22c55e" : T.primary, borderRadius: 100, transition: "width .5s cubic-bezier(.16,1,.3,1)" }} />
                 </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
                   {PASOS.map((p, i) => {
                     const activo = tab === p.id, ok = completo[p.id], libre = unlocked[p.id];
                     const pendiente = p.id === "sucursales" && omitioSucursales;
+                    const nodeColor = activo ? T.primary : ok ? "#22c55e" : pendiente ? "#eab308" : T.n200;
                     return (
-                      <div key={p.id} onClick={() => libre && setTab(p.id)} title={libre ? (ok ? "Completado — podés volver a ver" : "") : "Completá los pasos anteriores para desbloquear"} style={{
-                        display: "flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 100, fontSize: 13,
-                        cursor: libre ? "pointer" : "not-allowed", opacity: libre ? 1 : 0.45,
-                        fontWeight: activo ? 700 : 500,
-                        background: activo ? T.primary : ok ? T.okBg : pendiente ? T.warnBg : "#fff",
-                        color: activo ? "#fff" : ok ? T.okTx : pendiente ? T.warnTx : T.n600,
-                        border: "1px solid " + (activo ? T.primary : ok ? "#bbe8c9" : pendiente ? "#fde68a" : T.n200),
-                      }}>
-                        <span style={{ fontWeight: 700 }}>{ok ? "✓" : pendiente ? "!" : !libre ? "●" : ""}</span> {i + 1}. {p.n}{pendiente ? " (pendiente)" : ""}
+                      <div key={p.id} style={{ display: "flex", alignItems: "center" }}>
+                        <div
+                          onClick={() => libre && setTab(p.id)}
+                          title={libre ? (ok ? "Completado — podés volver a ver" : p.n) : "Completá los pasos anteriores para desbloquear"}
+                          className={activo && !ok ? "stepper-node-active" : ""}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 8, padding: "7px 14px 7px 8px", borderRadius: 10, fontSize: 13,
+                            cursor: libre ? "pointer" : "not-allowed", opacity: libre ? 1 : 0.4,
+                            fontWeight: activo ? 700 : 500, fontFamily: "var(--font-body)",
+                            background: activo ? T.primary50 : ok ? T.okBg : pendiente ? T.warnBg : "transparent",
+                            color: activo ? T.primary800 : ok ? T.okTx : pendiente ? T.warnTx : T.n600,
+                            border: "1.5px solid " + (activo ? T.primary : ok ? "#bbe8c9" : pendiente ? "#fde68a" : "transparent"),
+                            transition: "all .2s ease",
+                          }}
+                        >
+                          <span style={{
+                            width: 24, height: 24, borderRadius: 7, flexShrink: 0,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontSize: ok ? 13 : 12, fontWeight: 700,
+                            background: ok ? "#22c55e" : activo ? T.primary : pendiente ? "#eab308" : T.n100,
+                            color: (ok || activo || pendiente) ? "#fff" : T.n400,
+                            transition: "all .2s ease",
+                          }}>
+                            {ok ? <Check size={14} /> : pendiente ? <AlertTriangle size={12} /> : !libre ? <Lock size={11} /> : i + 1}
+                          </span>
+                          <span style={{ whiteSpace: "nowrap" }}>{p.n}</span>
+                        </div>
+                        {i < PASOS.length - 1 && <div style={{ width: 12, height: 2, background: ok ? "#22c55e" : T.n200, borderRadius: 1, flexShrink: 0, transition: "background .3s" }} />}
                       </div>
                     );
                   })}
-                  <div onClick={() => setTab("historial")} style={{ padding: "8px 13px", borderRadius: 100, fontSize: 13, cursor: "pointer", fontWeight: tab === "historial" ? 700 : 500, background: tab === "historial" ? T.primary : "transparent", color: tab === "historial" ? "#fff" : T.n400, border: "1px solid " + (tab === "historial" ? T.primary : T.n200) }}>Historial</div>
+                  <div onClick={() => setTab("historial")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 10, fontSize: 13, cursor: "pointer", fontWeight: tab === "historial" ? 700 : 500, background: tab === "historial" ? T.primary50 : "transparent", color: tab === "historial" ? T.primary800 : T.n400, border: "1.5px solid " + (tab === "historial" ? T.primary : "transparent"), transition: "all .2s ease" }}>
+                    <Clock size={14} /> Historial
+                  </div>
                 </div>
                 {omitioSucursales && (
                   <Alert tone="warning" style={{ marginTop: 14 }}>
@@ -855,11 +902,11 @@ function ClientPortal({ session, onLogout }) {
               {idxTab >= 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
                   {idxTab > 0
-                    ? <Btn variant="ghost" onClick={() => setTab(PASOS[idxTab - 1].id)}>← Paso {idxTab}: {PASOS[idxTab - 1].n}</Btn>
+                    ? <Btn variant="ghost" onClick={() => setTab(PASOS[idxTab - 1].id)}><ChevronRight size={14} style={{ transform: "rotate(180deg)" }} /> Paso {idxTab}: {PASOS[idxTab - 1].n}</Btn>
                     : <span />}
                   {idxTab < PASOS.length - 1 && (
                     avanzable[tab]
-                      ? <Btn onClick={() => setTab(PASOS[idxTab + 1].id)}>Siguiente — Paso {idxTab + 2}: {PASOS[idxTab + 1].n} →</Btn>
+                      ? <Btn onClick={() => setTab(PASOS[idxTab + 1].id)}>Siguiente — Paso {idxTab + 2}: {PASOS[idxTab + 1].n} <ArrowRight size={14} /></Btn>
                       : <span style={{ fontSize: 13, color: T.n400 }}>Completá este paso para pasar al siguiente</span>
                   )}
                 </div>
@@ -3696,7 +3743,7 @@ function AdminPortal({ session, onLogout }) {
                   </div>
                 )}
 
-                {!clients && <div style={{ color: T.n400, fontSize: 14 }}>Cargando clientes…</div>}
+                {!clients && <div style={{ display: "grid", gap: 10 }}>{[1,2,3,4].map(i => <div key={i} className="nub-skeleton" style={{ height: 72, borderRadius: 12 }} />)}</div>}
                 {clients && clientesVisibles.length === 0 && <div style={{ color: T.n400, fontSize: 14 }}>Ningún cliente coincide con la búsqueda/filtro.</div>}
                 <div style={{ display: "grid", gap: 10 }}>
                   {clientesVisibles.map((cli) => {
@@ -3773,7 +3820,12 @@ function AdminPortal({ session, onLogout }) {
           <div onClick={() => setPanelCliente(null)} style={{ position: "fixed", inset: 0, background: "rgba(13,17,32,0.4)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: 380, maxWidth: "92vw", height: "100%", background: "#fff", padding: 24, overflowY: "auto", boxShadow: "-8px 0 24px rgba(13,17,32,0.18)" }}>
               {!panelData ? (
-                <div style={{ color: T.n400, fontSize: 14 }}>Cargando…</div>
+                <div style={{ display: "grid", gap: 16 }}>
+                  <div className="nub-skeleton" style={{ width: 180, height: 20, borderRadius: 6 }} />
+                  <div className="nub-skeleton" style={{ width: "100%", height: 6, borderRadius: 100 }} />
+                  <div className="nub-skeleton" style={{ width: 140, height: 14 }} />
+                  <div className="nub-skeleton" style={{ width: "100%", height: 80, borderRadius: 10 }} />
+                </div>
               ) : (
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>

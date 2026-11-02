@@ -243,6 +243,15 @@ body {
   animation: pulse 2.5s ease infinite;
 }
 
+/* — Saved message toast — */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.saved-toast {
+  animation: slideUp .25s ease both;
+}
+
 /* — Nav items — */
 .nub-nav-item:hover {
   background: var(--nub-n50) !important;
