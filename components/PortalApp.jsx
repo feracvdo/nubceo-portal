@@ -723,7 +723,7 @@ function ClientSidebar({ activo, onCambiar, open, onClose }) {
   return (
     <>
       {open && <div className="nub-sidebar-overlay" onClick={onClose} style={{ display: "none", position: "fixed", inset: 0, top: 61, background: "rgba(13,17,32,0.3)", zIndex: 35 }} />}
-      <div className={"nub-sidebar" + (open ? " nub-sidebar--open" : "")} style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: T.card, padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+      <div className={"nub-sidebar" + (open ? " nub-sidebar--open" : "")} style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: T.card, padding: "20px 12px", position: "sticky", top: 61, alignSelf: "flex-start", height: "calc(100vh - 61px)", overflowY: "auto" }}>
         <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: "var(--font-display)", textTransform: "uppercase", letterSpacing: ".06em", color: T.n400, padding: "0 12px 10px", marginBottom: 2 }}>Portal</div>
         <div style={{ display: "grid", gap: 2 }}>
           {CLIENT_NAV_ITEMS.map(([id, Icon, lbl]) => (
@@ -800,7 +800,7 @@ function ClientPortal({ session, onLogout }) {
     <div>
       <Nav name="" who={session.who} onLogout={onLogout} />
       <div style={{ display: "flex" }}>
-        <div style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: T.card, padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+        <div style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: T.card, padding: "20px 12px", position: "sticky", top: 61, alignSelf: "flex-start", height: "calc(100vh - 61px)" }}>
           <div className="nub-skeleton" style={{ width: 60, height: 10, marginBottom: 18, marginLeft: 12 }} />
           {[1,2,3].map(i => <div key={i} className="nub-skeleton" style={{ height: 36, marginBottom: 6, borderRadius: 8 }} />)}
         </div>
@@ -2560,25 +2560,16 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                     <div className="nub-progress" style={{ height: 4, borderRadius: 100, background: T.n100, overflow: "hidden", marginBottom: 7 }}>
                       <div style={{ width: pct + "%", height: "100%", background: pct === 100 ? "#22c55e" : T.primary, borderRadius: 100, transition: "width .4s cubic-bezier(.16,1,.3,1)" }} />
                     </div>
-                    <div style={{ fontSize: 10.5, color: T.n400, marginBottom: 6 }}>
-                      {cli.implementadorNombre || "Sin implementador/a"}{cli.desarrolladorNombre ? " · " + cli.desarrolladorNombre + " (dev)" : ""}
+                    <div style={{ fontSize: 10.5, color: T.n400, marginBottom: 4, lineHeight: 1.5 }}>
+                      <div><User size={10} style={{ display: "inline", verticalAlign: "-1px", marginRight: 3 }} />{cli.implementadorNombre || "Sin implementador/a"}</div>
+                      <div><GitBranch size={10} style={{ display: "inline", verticalAlign: "-1px", marginRight: 3 }} />{cli.desarrolladorNombre || "Sin desarrollador/a"}</div>
+                      {cli.goLiveEstimado && <div><Target size={10} style={{ display: "inline", verticalAlign: "-1px", marginRight: 3 }} />Go-live: {cli.goLiveEstimado}</div>}
+                      {cli.fechaIngreso && <div><Calendar size={10} style={{ display: "inline", verticalAlign: "-1px", marginRight: 3 }} />Ingreso: {cli.fechaIngreso}</div>}
                     </div>
                     <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                      {(() => { const sg = semaforoGoLive(cli.goLiveEstimado); return sg ? <Badge tone={sg.tone}><Target size={11} style={{ display: "inline", verticalAlign: "-1px", marginRight: 2 }} />{sg.txt}</Badge> : null; })()}
-                      {!cli.implementadorId && <Badge tone="amber">Sin asignar</Badge>}
-                      {cli.estadoPago === "con_deuda" && <Badge tone="red"><DollarSign size={11} style={{ display: "inline", verticalAlign: "-1px", marginRight: 1 }} />Deuda {diasDesde(cli.deudaDesde)}d</Badge>}
-                      {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
+                      {cli.estadoSemaforo && <Badge tone={cli.estadoSemaforo === "verde" ? "green" : cli.estadoSemaforo === "amarillo" ? "amber" : "red"}>{cli.estadoSemaforo === "verde" ? "En tiempo" : cli.estadoSemaforo === "amarillo" ? "Atención" : "En riesgo"}</Badge>}
                       {cli.notasCount > 0 && <Badge tone="gray"><StickyNote size={11} style={{ display: "inline", verticalAlign: "-1px", marginRight: 2 }} />{cli.notasCount}</Badge>}
                     </div>
-                    {onEnviarAvisos && (
-                      <div
-                        onClick={(e) => { e.stopPropagation(); onEnviarAvisos(cli.code); }}
-                        title="Mandar ahora el recordatorio o aviso de incumplimiento que corresponda, si hay alguno pendiente"
-                        style={{ marginTop: 8, paddingTop: 7, borderTop: "1px solid " + T.n100, fontSize: 11, fontWeight: 600, color: enviandoAvisosDe === cli.code ? T.n400 : T.primary, cursor: enviandoAvisosDe === cli.code ? "default" : "pointer" }}
-                      >
-                        {enviandoAvisosDe === cli.code ? "Enviando…" : <><Mail size={12} style={{ display: "inline", verticalAlign: "-2px", marginRight: 3 }} />Enviar avisos pendientes</>}
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -2604,7 +2595,7 @@ function Sidebar({ activo, onCambiar, open, onClose }) {
   return (
     <>
       {open && <div className="nub-sidebar-overlay" onClick={onClose} style={{ display: "none", position: "fixed", inset: 0, top: 61, background: "rgba(13,17,32,0.3)", zIndex: 35 }} />}
-      <div className={"nub-sidebar" + (open ? " nub-sidebar--open" : "")} style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: T.card, padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+      <div className={"nub-sidebar" + (open ? " nub-sidebar--open" : "")} style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: T.card, padding: "20px 12px", position: "sticky", top: 61, alignSelf: "flex-start", height: "calc(100vh - 61px)", overflowY: "auto" }}>
         <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: "var(--font-display)", textTransform: "uppercase", letterSpacing: ".06em", color: T.n400, padding: "0 12px 10px", marginBottom: 2 }}>Equipo</div>
         <div style={{ display: "grid", gap: 2 }}>
           {NAV_ITEMS.map(([id, Icon, lbl]) => (
@@ -2824,9 +2815,14 @@ function AdminPortal({ session, onLogout }) {
   const [busqueda, setBusqueda] = useState("");
   const [filtroImpl, setFiltroImpl] = useState("");
   const [filtroDev, setFiltroDev] = useState("");
+  const [filtroVend, setFiltroVend] = useState("");
   const [newContactos, setNewContactos] = useState([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
   const [newComercial, setNewComercial] = useState("");
-  const [newGoLive, setNewGoLive] = useState(""); // formato YYYY-MM-DD
+  const [newGoLive, setNewGoLive] = useState("");
+  const [newFechaIngreso, setNewFechaIngreso] = useState("");
+  const [newPosErp, setNewPosErp] = useState("");
+  const [newImplementadorId, setNewImplementadorId] = useState("");
+  const [newDesarrolladorId, setNewDesarrolladorId] = useState("");
   const [miNombre, setMiNombre] = useState("");
   const [miRedmineKey, setMiRedmineKey] = useState("");
   const [tableroFull, setTableroFull] = useState(false);
@@ -3057,11 +3053,14 @@ function AdminPortal({ session, onLogout }) {
     try {
       await api("createClient", {
         sessionCode: sc, nombre: newName, codigo: newCode, tenant: newTenant, razonSocial: newRazonSocial, cuits: newCuits, logo: newLogo,
-        comercial: newComercial, goLiveEstimado: newGoLive, contactos: newContactos.filter((c) => c.nombre.trim()),
+        comercial: newComercial, goLiveEstimado: newGoLive, fechaIngreso: newFechaIngreso, posErp: newPosErp,
+        implementadorId: newImplementadorId, desarrolladorId: newDesarrolladorId,
+        contactos: newContactos.filter((c) => c.nombre.trim()),
       });
       flash("Cliente creado. Compartile el código " + newCode.trim().toUpperCase() + ". Al primer login se dispara el alta en Redmine y sus credenciales de API.", 5000);
       setNewName(""); setNewCode(""); setNewTenant(""); setNewRazonSocial(""); setNewCuits([]); setNewCuitInput(""); setNewLogo(null);
-      setNewComercial(""); setNewGoLive(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
+      setNewComercial(""); setNewGoLive(""); setNewFechaIngreso(""); setNewPosErp(""); setNewImplementadorId(""); setNewDesarrolladorId("");
+      setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
       cargarListado();
     } catch (e) { flash(e.message); }
   };
@@ -3277,6 +3276,13 @@ function AdminPortal({ session, onLogout }) {
                       {(meta.cuits || []).length > 0 && "CUIT: " + meta.cuits.join(", ")}
                     </div>
                   )}
+                  <div style={{ fontSize: 12.5, color: T.n400, marginTop: 2, display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    {meta.tenant && <span>Tenant: <b style={{ color: T.n600 }}>{meta.tenant}</b></span>}
+                    {meta.comercial && <span>Comercial: <b style={{ color: T.n600 }}>{meta.comercial}</b></span>}
+                    {meta.goLiveEstimado && <span>Go-live: <b style={{ color: T.n600 }}>{meta.goLiveEstimado}</b></span>}
+                    {meta.fechaIngreso && <span>Ingreso: <b style={{ color: T.n600 }}>{meta.fechaIngreso}</b></span>}
+                    {meta.posErp && <span>POS/ERP: <b style={{ color: T.n600 }}>{meta.posErp}</b></span>}
+                  </div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
@@ -3661,6 +3667,7 @@ function AdminPortal({ session, onLogout }) {
   const clientesVisibles = (clients || [])
     .filter((c) => !filtroImpl || c.implementadorId === filtroImpl)
     .filter((c) => !filtroDev || c.desarrolladorId === filtroDev)
+    .filter((c) => !filtroVend || c.comercial === filtroVend)
     .filter((c) => !busqueda.trim() || c.name.toLowerCase().includes(busqueda.trim().toLowerCase()) || c.code.toLowerCase().includes(busqueda.trim().toLowerCase()));
   const implementadoresTeam = team.filter((m) => m.rol === "implementador");
   const devsTeam = team.filter((m) => m.rol === "desarrollador");
@@ -3715,6 +3722,28 @@ function AdminPortal({ session, onLogout }) {
                       Es la que se acuerda con el cliente en la reunión de vinculación (típicamente ~2 meses después del alta). Con ella el tablero muestra un semáforo y prioriza los clientes por proximidad.
                     </div>
                   </div>
+                  <div>
+                    <Label>Fecha de ingreso</Label>
+                    <Input type="date" value={newFechaIngreso} onChange={(e) => setNewFechaIngreso(e.target.value)} />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
+                  <div><Label>Punto de venta / ERP</Label><Input value={newPosErp} onChange={(e) => setNewPosErp(e.target.value)} placeholder="Ej: Tango, SAP, Excel…" /></div>
+                  <div>
+                    <Label>Implementador a cargo</Label>
+                    <select value={newImplementadorId} onChange={(e) => setNewImplementadorId(e.target.value)} style={{ width: "100%", height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: T.card }}>
+                      <option value="">Sin asignar</option>
+                      {implementadoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Desarrollador a cargo</Label>
+                    <select value={newDesarrolladorId} onChange={(e) => setNewDesarrolladorId(e.target.value)} style={{ width: "100%", height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: T.card }}>
+                      <option value="">Sin asignar</option>
+                      {devsTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                    </select>
+                  </div>
                 </div>
 
                 <Label>Contactos (sponsor, key user, desarrollador del cliente, etc.)</Label>
@@ -3757,7 +3786,11 @@ function AdminPortal({ session, onLogout }) {
                     <option value="">Todos los desarrolladores</option>
                     {devsTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                   </select>
-                  {(busqueda || filtroImpl || filtroDev) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroDev(""); }}>Limpiar filtros</Btn>}
+                  <select value={filtroVend} onChange={(e) => setFiltroVend(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: T.card }}>
+                    <option value="">Todos los vendedores</option>
+                    {[...new Set((clients || []).map(c => c.comercial).filter(Boolean))].sort().map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                  {(busqueda || filtroImpl || filtroDev || filtroVend) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroDev(""); setFiltroVend(""); }}>Limpiar filtros</Btn>}
                 </div>
 
                 {clients && clients.length > 0 && (
@@ -3845,7 +3878,11 @@ function AdminPortal({ session, onLogout }) {
                   <option value="">Todos los implementadores</option>
                   {implementadoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                 </select>
-                {(busqueda || filtroImpl) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); }}>Limpiar filtros</Btn>}
+                <select value={filtroVend} onChange={(e) => setFiltroVend(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: T.card }}>
+                  <option value="">Todos los vendedores</option>
+                  {[...new Set((clients || []).map(c => c.comercial).filter(Boolean))].sort().map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
+                {(busqueda || filtroImpl || filtroVend) && <Btn variant="ghost" size="sm" onClick={() => { setBusqueda(""); setFiltroImpl(""); setFiltroVend(""); }}>Limpiar filtros</Btn>}
               </div>
               <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} onEnviarAvisos={enviarAvisosPendientes} enviandoAvisosDe={enviandoAvisosDe} />
         {/* Panel lateral rápido del tablero: se abre al hacer clic en una tarjeta */}
@@ -3886,6 +3923,22 @@ function AdminPortal({ session, onLogout }) {
                         <div style={{ fontSize: 14, fontWeight: 600, color: T.n800 }}>{val}</div>
                       </div>
                     ))}
+                    <div>
+                      <div style={{ fontSize: 11, color: T.n400, textTransform: "uppercase", letterSpacing: "0.04em" }}>Fecha go-live</div>
+                      <input
+                        type="date"
+                        value={panelData.meta.goLiveEstimado || ""}
+                        onChange={async (e) => {
+                          const val = e.target.value;
+                          try {
+                            await api("updateMeta", { sessionCode: sc, clientCode: panelCliente, goLiveEstimado: val });
+                            setPanelData(prev => ({ ...prev, meta: { ...prev.meta, goLiveEstimado: val } }));
+                            flash("Fecha de go-live actualizada");
+                          } catch (err) { flash(err.message); }
+                        }}
+                        style={{ width: "100%", height: 36, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: T.card }}
+                      />
+                    </div>
                   </div>
 
                   <div style={{ borderTop: "1px solid " + T.n100, paddingTop: 14, marginBottom: 18 }}>
