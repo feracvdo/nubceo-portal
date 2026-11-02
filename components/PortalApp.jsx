@@ -3,6 +3,16 @@ import { CONECTORES, ESTADOS_PROCESADORA, DOCS, COLUMNAS_OBLIGATORIAS, TEMPLATE_
 import { validarVentas, validarTabla, exportarNubceo } from "../lib/validadorVentas";
 import { convertirSucursales, exportarTemplateSucursales } from "../lib/sucursalesTemplate";
 import MailsCard from "./MailsCard";
+import {
+  Users, LayoutGrid, Bell, Rocket, Settings, User, CheckCircle2,
+  AlertTriangle, Info, ArrowRight, Calendar, Clock, ChevronRight,
+  FileText, Zap, Layers, Monitor, Plus, Search, Filter, Star,
+  Target, Flag, GitBranch, HelpCircle, Eye, EyeOff, Map, Play,
+  MousePointer, MessageCircle, BarChart3, Download, X, Mail,
+  Building2, CreditCard, Clipboard, ExternalLink, ChevronDown,
+  ChevronUp, MoreVertical, Trash2, Edit3, Copy, Check, RefreshCw,
+  LogOut, Home, Send, Upload, Link2
+} from "lucide-react";
 
 // ─── Tokens de marca Nubceo (tema C — Soft, portal de usuario) ───
 const T = {
@@ -163,7 +173,7 @@ const Btn = ({ children, onClick, variant = "primary", size = "md", disabled, st
       style={{
         ...base, padding: pad, borderRadius: 8, fontSize: 14, fontWeight: 500,
         cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
-        fontFamily: "inherit", transition: "opacity .15s", ...style,
+        fontFamily: "var(--font-body)", transition: "all .2s cubic-bezier(.16,1,.3,1)", ...style,
       }}
     >
       {children}
@@ -187,7 +197,7 @@ const Badge = ({ children, tone = "blue" }) => {
 };
 
 const Card = ({ children, style }) => (
-  <div style={{ background: T.card, border: "1px solid " + T.cardBorder, borderRadius: 16, padding: "1.75rem", ...style }}>
+  <div style={{ background: T.card, border: "1px solid " + T.cardBorder, borderRadius: 16, padding: "1.75rem", transition: "box-shadow .25s, transform .25s", ...style }}>
     {children}
   </div>
 );
@@ -196,8 +206,8 @@ const Card = ({ children, style }) => (
 const SectionHeader = ({ icon, title, subtitle, badge, style }) => (
   <div style={{ marginBottom: subtitle ? 14 : 10, ...style }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-      <h2 style={{ fontSize: 17, fontWeight: 700, color: T.n900, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-        {icon && <span style={{ fontSize: 16 }}>{icon}</span>}{title}
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: T.n900, margin: 0, display: "flex", alignItems: "center", gap: 8, fontFamily: "var(--font-display)", letterSpacing: "-.01em" }}>
+        {icon && <span style={{ fontSize: 16, display: "flex", alignItems: "center" }}>{icon}</span>}{title}
       </h2>
       {badge}
     </div>
@@ -209,10 +219,10 @@ const SectionHeader = ({ icon, title, subtitle, badge, style }) => (
 // tone: info (celeste, explica algo) · warning (ámbar, requiere atención) · error (rojo, bloquea) · success (verde, confirma)
 const Alert = ({ tone = "info", icon, children, style }) => {
   const c = {
-    info: [T.infoBg, T.infoTx, T.infoBorder, "💡"],
-    warning: [T.warnBg, T.warnTx, T.warnBorder, "⚠️"],
-    error: [T.errBg, T.errTx, T.errBorder, "✕"],
-    success: [T.okBg, T.okTx, T.okBorder, "✓"],
+    info: [T.infoBg, T.infoTx, T.infoBorder, <Info size={16} />],
+    warning: [T.warnBg, T.warnTx, T.warnBorder, <AlertTriangle size={16} />],
+    error: [T.errBg, T.errTx, T.errBorder, <X size={16} />],
+    success: [T.okBg, T.okTx, T.okBorder, <Check size={16} />],
   }[tone];
   return (
     <div style={{
@@ -243,9 +253,9 @@ const Input = (props) => (
   <input
     {...props}
     style={{
-      height: 40, padding: "0 12px", border: "1px solid " + T.n200, borderRadius: 6,
-      fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "inherit",
-      outline: "none", color: T.n800, background: "#fff", ...props.style,
+      height: 40, padding: "0 12px", border: "1.5px solid " + T.n200, borderRadius: 8,
+      fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "var(--font-body)",
+      outline: "none", color: T.n800, background: "#fff", transition: "border-color .2s, box-shadow .2s", ...props.style,
     }}
     onFocus={(e) => { e.target.style.border = "1px solid " + T.primary; e.target.style.boxShadow = "0 0 0 3px rgba(10,107,244,0.12)"; }}
     onBlur={(e) => { e.target.style.border = "1px solid " + T.n200; e.target.style.boxShadow = "none"; }}
@@ -382,7 +392,7 @@ export default function PortalImplementacion() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: T.n800 }}>
+    <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "var(--font-body)", color: T.n800 }}>
       {screen === "login" && <Login onLogin={login} err={err} loggingIn={loggingIn} />}
       {screen === "client" && <ClientPortal session={session} onLogout={() => { setSession(null); setScreen("login"); }} />}
       {screen === "admin" && <AdminPortal session={session} onLogout={() => { setSession(null); setScreen("login"); }} />}
@@ -402,7 +412,7 @@ function Login({ onLogin, err, loggingIn }) {
         <Wordmark height={32} />
       </div>
       <Card>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: T.n900, margin: "0 0 6px" }}>Portal de implementación</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: T.n900, margin: "0 0 6px", fontFamily: "var(--font-display)", letterSpacing: "-.02em" }}>Portal de implementación</h1>
         <p style={{ fontSize: 14, color: T.n600, margin: "0 0 24px", lineHeight: 1.55 }}>
           Acompañá tu implementación del Conciliador: completá los pasos pendientes y seguí en qué instancia está tu proyecto.
         </p>
@@ -448,7 +458,7 @@ const ContactoImplementador = ({ nombre, email, cliente }) => {
         background: T.primary50, border: "1px solid " + T.primary100, borderRadius: 100, padding: "6px 12px", textDecoration: "none", whiteSpace: "nowrap",
       }}
     >
-      ✉️ Contactar a {nombre}
+      <Mail size={14} /> Contactar a {nombre}
     </a>
   ) : (
     <span title="Tu implementador/a todavía no cargó su mail en el portal" style={{ fontSize: 12.5, color: T.n400, whiteSpace: "nowrap" }}>
@@ -1412,7 +1422,7 @@ function TabRelevamiento({ data, persist, saving, rvOK, session, setAll }) {
 
       {rvOK && (
         <Card>
-          <SectionHeader icon="🗓" title="Workshop de relevamiento" />
+          <SectionHeader icon={<Calendar size={16} />} title="Workshop de relevamiento" />
           {workshop ? (
             <EventoLinea e={workshop} />
           ) : (
@@ -2279,11 +2289,11 @@ function TabCapacitacion({ data, session, setAll }) {
   return (
     <div style={{ display: "grid", gap: SP.lg }}>
       <Card>
-        <SectionHeader icon="📚" title="Manuales de Nubceo" subtitle="Toda la documentación del producto está en los manuales oficiales: primeros pasos, carga de datos, reglas y secuencias de conciliación, reportes y más. Es la mejor referencia para consultar entre capacitaciones." />
+        <SectionHeader icon={<FileText size={16} />} title="Manuales de Nubceo" subtitle="Toda la documentación del producto está en los manuales oficiales: primeros pasos, carga de datos, reglas y secuencias de conciliación, reportes y más. Es la mejor referencia para consultar entre capacitaciones." />
         <a href={DOCS.conciliador} target="_blank" rel="noreferrer" style={{ display: "inline-block", fontSize: 14, fontWeight: 600, color: T.primary }}>📘 Abrir los manuales del Conciliador →</a>
       </Card>
       <Card>
-        <SectionHeader icon="🗓" title="Solicitar una capacitación" subtitle="Las capacitaciones las da Mariana Macri y son para todo tu equipo. Elegí cuál necesitás y un horario disponible — antes de confirmar podés editar a quién se invita." />
+        <SectionHeader icon={<Calendar size={16} />} title="Solicitar una capacitación" subtitle="Las capacitaciones las da Mariana Macri y son para todo tu equipo. Elegí cuál necesitás y un horario disponible — antes de confirmar podés editar a quién se invita." />
         {evs.map((e) => <div key={e.id} style={{ marginBottom: 8 }}><EventoLinea e={e} /></div>)}
         {!pedido ? (
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
@@ -2334,7 +2344,7 @@ function TabPruebasEtapa({ etapa, tipoEvento, data, session, setAll }) {
 
       {(status === "listo_para_mostrar" || agendado || realizado) && (
         <Card>
-          <SectionHeader icon="🗓" title={etapa === "sandbox" ? "Reunión de resultados" : "Evento de go-live"} />
+          <SectionHeader icon={<Calendar size={16} />} title={etapa === "sandbox" ? "Reunión de resultados" : "Evento de go-live"} />
           {evs.map((e) => (
             <div key={e.id} style={{ marginBottom: 10 }}>
               <EventoLinea e={e} />
@@ -2356,7 +2366,7 @@ function TabPruebasEtapa({ etapa, tipoEvento, data, session, setAll }) {
 
       {etapa === "golive" && realizado && (
         <Card>
-          <SectionHeader icon="🎉" title="Workshop de cierre" subtitle="Para cerrar la implementación, coordinamos un último workshop de repaso con todo el equipo: CX, desarrollo e implementaciones." />
+          <SectionHeader icon={<Star size={16} />} title="Workshop de cierre" subtitle="Para cerrar la implementación, coordinamos un último workshop de repaso con todo el equipo: CX, desarrollo e implementaciones." />
           {(() => {
             const evsCierre = (data.eventos || []).filter((e) => e.tipo === "workshop_cierre" && e.estado !== "cancelado");
             const yaAgendado = evsCierre.some((e) => e.estado !== "cancelado");
