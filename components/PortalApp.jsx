@@ -42,7 +42,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.37.0";
+const APP_VERSION = "1.38.0";
 const APP_VERSION_FECHA = "2026-11-02";
 
 const FASES = [
@@ -71,6 +71,30 @@ async function api(action, payload = {}) {
 }
 
 const now = () => new Date().toISOString();
+// "hace 5 min", "hace 3 h", "ayer"… y, si es más viejo, la fecha completa.
+const haceCuanto = (iso) => {
+  if (!iso) return "—";
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return "recién";
+  if (min < 60) return "hace " + min + " min";
+  const h = Math.round(min / 60);
+  if (h < 24) return "hace " + h + " h";
+  const d = Math.round(h / 24);
+  if (d === 1) return "ayer";
+  if (d < 7) return "hace " + d + " días";
+  return fmtDate(iso);
+};
+const grupoDia = (iso) => {
+  if (!iso) return "Sin fecha";
+  const d = new Date(iso), hoy = new Date();
+  const inicio = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const dif = Math.round((inicio(hoy) - inicio(d)) / 86400000);
+  if (dif === 0) return "Hoy";
+  if (dif === 1) return "Ayer";
+  if (dif < 7) return "Esta semana";
+  return d.toLocaleDateString("es-AR", { month: "long", year: "numeric" }).replace(/^./, (c) => c.toUpperCase());
+};
+
 const fmtDate = (iso) => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -158,6 +182,37 @@ const alTeclear = (fn) => (e) => {
   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); }
 };
 
+// ─── Iconos SVG propios (trazo 2px, 24×24). Reemplazan a los emojis de la interfaz,
+// que cambian de dibujo según el sistema operativo. Uso: <Icon n="bell" size={16} />
+const ICON_PATHS = {
+  menu: ["M4 6h16", "M4 12h16", "M4 18h16"],
+  x: ["M18 6 6 18", "M6 6l12 12"],
+  check: ["M20 6 9 17l-5-5"],
+  lock: ["M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z", "M7 11V7a5 5 0 0 1 10 0v4"],
+  bell: ["M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9", "M10.3 21a1.94 1.94 0 0 0 3.4 0"],
+  users: ["M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2", "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z", "M22 21v-2a4 4 0 0 0-3-3.87", "M16 3.13a4 4 0 0 1 0 7.75"],
+  user: ["M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2", "M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"],
+  sliders: ["M4 21v-7", "M4 10V3", "M12 21v-9", "M12 8V3", "M20 21v-5", "M20 12V3", "M1 14h6", "M9 8h6", "M17 16h6"],
+  folder: ["M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"],
+  kanban: ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M9 3v18", "M15 3v18"],
+  rocket: ["M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z", "m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z", "M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0", "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"],
+  clipboard: ["M9 2h6a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z", "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2", "M12 11h4", "M12 16h4", "M8 11h.01", "M8 16h.01"],
+  calendar: ["M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "M16 2v4", "M8 2v4", "M3 10h18"],
+  building: ["M6 2h12a2 2 0 0 1 2 2v18H4V4a2 2 0 0 1 2-2z", "M9 22v-4h6v4", "M8 6h.01", "M16 6h.01", "M12 6h.01", "M12 10h.01", "M12 14h.01", "M16 10h.01", "M16 14h.01", "M8 10h.01", "M8 14h.01"],
+  info: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 16v-4", "M12 8h.01"],
+  warning: ["m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z", "M12 9v4", "M12 17h.01"],
+  error: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "m15 9-6 6", "m9 9 6 6"],
+  success: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "m9 12 2 2 4-4"],
+  pending: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 8v4", "M12 16h.01"],
+  left: ["m15 18-6-6 6-6"],
+  right: ["m9 18 6-6-6-6"],
+};
+const Icon = ({ n, size = 16, stroke = 2, style }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false" style={{ flexShrink: 0, display: "block", ...style }}>
+    {(ICON_PATHS[n] || []).map((d, i) => <path key={i} d={d} />)}
+  </svg>
+);
+
 // ─── Esqueletos de carga: reemplazan los "Cargando…" manteniendo la forma de la pantalla ───
 const Skeleton = ({ w = "100%", h = 14, r = 6, style }) => (
   <div className="nub-skel" aria-hidden="true" style={{ width: w, height: h, borderRadius: r, flexShrink: 0, ...style }} />
@@ -232,17 +287,17 @@ const SectionHeader = ({ icon, title, subtitle, badge, style }) => (
 // tone: info (celeste, explica algo) · warning (ámbar, requiere atención) · error (rojo, bloquea) · success (verde, confirma)
 const Alert = ({ tone = "info", icon, children, style }) => {
   const c = {
-    info: [T.infoBg, T.infoTx, T.infoBorder, "💡"],
-    warning: [T.warnBg, T.warnTx, T.warnBorder, "⚠️"],
-    error: [T.errBg, T.errTx, T.errBorder, "✕"],
-    success: [T.okBg, T.okTx, T.okBorder, "✓"],
+    info: [T.infoBg, T.infoTx, T.infoBorder, "info"],
+    warning: [T.warnBg, T.warnTx, T.warnBorder, "warning"],
+    error: [T.errBg, T.errTx, T.errBorder, "error"],
+    success: [T.okBg, T.okTx, T.okBorder, "success"],
   }[tone];
   return (
-    <div style={{
+    <div role={tone === "error" || tone === "warning" ? "alert" : undefined} style={{
       display: "flex", gap: 10, alignItems: "flex-start", background: c[0], color: c[1],
       border: "1px solid " + c[2], borderRadius: 10, padding: "12px 14px", fontSize: 13.5, lineHeight: 1.55, ...style,
     }}>
-      <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{icon || c[3]}</span>
+      <span style={{ fontSize: 14, flexShrink: 0, marginTop: 2 }}>{icon || <Icon n={c[3]} size={16} />}</span>
       <div style={{ flex: 1 }}>{children}</div>
     </div>
   );
@@ -335,7 +390,7 @@ const Multi = ({ options, value = [], onChange }) => {
               border: "2px solid " + (on ? T.primary : T.n200),
               background: on ? T.primary : "#fff", color: "#fff",
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700,
-            }}>{on ? "✓" : ""}</span>
+            }}>{on ? <Icon n="check" size={11} stroke={3} /> : ""}</span>
             {lbl}
           </div>
         );
@@ -356,35 +411,47 @@ const Wordmark = ({ white = false, height = 26 }) => (
 );
 
 // ─── Stepper de fases ───
-const Stepper = ({ fase }) => (
-  <div style={{ display: "flex", alignItems: "flex-start", gap: 0, overflowX: "auto", paddingBottom: 4 }}>
-    {FASES.map((f, i) => {
-      const done = i < fase, current = i === fase;
-      return (
-        <div key={f} style={{ display: "flex", alignItems: "flex-start", flex: "1 0 auto", minWidth: 86 }}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, gap: 6 }}>
-            <div style={{
-              width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 13, fontWeight: 700,
-              background: done ? T.primary : current ? T.card : T.n100,
-              color: done ? "#fff" : current ? T.primary : T.n400,
-              border: current ? "2.5px solid " + T.primary : "2.5px solid transparent",
-              boxShadow: current ? "0 0 0 4px rgba(10,107,244,0.15)" : "none",
-            }}>
-              {done ? "✓" : i + 1}
+const Stepper = ({ fase }) => {
+  const ref = useRef(null);
+  // En pantallas angostas el stepper scrollea: dejamos la fase actual a la vista.
+  useEffect(() => {
+    const cont = ref.current;
+    const act = cont && cont.querySelector('[aria-current="step"]');
+    if (cont && act && cont.scrollWidth > cont.clientWidth) {
+      cont.scrollLeft = act.offsetLeft - cont.clientWidth / 2 + act.offsetWidth / 2;
+    }
+  }, [fase]);
+  return (
+    <ol ref={ref} aria-label="Fases de la implementación" style={{ display: "flex", alignItems: "flex-start", gap: 0, overflowX: "auto", paddingBottom: 4, margin: 0, paddingLeft: 0, listStyle: "none" }}>
+      {FASES.map((f, i) => {
+        const done = i < fase, current = i === fase;
+        return (
+          <li key={f} aria-current={current ? "step" : undefined} style={{ display: "flex", alignItems: "flex-start", flex: "1 0 auto", minWidth: 86 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, gap: 6 }}>
+              <div className={current ? "nub-step-actual" : undefined} style={{
+                width: 30, height: 30, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, fontWeight: 700,
+                background: done ? T.primary : current ? T.card : T.n100,
+                color: done ? "#fff" : current ? T.primary : T.n400,
+                border: current ? "2.5px solid " + T.primary : "2.5px solid transparent",
+                boxShadow: current ? "0 0 0 4px rgba(10,107,244,0.15)" : "none",
+              }}>
+                {done ? <Icon n="check" size={15} stroke={3} /> : i + 1}
+              </div>
+              <div style={{ fontSize: 11, fontWeight: current ? 700 : 500, color: current ? T.primary800 : done ? T.n600 : T.n400, textAlign: "center", lineHeight: 1.25, maxWidth: 90 }}>
+                {f}
+                {current && <span style={{ display: "block", fontSize: 10, fontWeight: 600, color: T.primary, marginTop: 2 }}>Fase actual</span>}
+              </div>
             </div>
-            <div style={{ fontSize: 11, fontWeight: current ? 700 : 500, color: current ? T.primary800 : done ? T.n600 : T.n400, textAlign: "center", lineHeight: 1.25, maxWidth: 90 }}>
-              {f}
-            </div>
-          </div>
-          {i < FASES.length - 1 && (
-            <div style={{ height: 2.5, background: i < fase ? T.primary : T.n200, flex: "1 0 12px", marginTop: 14, borderRadius: 2 }} />
-          )}
-        </div>
-      );
-    })}
-  </div>
-);
+            {i < FASES.length - 1 && (
+              <div aria-hidden="true" style={{ height: 2.5, background: i < fase ? T.primary : T.n200, flex: "1 0 12px", marginTop: 14, borderRadius: 2 }} />
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+};
 
 // ══════════════════════════ APP ══════════════════════════
 export default function PortalImplementacion() {
@@ -460,39 +527,57 @@ function Login({ onLogin, err, loggingIn }) {
   const [verCodigo, setVerCodigo] = useState(false);
   const submit = (e) => { e.preventDefault(); onLogin(code, who); };
   return (
-    <div style={{ maxWidth: 440, margin: "0 auto", padding: "9vh 20px 40px" }}>
-      <div style={{ display: "flex", justifyContent: "center", marginBottom: SP.xl }}>
-        <Wordmark height={32} />
-      </div>
-      <Card>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: T.n900, margin: "0 0 6px" }}>Portal de implementación</h1>
-        <p style={{ fontSize: 14, color: T.n600, margin: "0 0 24px", lineHeight: 1.55 }}>
-          Ingresá con el nombre de tu empresa y el código de acceso que te compartió tu referente de Nubceo.
-        </p>
-        <form onSubmit={submit}>
-          <div style={{ marginBottom: 16 }}>
-            <Label>Nombre del cliente</Label>
-            <Input name="username" autoComplete="username" placeholder="Ej: Freddo" value={who} onChange={(e) => setWho(e.target.value)} />
+    <div className="nub-login">
+      <main className="nub-login__form">
+        <div style={{ width: "100%", maxWidth: 400 }}>
+          <div style={{ marginBottom: SP.xl }}>
+            <Wordmark height={30} />
           </div>
-          <div style={{ marginBottom: 20 }}>
-            <Label>Código de acceso</Label>
-            <div style={{ position: "relative" }}>
-              <Input name="password" type={verCodigo ? "text" : "password"} autoComplete="current-password" placeholder="Ej: FREDDO26" value={code} onChange={(e) => setCode(e.target.value)} style={{ paddingRight: 74 }} />
-              <span onClick={() => setVerCodigo(!verCodigo)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer", userSelect: "none" }}>{verCodigo ? "Ocultar" : "Mostrar"}</span>
+          <h1 style={{ fontSize: 26, fontWeight: 700, color: T.n900, margin: "0 0 8px", letterSpacing: "-0.01em" }}>Portal de implementación</h1>
+          <p style={{ fontSize: 14.5, color: T.n600, margin: "0 0 28px", lineHeight: 1.6 }}>
+            Ingresá con el nombre de tu empresa y el código de acceso que te compartió tu referente de Nubceo.
+          </p>
+          <form onSubmit={submit}>
+            <div style={{ marginBottom: 16 }}>
+              <Label>Nombre del cliente</Label>
+              <Input name="username" autoComplete="username" placeholder="Ej: Freddo" value={who} onChange={(e) => setWho(e.target.value)} />
             </div>
+            <div style={{ marginBottom: 20 }}>
+              <Label>Código de acceso</Label>
+              <div style={{ position: "relative" }}>
+                <Input name="password" type={verCodigo ? "text" : "password"} autoComplete="current-password" placeholder="Ej: FREDDO26" value={code} onChange={(e) => setCode(e.target.value)} style={{ paddingRight: 80 }} />
+                <button type="button" onClick={() => setVerCodigo(!verCodigo)} aria-label={verCodigo ? "Ocultar código" : "Mostrar código"} style={{ position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer", background: "transparent", border: "none", padding: "6px 8px", borderRadius: 6, fontFamily: "inherit" }}>{verCodigo ? "Ocultar" : "Mostrar"}</button>
+              </div>
+            </div>
+            {err && <Alert tone="error" style={{ marginBottom: 16 }}>{err}</Alert>}
+            <Btn type="submit" disabled={loggingIn || !code.trim() || !who.trim()} style={{ width: "100%", padding: "12px 20px" }}>{loggingIn ? "Ingresando…" : "Ingresar"}</Btn>
+          </form>
+          <div style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid " + T.n200, fontSize: 12.5, color: T.n600, lineHeight: 1.55 }}>
+            ¿Sos del equipo de Nubceo? Ingresá con tu nombre y tu código de implementador.
           </div>
-          {err && <Alert tone="error" style={{ marginBottom: 16 }}>{err}</Alert>}
-          <Btn type="submit" disabled={loggingIn || !code.trim() || !who.trim()} style={{ width: "100%" }}>{loggingIn ? "Ingresando…" : "Ingresar"}</Btn>
-        </form>
-        <ActionBar style={{ marginTop: 20, paddingTop: 16 }}>
-          <div style={{ fontSize: 12, color: T.n400, lineHeight: 1.55 }}>
-            ¿Sos del equipo de Nubceo? Ingresá con tu nombre y código de implementador.
+          <div style={{ marginTop: 28, fontSize: 11.5, color: T.n400 }}>
+            Portal de Implementaciones · v{APP_VERSION} · {new Date(APP_VERSION_FECHA + "T00:00:00").toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" })}
           </div>
-        </ActionBar>
-      </Card>
-      <div style={{ textAlign: "center", marginTop: 16, fontSize: 11.5, color: T.n400 }}>
-        Portal de Implementaciones · v{APP_VERSION} · {new Date(APP_VERSION_FECHA + "T00:00:00").toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" })}
-      </div>
+        </div>
+      </main>
+
+      {/* Panel de marca: el recorrido real de la implementación es la imagen del login */}
+      <aside className="nub-login__fases" aria-label="Fases de la implementación">
+        <div style={{ maxWidth: 380 }}>
+          <h2 style={{ fontSize: 22, fontWeight: 700, color: "#fff", margin: "0 0 10px", lineHeight: 1.3 }}>Así avanza tu implementación</h2>
+          <p style={{ fontSize: 14, color: "rgba(255,255,255,0.78)", margin: "0 0 30px", lineHeight: 1.6 }}>
+            Nueve fases, desde la vinculación hasta el acompañamiento después del go-live. En el portal ves en cuál estás y qué falta para avanzar.
+          </p>
+          <ol className="nub-rail">
+            {FASES.map((f, i) => (
+              <li key={f} className="nub-rail__item" style={{ animationDelay: (120 + i * 70) + "ms" }}>
+                <span className="nub-rail__num">{i + 1}</span>
+                <span className="nub-rail__txt">{f}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </aside>
     </div>
   );
 }
@@ -519,9 +604,14 @@ const ContactoImplementador = ({ nombre, email, cliente }) => {
   );
 };
 
-const Nav = ({ name, who, onLogout, admin, implementador, extra }) => (
-  <div style={{ background: "#fff", borderBottom: "1px solid " + T.n200, minHeight: 60, display: "flex", alignItems: "center", padding: "10px 24px", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10, gap: 12, flexWrap: "wrap" }}>
-    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+const Nav = ({ name, who, onLogout, admin, implementador, extra, onMenu }) => (
+  <div className="nub-topbar" style={{ background: "#fff", borderBottom: "1px solid " + T.n200, minHeight: 60, display: "flex", alignItems: "center", padding: "10px 24px", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10, gap: 12, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      {onMenu && (
+        <button type="button" className="nub-menu-btn" onClick={onMenu} aria-label="Abrir menú" style={{ alignItems: "center", justifyContent: "center", width: 38, height: 38, borderRadius: 8, border: "1px solid " + T.n200, background: "#fff", color: T.n800, cursor: "pointer", marginRight: 4 }}>
+          <Icon n="menu" size={18} />
+        </button>
+      )}
       <Wordmark />
       <span title={"Versión " + APP_VERSION} style={{ fontSize: 10.5, color: T.n400, fontWeight: 600 }}>v{APP_VERSION}</span>
     </div>
@@ -743,29 +833,53 @@ const fmtDateSolo = (iso) => {
 
 // ─── Menú lateral del portal del cliente ───
 const CLIENT_NAV_ITEMS = [
-  ["implementacion", "📋", "Implementación"],
-  ["cronograma", "🗓", "Cronograma"],
-  ["perfil", "🏢", "Mi Perfil"],
+  ["implementacion", "clipboard", "Implementación"],
+  ["cronograma", "calendar", "Cronograma"],
+  ["perfil", "building", "Mi Perfil"],
 ];
-function ClientSidebar({ activo, onCambiar }) {
+
+// En celular el menú lateral se abre como panel; Escape lo cierra.
+function useCerrarConEscape(abierto, onCerrar) {
+  useEffect(() => {
+    if (!abierto || !onCerrar) return;
+    const fn = (e) => { if (e.key === "Escape") onCerrar(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [abierto, onCerrar]);
+}
+const SidebarCerrar = ({ onCerrar, oscuro }) => (
+  <button type="button" className="nub-sidebar-close" onClick={onCerrar} aria-label="Cerrar menú" style={{ alignItems: "center", gap: 6, marginBottom: 14, background: "transparent", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit", padding: "6px 4px", color: oscuro ? "#fff" : T.n600 }}>
+    <Icon n="x" size={16} /> Cerrar
+  </button>
+);
+
+function ClientSidebar({ activo, onCambiar, abierto, onCerrar }) {
+  useCerrarConEscape(abierto, onCerrar);
+  const ir = (id) => { onCambiar(id); onCerrar && onCerrar(); };
   return (
-    <nav aria-label="Secciones del portal" className="nub-nav--dark" style={{ width: 210, flexShrink: 0, background: "linear-gradient(180deg, #0a6bf4 0%, #0550c0 100%)", padding: "20px 14px", minHeight: "calc(100vh - 61px)", borderRadius: "0 16px 16px 0" }}>
+    <>
+    {abierto && <div className="nub-backdrop" onClick={onCerrar} />}
+    <nav aria-label="Secciones del portal" className={"nub-sidebar nub-nav--dark" + (abierto ? " is-open" : "")} style={{ width: 210, flexShrink: 0, background: "linear-gradient(180deg, #0a6bf4 0%, #0550c0 100%)", padding: "20px 14px", minHeight: "calc(100vh - 61px)", borderRadius: "0 16px 16px 0" }}>
       <div style={{ display: "grid", gap: 3 }}>
+        {onCerrar && <SidebarCerrar onCerrar={onCerrar} oscuro />}
         {CLIENT_NAV_ITEMS.map(([id, icon, lbl]) => (
-          <div key={id} role="button" tabIndex={0} aria-current={activo === id ? "page" : undefined} className="nub-nav-item" onClick={() => onCambiar(id)} onKeyDown={alTeclear(() => onCambiar(id))} style={{
+          <div key={id} role="button" tabIndex={0} aria-current={activo === id ? "page" : undefined} className="nub-nav-item" onClick={() => ir(id)} onKeyDown={alTeclear(() => ir(id))} style={{
             display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, cursor: "pointer",
             fontSize: 13.5, fontWeight: activo === id ? 700 : 500,
             background: activo === id ? "rgba(255,255,255,0.18)" : "transparent", color: activo === id ? "#fff" : "rgba(255,255,255,0.72)", transition: "all 0.15s ease",
           }}>
-            <span style={{ fontSize: 15 }}>{icon}</span>{lbl}
+            <Icon n={icon} size={17} />{lbl}
           </div>
         ))}
       </div>
     </nav>
+    </>
   );
 }
 
 function ClientPortal({ session, onLogout }) {
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const cerrarMenu = useCallback(() => setMenuAbierto(false), []);
   const [data, setData] = useState(null);
   const [meta, setMeta] = useState(null);
   const [tab, setTab] = useState("procesadoras");
@@ -857,10 +971,10 @@ function ClientPortal({ session, onLogout }) {
 
   return (
     <div>
-      <Nav name={meta.name} who={session.who} onLogout={onLogout} implementador={meta.implementadorNombre ? { nombre: meta.implementadorNombre, email: meta.implementadorEmail } : null} />
+      <Nav name={meta.name} who={session.who} onLogout={onLogout} onMenu={() => setMenuAbierto(true)} implementador={meta.implementadorNombre ? { nombre: meta.implementadorNombre, email: meta.implementadorEmail } : null} />
       <div style={{ display: "flex" }}>
-        <ClientSidebar activo={modulo} onCambiar={setModulo} />
-        <div style={{ flex: 1, minWidth: 0, maxWidth: 900, margin: "0 auto", padding: "26px 20px 60px" }}>
+        <ClientSidebar activo={modulo} onCambiar={setModulo} abierto={menuAbierto} onCerrar={cerrarMenu} />
+        <div className="nub-main" style={{ flex: 1, minWidth: 0, maxWidth: 900, margin: "0 auto", padding: "26px 20px 60px" }}>
 
           {modulo === "implementacion" && (
             <>
@@ -880,7 +994,9 @@ function ClientPortal({ session, onLogout }) {
                     const activo = tab === p.id, ok = completo[p.id], libre = unlocked[p.id];
                     const pendiente = p.id === "sucursales" && omitioSucursales;
                     return (
-                      <div key={p.id} onClick={() => libre && setTab(p.id)} title={libre ? (ok ? "Completado — podés volver a ver" : "") : "Completá los pasos anteriores para desbloquear"} style={{
+                      <div key={p.id} role="button" tabIndex={libre ? 0 : -1} aria-disabled={!libre} aria-current={activo ? "step" : undefined} className={libre ? "nub-paso" : undefined}
+                        onClick={() => libre && setTab(p.id)} onKeyDown={alTeclear(() => libre && setTab(p.id))}
+                        title={libre ? (ok ? "Completado — podés volver a ver" : "") : "Completá los pasos anteriores para desbloquear"} style={{
                         display: "flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 100, fontSize: 13,
                         cursor: libre ? "pointer" : "not-allowed", opacity: libre ? 1 : 0.45,
                         fontWeight: activo ? 700 : 500,
@@ -888,11 +1004,12 @@ function ClientPortal({ session, onLogout }) {
                         color: activo ? "#fff" : ok ? T.okTx : pendiente ? T.warnTx : T.n600,
                         border: "1px solid " + (activo ? T.primary : ok ? "#bbe8c9" : pendiente ? "#fde68a" : T.n200),
                       }}>
-                        <span style={{ fontWeight: 700 }}>{ok ? "✓" : pendiente ? "!" : !libre ? "🔒" : ""}</span> {i + 1}. {p.n}{pendiente ? " (pendiente)" : ""}
+                        {ok ? <Icon n="check" size={14} stroke={3} /> : pendiente ? <Icon n="pending" size={14} /> : !libre ? <Icon n="lock" size={13} /> : null}
+                        <span>{i + 1}. {p.n}{pendiente ? " (pendiente)" : ""}</span>
                       </div>
                     );
                   })}
-                  <div onClick={() => setTab("historial")} style={{ padding: "8px 13px", borderRadius: 100, fontSize: 13, cursor: "pointer", fontWeight: tab === "historial" ? 700 : 500, background: tab === "historial" ? T.primary : "transparent", color: tab === "historial" ? "#fff" : T.n400, border: "1px solid " + (tab === "historial" ? T.primary : T.n200) }}>Historial</div>
+                  <div role="button" tabIndex={0} className="nub-paso" aria-current={tab === "historial" ? "step" : undefined} onClick={() => setTab("historial")} onKeyDown={alTeclear(() => setTab("historial"))} style={{ padding: "8px 13px", borderRadius: 100, fontSize: 13, cursor: "pointer", fontWeight: tab === "historial" ? 700 : 500, background: tab === "historial" ? T.primary : "transparent", color: tab === "historial" ? "#fff" : T.n400, border: "1px solid " + (tab === "historial" ? T.primary : T.n200) }}>Historial</div>
                 </div>
                 {omitioSucursales && (
                   <Alert tone="warning" style={{ marginTop: 14 }}>
@@ -2605,15 +2722,19 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
         .kanban-scroll::-webkit-scrollbar-thumb:hover { background: ${T.primary}; }
       `}</style>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 8 }}>
-        <span onClick={() => desplazar(-1)} title="Desplazar a la izquierda" style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid " + T.n200, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, color: T.n600 }}>←</span>
-        <span onClick={() => desplazar(1)} title="Desplazar a la derecha" style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid " + T.n200, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, color: T.n600 }}>→</span>
+        <button type="button" className="nub-btn nub-btn--ghost" onClick={() => desplazar(-1)} aria-label="Ver fases anteriores" title="Ver fases anteriores" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + T.n200, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: T.n600, padding: 0 }}><Icon n="left" size={16} /></button>
+        <button type="button" className="nub-btn nub-btn--ghost" onClick={() => desplazar(1)} aria-label="Ver fases siguientes" title="Ver fases siguientes" style={{ width: 30, height: 30, borderRadius: 8, border: "1px solid " + T.n200, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: T.n600, padding: 0 }}><Icon n="right" size={16} /></button>
       </div>
       <div ref={scrollRef} className="kanban-scroll" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 12, scrollbarWidth: "thin" }}>
       {FASES.map((faseNombre, faseIdx) => {
         const items = clientes.filter((c) => c.phase === faseIdx);
+        const origen = arrastrando && clientes.find((c) => c.code === arrastrando);
+        const esDestino = sobreCol === faseIdx && origen && origen.phase !== faseIdx;
         return (
           <div
             key={faseIdx}
+            className="nub-kcol"
+            aria-label={"Fase " + (faseIdx + 1) + ": " + faseNombre + ", " + items.length + " clientes"}
             onDragOver={(e) => { e.preventDefault(); setSobreCol(faseIdx); }}
             onDragLeave={() => setSobreCol((v) => (v === faseIdx ? null : v))}
             onDrop={(e) => { e.preventDefault(); const code = e.dataTransfer.getData("text/plain"); if (code) onMoverFase(code, faseIdx); setArrastrando(null); setSobreCol(null); }}
@@ -2636,9 +2757,14 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
                   <div
                     key={cli.code}
                     draggable
+                    role="button"
+                    tabIndex={0}
+                    aria-label={"Abrir " + cli.name}
+                    className={"nub-kcard" + (arrastrando ? " is-dragging" : "")}
                     onDragStart={(e) => { e.dataTransfer.setData("text/plain", cli.code); setArrastrando(cli.code); }}
-                    onDragEnd={() => setArrastrando(null)}
+                    onDragEnd={() => { setArrastrando(null); setSobreCol(null); }}
                     onClick={() => onAbrir(cli.code)}
+                    onKeyDown={(e) => { if (e.target === e.currentTarget) alTeclear(() => onAbrir(cli.code))(e); }}
                     style={{
                       background: "#fff", flexShrink: 0,
                       border: "1px solid " + (colorSeg(cli.estadoSeguimiento) || T.n200),
@@ -2686,7 +2812,12 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
                   </div>
                 );
               })}
-              {items.length === 0 && <div style={{ fontSize: 11.5, color: T.n400, textAlign: "center", padding: "10px 0" }}>Sin clientes</div>}
+              {esDestino && (
+                <div aria-hidden="true" style={{ flexShrink: 0, border: "1.5px dashed " + T.primary, background: "#fff", borderRadius: 10, padding: "14px 10px", fontSize: 12, fontWeight: 600, color: T.primary, textAlign: "center" }}>
+                  Soltá acá para mover a {faseNombre}
+                </div>
+              )}
+              {items.length === 0 && !esDestino && <div style={{ fontSize: 11.5, color: T.n400, textAlign: "center", padding: "10px 0" }}>Sin clientes</div>}
             </div>
           </div>
         );
@@ -2738,32 +2869,38 @@ function SelectorVendedores({ vendedores, seleccion, onChange }) {
 }
 
 const NAV_ITEMS = [
-  ["clientes", "🗂", "Clientes"],
-  ["tablero", "▦", "Tablero"],
-  ["notificaciones", "🔔", "Notificaciones"],
-  ["equipo", "👥", "Equipo"],
-  ["autoimp", "🚀", "Autoimplementador"],
-  ["config", "⚙", "Configuración"],
-  ["perfil", "🙂", "Mi perfil"],
+  ["clientes", "folder", "Clientes"],
+  ["tablero", "kanban", "Tablero"],
+  ["notificaciones", "bell", "Notificaciones"],
+  ["equipo", "users", "Equipo"],
+  ["autoimp", "rocket", "Autoimplementador"],
+  ["config", "sliders", "Configuración"],
+  ["perfil", "user", "Mi perfil"],
 ];
-function Sidebar({ activo, onCambiar, noLeidas = 0 }) {
+function Sidebar({ activo, onCambiar, noLeidas = 0, abierto, onCerrar }) {
+  useCerrarConEscape(abierto, onCerrar);
+  const ir = (id) => { onCambiar(id); onCerrar && onCerrar(); };
   return (
-    <nav aria-label="Secciones del panel" className="nub-nav--light" style={{ width: 200, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+    <>
+    {abierto && <div className="nub-backdrop" onClick={onCerrar} />}
+    <nav aria-label="Secciones del panel" className={"nub-sidebar nub-nav--light" + (abierto ? " is-open" : "")} style={{ width: 200, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
       <div style={{ display: "grid", gap: 3 }}>
+        {onCerrar && <SidebarCerrar onCerrar={onCerrar} />}
         {NAV_ITEMS.map(([id, icon, lbl]) => (
-          <div key={id} role="button" tabIndex={0} aria-current={activo === id ? "page" : undefined} className="nub-nav-item" onClick={() => onCambiar(id)} onKeyDown={alTeclear(() => onCambiar(id))} style={{
+          <div key={id} role="button" tabIndex={0} aria-current={activo === id ? "page" : undefined} className="nub-nav-item" onClick={() => ir(id)} onKeyDown={alTeclear(() => ir(id))} style={{
             display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, cursor: "pointer",
             fontSize: 13.5, fontWeight: activo === id ? 700 : 500,
             background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
           }}>
-            <span style={{ fontSize: 15 }}>{icon}</span>{lbl}
+            <Icon n={icon} size={17} />{lbl}
             {id === "notificaciones" && noLeidas > 0 && (
-              <span style={{ marginLeft: "auto", background: "#fff", color: T.primary, fontSize: 11, fontWeight: 700, borderRadius: 100, padding: "1px 7px", minWidth: 18, textAlign: "center" }}>{noLeidas > 99 ? "99+" : noLeidas}</span>
+              <span aria-label={noLeidas + " sin leer"} style={{ marginLeft: "auto", background: T.primary, color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: 100, padding: "1px 7px", minWidth: 18, textAlign: "center" }}>{noLeidas > 99 ? "99+" : noLeidas}</span>
             )}
           </div>
         ))}
       </div>
     </nav>
+    </>
   );
 }
 
@@ -2925,6 +3062,9 @@ function EquipoLista({ miembros, esSuperuser, onEliminar, onSetTipoUsuario, miCo
 }
 
 function AdminPortal({ session, onLogout }) {
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const cerrarMenu = useCallback(() => setMenuAbierto(false), []);
+  const [filtroNotif, setFiltroNotif] = useState("todas"); // todas | sin_leer
 
 
 
@@ -4024,11 +4164,11 @@ function AdminPortal({ session, onLogout }) {
 
   return (
     <div>
-      <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin extra={<AyudaMemoria codigo={sc} />} />
+      <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin onMenu={() => setMenuAbierto(true)} extra={<AyudaMemoria codigo={sc} />} />
       <ChatBot codigo={sc} />
       <div style={{ display: "flex" }}>
-        <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); }} noLeidas={notifNoLeidas} />
-        <div style={{ flex: 1, minWidth: 0, padding: "26px 24px 60px", maxWidth: 1180, margin: "0 auto" }}>
+        <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); }} noLeidas={notifNoLeidas} abierto={menuAbierto} onCerrar={cerrarMenu} />
+        <div className="nub-main" style={{ flex: 1, minWidth: 0, padding: "26px 24px 60px", maxWidth: 1180, margin: "0 auto" }}>
           {msg && <Alert tone="success" style={{ marginBottom: 16 }}>{msg}</Alert>}
           {modulo === "autoimp" && <PanelAutoimp codigo={sc} />}
 
@@ -4376,31 +4516,68 @@ function AdminPortal({ session, onLogout }) {
                   {notifNoLeidas > 0 && <Btn variant="secondary" size="sm" onClick={marcarTodasNotifLeidas}>Marcar todas como leídas</Btn>}
                 </div>
               </div>
-              {notifs.length === 0 ? (
-                <Card><div style={{ color: T.n400, fontSize: 14, textAlign: "center", padding: 20 }}>No tenés notificaciones todavía.</div></Card>
-              ) : (
-                <div style={{ display: "grid", gap: 8 }}>
-                  {notifs.map((n) => (
-                    <Card key={n.id} style={{ background: n.leida ? "#fff" : T.primary50, borderColor: n.leida ? T.n200 : T.primary100 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                        <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                          {!n.leida && <span style={{ width: 8, height: 8, borderRadius: "50%", background: T.primary, marginTop: 6, flexShrink: 0 }} />}
-                          <div>
-                            <div style={{ fontSize: 14, color: T.n900, fontWeight: n.leida ? 500 : 700 }}>{n.texto}</div>
-                            <div style={{ fontSize: 12, color: T.n400, marginTop: 3 }}>
-                              {n.code ? n.code + " · " : ""}{fmtDate(n.creadoAt)}
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-                          {n.code && <Btn variant="ghost" size="sm" onClick={() => { setModulo("clientes"); abrir(n.code); }}>Ver cliente</Btn>}
-                          {!n.leida && <Btn variant="ghost" size="sm" onClick={() => marcarNotifLeida(n.id)}>Marcar leída</Btn>}
-                        </div>
+              <div role="tablist" aria-label="Filtrar notificaciones" style={{ display: "inline-flex", gap: 4, padding: 4, background: T.n100, borderRadius: 10, marginBottom: 16 }}>
+                {[["todas", "Todas", notifs.length], ["sin_leer", "Sin leer", notifNoLeidas]].map(([id, lbl, cant]) => (
+                  <button key={id} type="button" role="tab" aria-selected={filtroNotif === id} onClick={() => setFiltroNotif(id)} style={{
+                    border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: filtroNotif === id ? 700 : 500,
+                    padding: "7px 14px", borderRadius: 7, background: filtroNotif === id ? "#fff" : "transparent",
+                    color: filtroNotif === id ? T.n900 : T.n600, boxShadow: filtroNotif === id ? "0 1px 2px rgba(15,23,42,0.08)" : "none",
+                  }}>
+                    {lbl} <span style={{ color: T.n400, fontWeight: 600 }}>{cant}</span>
+                  </button>
+                ))}
+              </div>
+              {(() => {
+                const lista = filtroNotif === "sin_leer" ? notifs.filter((n) => !n.leida) : notifs;
+                if (notifs.length === 0) {
+                  return <Card><div style={{ color: T.n600, fontSize: 14, textAlign: "center", padding: 20 }}>Todavía no hay notificaciones. Te avisamos acá cuando un cliente complete un paso.</div></Card>;
+                }
+                if (lista.length === 0) {
+                  return (
+                    <Card>
+                      <div style={{ color: T.n600, fontSize: 14, textAlign: "center", padding: 16, display: "grid", gap: 12, justifyItems: "center" }}>
+                        Estás al día: no quedan notificaciones sin leer.
+                        <Btn variant="ghost" size="sm" onClick={() => setFiltroNotif("todas")}>Ver todas</Btn>
                       </div>
                     </Card>
-                  ))}
-                </div>
-              )}
+                  );
+                }
+                // Agrupamos por día para leer rápido qué pasó hoy y qué es más viejo.
+                const grupos = [];
+                lista.forEach((n) => {
+                  const g = grupoDia(n.creadoAt);
+                  const ult = grupos[grupos.length - 1];
+                  if (ult && ult.titulo === g) ult.items.push(n); else grupos.push({ titulo: g, items: [n] });
+                });
+                return grupos.map((g) => (
+                  <section key={g.titulo} style={{ marginBottom: 18 }}>
+                    <h3 style={{ fontSize: 12.5, fontWeight: 700, color: T.n600, margin: "0 0 8px" }}>{g.titulo}</h3>
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {g.items.map((n) => (
+                        <Card key={n.id} style={{ padding: "14px 16px", background: "#fff", borderColor: n.leida ? T.n200 : T.primary100, boxShadow: n.leida ? "none" : "inset 3px 0 0 " + T.primary }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                            <div style={{ display: "flex", gap: 12, alignItems: "flex-start", minWidth: 0, flex: "1 1 280px" }}>
+                              <span style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: n.leida ? T.n100 : T.primary50, color: n.leida ? T.n400 : T.primary }}>
+                                <Icon n="bell" size={16} />
+                              </span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 14, color: T.n900, fontWeight: n.leida ? 500 : 700, lineHeight: 1.45 }}>{n.texto}</div>
+                                <div style={{ fontSize: 12, color: T.n400, marginTop: 3 }}>
+                                  {n.code ? n.code + " · " : ""}<time dateTime={n.creadoAt} title={fmtDate(n.creadoAt)}>{haceCuanto(n.creadoAt)}</time>{!n.leida && <span style={{ color: T.primary, fontWeight: 600 }}> · Sin leer</span>}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                              {n.code && <Btn variant="ghost" size="sm" onClick={() => { if (!n.leida) marcarNotifLeida(n.id); setModulo("clientes"); abrir(n.code); }}>Ver cliente</Btn>}
+                              {!n.leida && <Btn variant="ghost" size="sm" onClick={() => marcarNotifLeida(n.id)}>Marcar leída</Btn>}
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </section>
+                ));
+              })()}
             </>
           )}
 
