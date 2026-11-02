@@ -42,8 +42,8 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.36.0";
-const APP_VERSION_FECHA = "2026-10-28";
+const APP_VERSION = "1.37.0";
+const APP_VERSION_FECHA = "2026-11-02";
 
 const FASES = [
   "Vinculación",
@@ -152,6 +152,23 @@ function fmtRespuesta(q, rv) {
 // ─── Validador básico del CSV de ventas ───
 
 // ─── UI base ───
+
+// Para divs clickeables (nav, opciones): Enter y Espacio hacen lo mismo que el clic.
+const alTeclear = (fn) => (e) => {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); }
+};
+
+// ─── Esqueletos de carga: reemplazan los "Cargando…" manteniendo la forma de la pantalla ───
+const Skeleton = ({ w = "100%", h = 14, r = 6, style }) => (
+  <div className="nub-skel" aria-hidden="true" style={{ width: w, height: h, borderRadius: r, flexShrink: 0, ...style }} />
+);
+const SkeletonLineas = ({ lineas = 3, style }) => (
+  <div role="status" aria-label="Cargando" style={{ display: "grid", gap: 8, ...style }}>
+    {Array.from({ length: lineas }).map((_, i) => (
+      <Skeleton key={i} w={i === lineas - 1 ? "60%" : "100%"} h={12} />
+    ))}
+  </div>
+);
 const Btn = ({ children, onClick, variant = "primary", size = "md", disabled, style, type = "button" }) => {
   const base = {
     primary: { background: T.primary, color: "#fff", border: "none", boxShadow: "0 1px 3px rgba(10,107,244,0.25)" },
@@ -165,9 +182,7 @@ const Btn = ({ children, onClick, variant = "primary", size = "md", disabled, st
       type={type}
       onClick={onClick}
       disabled={disabled}
-      onMouseDown={(e) => { if (!disabled) e.currentTarget.style.transform = "scale(0.97)"; }}
-      onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
-      onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+      className={"nub-btn nub-btn--" + variant}
       style={{
         ...base, padding: pad, borderRadius: 8, fontSize: 14, fontWeight: 500,
         cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
@@ -267,11 +282,16 @@ const Label = ({ children }) => (
 );
 
 const Radio = ({ options, value, onChange }) => (
-  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+  <div role="radiogroup" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
     {options.map(([v, lbl]) => (
       <div
         key={v}
+        role="radio"
+        aria-checked={value === v}
+        tabIndex={0}
+        className="nub-opt"
         onClick={() => onChange(v)}
+        onKeyDown={alTeclear(() => onChange(v))}
         style={{
           padding: "8px 14px", borderRadius: 8, fontSize: 14, cursor: "pointer",
           border: "1.5px solid " + (value === v ? T.primary : T.n200),
@@ -295,7 +315,12 @@ const Multi = ({ options, value = [], onChange }) => {
         return (
           <div
             key={v}
+            role="checkbox"
+            aria-checked={on}
+            tabIndex={0}
+            className="nub-opt"
             onClick={() => toggle(v)}
+            onKeyDown={alTeclear(() => toggle(v))}
             style={{
               padding: "8px 14px", borderRadius: 8, fontSize: 14, cursor: "pointer",
               border: "1.5px solid " + (on ? T.primary : T.n200),
@@ -411,11 +436,16 @@ export default function PortalImplementacion() {
   }, []);
 
   if (rehidratando) {
-    return <div style={{ minHeight: "100vh", background: T.bg, display: "flex", alignItems: "center", justifyContent: "center", color: T.n400, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>Cargando…</div>;
+    return (
+      <div className="nub-app" role="status" aria-label="Cargando el portal" style={{ minHeight: "100vh", background: T.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+        <Wordmark height={28} />
+        <Skeleton w={160} h={4} r={100} />
+      </div>
+    );
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: T.bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: T.n800 }}>
+    <div className="nub-app" style={{ minHeight: "100vh", background: T.bg, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color: T.n800 }}>
       {screen === "login" && <Login onLogin={login} err={err} loggingIn={loggingIn} />}
       {screen === "client" && <ClientPortal session={session} onLogout={logout} />}
       {screen === "admin" && <AdminPortal session={session} onLogout={logout} />}
@@ -719,10 +749,10 @@ const CLIENT_NAV_ITEMS = [
 ];
 function ClientSidebar({ activo, onCambiar }) {
   return (
-    <div style={{ width: 210, flexShrink: 0, background: "linear-gradient(180deg, #0a6bf4 0%, #0550c0 100%)", padding: "20px 14px", minHeight: "calc(100vh - 61px)", borderRadius: "0 16px 16px 0" }}>
+    <nav aria-label="Secciones del portal" className="nub-nav--dark" style={{ width: 210, flexShrink: 0, background: "linear-gradient(180deg, #0a6bf4 0%, #0550c0 100%)", padding: "20px 14px", minHeight: "calc(100vh - 61px)", borderRadius: "0 16px 16px 0" }}>
       <div style={{ display: "grid", gap: 3 }}>
         {CLIENT_NAV_ITEMS.map(([id, icon, lbl]) => (
-          <div key={id} onClick={() => onCambiar(id)} style={{
+          <div key={id} role="button" tabIndex={0} aria-current={activo === id ? "page" : undefined} className="nub-nav-item" onClick={() => onCambiar(id)} onKeyDown={alTeclear(() => onCambiar(id))} style={{
             display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, cursor: "pointer",
             fontSize: 13.5, fontWeight: activo === id ? 700 : 500,
             background: activo === id ? "rgba(255,255,255,0.18)" : "transparent", color: activo === id ? "#fff" : "rgba(255,255,255,0.72)", transition: "all 0.15s ease",
@@ -731,7 +761,7 @@ function ClientSidebar({ activo, onCambiar }) {
           </div>
         ))}
       </div>
-    </div>
+    </nav>
   );
 }
 
@@ -787,7 +817,18 @@ function ClientPortal({ session, onLogout }) {
     finally { setSaving(false); }
   };
 
-  if (!data || !meta) return <div style={{ padding: 60, textAlign: "center", color: T.n400 }}>Cargando…</div>;
+  if (!data || !meta) return (
+    <div role="status" aria-label="Cargando tu implementación" style={{ maxWidth: 900, margin: "0 auto", padding: "26px 20px 60px", display: "grid", gap: 20 }}>
+      <Card>
+        <Skeleton w={140} h={11} style={{ marginBottom: 12 }} />
+        <Skeleton w={280} h={22} style={{ marginBottom: 20, maxWidth: "100%" }} />
+        <div style={{ display: "flex", gap: 14, overflow: "hidden" }}>
+          {Array.from({ length: 9 }).map((_, i) => <Skeleton key={i} w={30} h={30} r={100} />)}
+        </div>
+      </Card>
+      <Card><SkeletonLineas lineas={4} /></Card>
+    </div>
+  );
 
   const rv = data.relevamiento || {};
   const eventos = data.eventos || [];
@@ -2707,10 +2748,10 @@ const NAV_ITEMS = [
 ];
 function Sidebar({ activo, onCambiar, noLeidas = 0 }) {
   return (
-    <div style={{ width: 200, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+    <nav aria-label="Secciones del panel" className="nub-nav--light" style={{ width: 200, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
       <div style={{ display: "grid", gap: 3 }}>
         {NAV_ITEMS.map(([id, icon, lbl]) => (
-          <div key={id} onClick={() => onCambiar(id)} style={{
+          <div key={id} role="button" tabIndex={0} aria-current={activo === id ? "page" : undefined} className="nub-nav-item" onClick={() => onCambiar(id)} onKeyDown={alTeclear(() => onCambiar(id))} style={{
             display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, cursor: "pointer",
             fontSize: 13.5, fontWeight: activo === id ? 700 : 500,
             background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
@@ -2722,7 +2763,7 @@ function Sidebar({ activo, onCambiar, noLeidas = 0 }) {
           </div>
         ))}
       </div>
-    </div>
+    </nav>
   );
 }
 
@@ -3523,7 +3564,7 @@ function AdminPortal({ session, onLogout }) {
                       ? <Badge tone="green">Acceso a la guía habilitado</Badge>
                       : <Badge tone="amber">Acceso a la guía deshabilitado</Badge>)}
                   </div>
-                  {!autoProg ? <div style={{ color: T.n400, fontSize: 14, marginTop: 10 }}>Cargando avance…</div>
+                  {!autoProg ? <SkeletonLineas lineas={2} style={{ marginTop: 14 }} />
                     : !autoProg.existe ? <div style={{ color: T.n400, fontSize: 14, marginTop: 10 }}>El cliente todavía no ingresó a la guía de autoimplementación.</div>
                     : (<>
                         <div style={{ display: "flex", gap: 20, flexWrap: "wrap", margin: "14px 0" }}>
@@ -4142,7 +4183,20 @@ function AdminPortal({ session, onLogout }) {
                   </div>
                 )}
 
-                {!clients && <div style={{ color: T.n400, fontSize: 14 }}>Cargando clientes…</div>}
+                {!clients && (
+                  <div role="status" aria-label="Cargando clientes" style={{ display: "grid", gap: 10 }}>
+                    {[0, 1, 2, 3].map((i) => (
+                      <div key={i} style={{ background: "#fff", border: "1px solid " + T.cardBorder, borderRadius: 14, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+                        <Skeleton w={36} h={36} r={100} />
+                        <div style={{ flex: 1, display: "grid", gap: 8 }}>
+                          <Skeleton w="40%" h={13} />
+                          <Skeleton w="65%" h={10} />
+                        </div>
+                        <Skeleton w={80} h={20} r={6} />
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {clients && clientesVisibles.length === 0 && <div style={{ color: T.n400, fontSize: 14 }}>Ningún cliente coincide con la búsqueda/filtro.</div>}
                 <div style={{ display: "grid", gap: 10 }}>
                   {clientesVisibles.map((cli) => {
@@ -4248,7 +4302,13 @@ function AdminPortal({ session, onLogout }) {
           <div onClick={() => setPanelCliente(null)} style={{ position: "fixed", inset: 0, background: "rgba(13,17,32,0.4)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
             <div onClick={(e) => e.stopPropagation()} style={{ width: 380, maxWidth: "92vw", height: "100%", background: "#fff", padding: 24, overflowY: "auto", boxShadow: "-8px 0 24px rgba(13,17,32,0.18)" }}>
               {!panelData ? (
-                <div style={{ color: T.n400, fontSize: 14 }}>Cargando…</div>
+                <div role="status" aria-label="Cargando cliente">
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 22 }}>
+                    <Skeleton w={44} h={44} r={100} />
+                    <div style={{ flex: 1, display: "grid", gap: 8 }}><Skeleton w="70%" h={15} /><Skeleton w="40%" h={10} /></div>
+                  </div>
+                  <SkeletonLineas lineas={5} />
+                </div>
               ) : (
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
