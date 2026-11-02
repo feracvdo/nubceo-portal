@@ -13,32 +13,33 @@ import {
   ChevronUp, MoreVertical, Trash2, Edit3, Copy, Check, RefreshCw,
   LogOut, Home, Send, Upload, Link2,
   BookOpen, MapPin, DollarSign, StickyNote, Archive, Package,
-  Lock, Unlock, XCircle, Maximize2, Pencil, FolderOpen, ImageIcon, Ticket
+  Lock, Unlock, XCircle, Maximize2, Pencil, FolderOpen, ImageIcon, Ticket,
+  Menu, PanelLeftClose, Sun, Moon
 } from "lucide-react";
 
 // ─── Tokens de marca Nubceo (tema C — Soft, portal de usuario) ───
 const T = {
-  bg: "#eef4ff",
-  card: "#ffffff",
-  cardBorder: "#c7dcfd",
-  primary: "#0a6bf4",
-  primary50: "#e8f1fe",
-  primary100: "#b9d2fb",
-  primary600: "#0550c0",
-  primary800: "#033a8a",
-  primary900: "#02265c",
-  sky: "#38b6ff",
-  n50: "#f7f8fa",
-  n100: "#eef0f4",
-  n200: "#d8dce6",
-  n400: "#8e96a8",
-  n600: "#4b5468",
-  n800: "#1e2433",
-  n900: "#0d1120",
-  okBg: "#dcfce7", okTx: "#166534", okBorder: "#bbe8c9",
-  warnBg: "#fef9c3", warnTx: "#854d0e", warnBorder: "#fde68a",
-  errBg: "#fee2e2", errTx: "#991b1b", errBorder: "#fca5a5",
-  infoBg: "#eef6ff", infoTx: "#0550c0", infoBorder: "#b9d2fb",
+  bg: "var(--nub-bg)",
+  card: "var(--nub-card)",
+  cardBorder: "var(--nub-card-border)",
+  primary: "var(--nub-primary)",
+  primary50: "var(--nub-primary-50)",
+  primary100: "var(--nub-primary-100)",
+  primary600: "var(--nub-primary-600)",
+  primary800: "var(--nub-primary-800)",
+  primary900: "var(--nub-primary-900)",
+  sky: "var(--nub-sky)",
+  n50: "var(--nub-n50)",
+  n100: "var(--nub-n100)",
+  n200: "var(--nub-n200)",
+  n400: "var(--nub-n400)",
+  n600: "var(--nub-n600)",
+  n800: "var(--nub-n800)",
+  n900: "var(--nub-n900)",
+  okBg: "var(--nub-ok-bg)", okTx: "var(--nub-ok-tx)", okBorder: "var(--nub-ok-border)",
+  warnBg: "var(--nub-warn-bg)", warnTx: "var(--nub-warn-tx)", warnBorder: "var(--nub-warn-border)",
+  errBg: "var(--nub-err-bg)", errTx: "var(--nub-err-tx)", errBorder: "var(--nub-err-border)",
+  infoBg: "var(--nub-info-bg)", infoTx: "var(--nub-info-tx)", infoBorder: "var(--nub-info-border)",
 };
 
 // Escala de espaciado única — así todo el portal respira igual y no hay que
@@ -46,6 +47,26 @@ const T = {
 const SP = { xs: 6, sm: 10, md: 16, lg: 24, xl: 32, xxl: 44 };
 
 const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+function useTheme() {
+  const [theme, setThemeState] = useState(() => {
+    if (typeof window === "undefined") return "light";
+    try { return localStorage.getItem("nub-theme") || "system"; } catch { return "system"; }
+  });
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "system") { root.removeAttribute("data-theme"); }
+    else { root.setAttribute("data-theme", theme); }
+    try { localStorage.setItem("nub-theme", theme); } catch {}
+  }, [theme]);
+  const toggle = () => setThemeState(prev => {
+    if (prev === "light") return "dark";
+    if (prev === "dark") return "system";
+    return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark";
+  });
+  const isDark = theme === "dark" || (theme === "system" && typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  return { theme, toggle, isDark };
+}
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
@@ -257,7 +278,7 @@ const Input = (props) => (
     style={{
       height: 40, padding: "0 12px", border: "1.5px solid " + T.n200, borderRadius: 8,
       fontSize: 14, width: "100%", boxSizing: "border-box", fontFamily: "var(--font-body)",
-      outline: "none", color: T.n800, background: "#fff", transition: "border-color .2s, box-shadow .2s", ...props.style,
+      outline: "none", color: T.n800, background: T.card, transition: "border-color .2s, box-shadow .2s", ...props.style,
     }}
     onFocus={(e) => { e.target.style.border = "1px solid " + T.primary; e.target.style.boxShadow = "0 0 0 3px rgba(10,107,244,0.12)"; }}
     onBlur={(e) => { e.target.style.border = "1px solid " + T.n200; e.target.style.boxShadow = "none"; }}
@@ -279,7 +300,7 @@ const Radio = ({ options, value, onChange }) => (
         style={{
           padding: "8px 14px", borderRadius: 8, fontSize: 14, cursor: "pointer",
           border: "1.5px solid " + (value === v ? T.primary : T.n200),
-          background: value === v ? T.primary50 : "#fff",
+          background: value === v ? T.primary50 : T.card,
           color: value === v ? T.primary800 : T.n600,
           fontWeight: value === v ? 600 : 400,
         }}
@@ -303,7 +324,7 @@ const Multi = ({ options, value = [], onChange }) => {
             style={{
               padding: "8px 14px", borderRadius: 8, fontSize: 14, cursor: "pointer",
               border: "1.5px solid " + (on ? T.primary : T.n200),
-              background: on ? T.primary50 : "#fff",
+              background: on ? T.primary50 : T.card,
               color: on ? T.primary800 : T.n600,
               fontWeight: on ? 600 : 400,
               display: "flex", alignItems: "center", gap: 7,
@@ -312,7 +333,7 @@ const Multi = ({ options, value = [], onChange }) => {
             <span style={{
               width: 16, height: 16, borderRadius: 4, flexShrink: 0,
               border: "2px solid " + (on ? T.primary : T.n200),
-              background: on ? T.primary : "#fff", color: "#fff",
+              background: on ? T.primary : T.card, color: "#fff",
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700,
             }}>{on ? "✓" : ""}</span>
             {lbl}
@@ -469,19 +490,21 @@ const ContactoImplementador = ({ nombre, email, cliente }) => {
   );
 };
 
-const Nav = ({ name, who, onLogout, admin, implementador }) => (
-  <div style={{ background: "#fff", borderBottom: "1px solid " + T.n200, minHeight: 60, display: "flex", alignItems: "center", padding: "10px 24px", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10, gap: 12, flexWrap: "wrap" }}>
-    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+const Nav = ({ name, who, onLogout, admin, implementador, onToggleMenu, isDark, onToggleTheme }) => (
+  <div style={{ background: T.card, borderBottom: "1px solid " + T.n200, minHeight: 60, display: "flex", alignItems: "center", padding: "10px 16px 10px 16px", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 10, gap: 10, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {onToggleMenu && <button className="nub-menu-btn" onClick={onToggleMenu} style={{ display: "none", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 8, border: "1px solid " + T.n200, background: "transparent", cursor: "pointer", color: T.n600 }}><Menu size={18} /></button>}
       <Wordmark />
       <span title={"Versión " + APP_VERSION} style={{ fontSize: 10.5, color: T.n400, fontWeight: 600 }}>v{APP_VERSION}</span>
     </div>
-    <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
       {implementador && <ContactoImplementador nombre={implementador.nombre} email={implementador.email} cliente={name} />}
       <div style={{ textAlign: "right" }}>
         <div style={{ fontSize: 13.5, fontWeight: 600, color: T.n800 }}>{name}</div>
         {who && <div style={{ fontSize: 11.5, color: T.n400 }}>{who}{admin ? " · Equipo Nubceo" : ""}</div>}
       </div>
-      <Btn variant="ghost" size="sm" onClick={onLogout}>Salir</Btn>
+      {onToggleTheme && <Btn variant="ghost" size="sm" onClick={onToggleTheme} title={isDark ? "Modo claro" : "Modo oscuro"}>{isDark ? <Sun size={15} /> : <Moon size={15} />}</Btn>}
+      <Btn variant="ghost" size="sm" onClick={onLogout}><LogOut size={14} /></Btn>
     </div>
   </div>
 );
@@ -696,23 +719,26 @@ const CLIENT_NAV_ITEMS = [
   ["cronograma", Calendar, "Cronograma"],
   ["perfil", Building2, "Mi Perfil"],
 ];
-function ClientSidebar({ activo, onCambiar }) {
+function ClientSidebar({ activo, onCambiar, open, onClose }) {
   return (
-    <div style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
-      <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: "var(--font-display)", textTransform: "uppercase", letterSpacing: ".06em", color: T.n400, padding: "0 12px 10px", marginBottom: 2 }}>Portal</div>
-      <div style={{ display: "grid", gap: 2 }}>
-        {CLIENT_NAV_ITEMS.map(([id, Icon, lbl]) => (
-          <div key={id} onClick={() => onCambiar(id)} className="nub-nav-item" style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, cursor: "pointer",
-            fontSize: 13.5, fontWeight: activo === id ? 700 : 500, fontFamily: "var(--font-body)",
-            background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
-            transition: "background .15s, color .15s",
-          }}>
-            <Icon size={16} strokeWidth={activo === id ? 2.2 : 1.8} />{lbl}
-          </div>
-        ))}
+    <>
+      {open && <div className="nub-sidebar-overlay" onClick={onClose} style={{ display: "none", position: "fixed", inset: 0, top: 61, background: "rgba(13,17,32,0.3)", zIndex: 35 }} />}
+      <div className={"nub-sidebar" + (open ? " nub-sidebar--open" : "")} style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: T.card, padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+        <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: "var(--font-display)", textTransform: "uppercase", letterSpacing: ".06em", color: T.n400, padding: "0 12px 10px", marginBottom: 2 }}>Portal</div>
+        <div style={{ display: "grid", gap: 2 }}>
+          {CLIENT_NAV_ITEMS.map(([id, Icon, lbl]) => (
+            <div key={id} onClick={() => { onCambiar(id); if (onClose) onClose(); }} className="nub-nav-item" style={{
+              display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, cursor: "pointer",
+              fontSize: 13.5, fontWeight: activo === id ? 700 : 500, fontFamily: "var(--font-body)",
+              background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
+              transition: "background .15s, color .15s",
+            }}>
+              <Icon size={16} strokeWidth={activo === id ? 2.2 : 1.8} />{lbl}
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -723,6 +749,8 @@ function ClientPortal({ session, onLogout }) {
   const [modulo, setModulo] = useState("implementacion"); // implementacion | cronograma | perfil
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isDark, toggle: toggleTheme } = useTheme();
 
   const reload = useCallback(async () => {
     try {
@@ -772,7 +800,7 @@ function ClientPortal({ session, onLogout }) {
     <div>
       <Nav name="" who={session.who} onLogout={onLogout} />
       <div style={{ display: "flex" }}>
-        <div style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+        <div style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: T.card, padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
           <div className="nub-skeleton" style={{ width: 60, height: 10, marginBottom: 18, marginLeft: 12 }} />
           {[1,2,3].map(i => <div key={i} className="nub-skeleton" style={{ height: 36, marginBottom: 6, borderRadius: 8 }} />)}
         </div>
@@ -822,9 +850,9 @@ function ClientPortal({ session, onLogout }) {
 
   return (
     <div>
-      <Nav name={meta.name} who={session.who} onLogout={onLogout} implementador={meta.implementadorNombre ? { nombre: meta.implementadorNombre, email: meta.implementadorEmail } : null} />
+      <Nav name={meta.name} who={session.who} onLogout={onLogout} implementador={meta.implementadorNombre ? { nombre: meta.implementadorNombre, email: meta.implementadorEmail } : null} onToggleMenu={() => setSidebarOpen(v => !v)} isDark={isDark} onToggleTheme={toggleTheme} />
       <div style={{ display: "flex" }}>
-        <ClientSidebar activo={modulo} onCambiar={setModulo} />
+        <ClientSidebar activo={modulo} onCambiar={setModulo} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div style={{ flex: 1, minWidth: 0, maxWidth: 900, margin: "0 auto", padding: "26px 20px 60px" }}>
 
           {modulo === "implementacion" && (
@@ -952,9 +980,9 @@ function TabProcesadoras({ data, act, saving }) {
             {conns.map((c) => {
               const activo = sel[c.code] !== undefined;
               return (
-                <div key={c.code} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, border: "1px solid " + (activo ? T.primary100 : T.n200), background: activo ? T.primary50 : "#fff" }}>
+                <div key={c.code} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 10, border: "1px solid " + (activo ? T.primary100 : T.n200), background: activo ? T.primary50 : T.card }}>
                   <div onClick={() => toggle(c.code)} style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer", flex: "1 0 200px" }}>
-                    <span style={{ width: 18, height: 18, borderRadius: 5, border: "2px solid " + (activo ? T.primary : T.n200), background: activo ? T.primary : "#fff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{activo ? "✓" : ""}</span>
+                    <span style={{ width: 18, height: 18, borderRadius: 5, border: "2px solid " + (activo ? T.primary : T.n200), background: activo ? T.primary : T.card, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{activo ? "✓" : ""}</span>
                     <span style={{ fontSize: 14, fontWeight: activo ? 600 : 400, color: activo ? T.primary900 : T.n600 }}>{c.nombre}</span>
                   </div>
                   {activo && (
@@ -962,7 +990,7 @@ function TabProcesadoras({ data, act, saving }) {
                       {ESTADOS_PROCESADORA.map(([v, lbl]) => (
                         <span key={v} onClick={() => setEstado(c.code, v)} style={{
                           fontSize: 12, padding: "4px 10px", borderRadius: 100, cursor: "pointer", fontWeight: sel[c.code] === v ? 700 : 400,
-                          background: sel[c.code] === v ? (v === "conectado" ? T.okBg : v === "en_espera" ? T.warnBg : T.errBg) : "#fff",
+                          background: sel[c.code] === v ? (v === "conectado" ? T.okBg : v === "en_espera" ? T.warnBg : T.errBg) : T.card,
                           color: sel[c.code] === v ? (v === "conectado" ? T.okTx : v === "en_espera" ? T.warnTx : T.errTx) : T.n400,
                           border: "1px solid " + T.n200,
                         }}>{lbl}</span>
@@ -1376,7 +1404,7 @@ function Involucrados({ inv, setInv }) {
             <Input placeholder="Cargo" value={p.cargo} onChange={(e) => set(i, "cargo", e.target.value)} />
             <Input placeholder="Mail" value={p.email} onChange={(e) => set(i, "email", e.target.value)} />
             <Input placeholder="Tel (opc)" value={p.telefono} onChange={(e) => set(i, "telefono", e.target.value)} />
-            <select value={p.rol} onChange={(e) => set(i, "rol", e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+            <select value={p.rol} onChange={(e) => set(i, "rol", e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: T.card }}>
               {ROLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </select>
             <Btn variant="ghost" size="sm" onClick={() => del(i)} style={{ padding: "6px 10px" }}>✕</Btn>
@@ -1644,7 +1672,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
         
         <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "16px 0 10px 0" }}>El Desafío: Dos Sistemas de Identificación Diferentes</h3>
         
-        <div style={{ background: "#eef4ff", padding: 12, borderRadius: 6, marginBottom: 14 }}>
+        <div style={{ background: T.infoBg, padding: 12, borderRadius: 6, marginBottom: 14 }}>
           <p style={{ margin: "0 0 8px 0", fontWeight: 600, fontSize: 13, color: T.primary }}>Sistema de Procesadoras de Pago</p>
           <p style={{ margin: 0, fontSize: 12.5, color: T.n600, lineHeight: 1.6 }}>
             Identifican cada venta por número de comercio, asignando uno distinto para cada plataforma. Ej: 0000001 en Prisma, 0000002 en Mercado Pago
@@ -1700,7 +1728,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
             borderRadius: 8,
             padding: 16,
             cursor: "pointer",
-            background: opcionSeleccionada === "vinculada" ? "#eef4ff" : "#fff",
+            background: opcionSeleccionada === "vinculada" ? T.infoBg : T.card,
             transition: "all 0.2s"
           }}
         >
@@ -1710,7 +1738,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
           </p>
           
           {opcionSeleccionada === "vinculada" && (
-            <div style={{ background: "#fff", padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
+            <div style={{ background: T.card, padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
               <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}><MapPin size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Ruta en Nubceo:</p>
               <p style={{ margin: "0 0 12px 0", fontFamily: "monospace", color: T.n600, fontSize: 11 }}>
                 Dashboard → Mi negocio → Sucursales cabecera → Crear masivamente
@@ -1770,7 +1798,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
             borderRadius: 8,
             padding: 16,
             cursor: "pointer",
-            background: opcionSeleccionada === "sin_vincular" ? "#eef4ff" : "#fff",
+            background: opcionSeleccionada === "sin_vincular" ? T.infoBg : T.card,
             transition: "all 0.2s"
           }}
         >
@@ -1780,7 +1808,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
           </p>
           
           {opcionSeleccionada === "sin_vincular" && (
-            <div style={{ background: "#fff", padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
+            <div style={{ background: T.card, padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
               <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}><MapPin size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Ruta en Nubceo:</p>
               <p style={{ margin: "0 0 12px 0", fontFamily: "monospace", color: T.n600, fontSize: 11 }}>
                 Dashboard → Mi negocio → Sucursales cabecera → Crear masivamente
@@ -1840,7 +1868,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
             borderRadius: 8,
             padding: 16,
             cursor: "pointer",
-            background: opcionSeleccionada === "manual" ? "#eef4ff" : "#fff",
+            background: opcionSeleccionada === "manual" ? T.infoBg : T.card,
             transition: "all 0.2s"
           }}
         >
@@ -1850,7 +1878,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
           </p>
           
           {opcionSeleccionada === "manual" && (
-            <div style={{ background: "#fff", padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
+            <div style={{ background: T.card, padding: 12, borderRadius: 6, marginTop: 12, fontSize: 12 }}>
               <p style={{ margin: "0 0 10px 0", fontWeight: 600, color: T.n900 }}><MapPin size={13} style={{ display: "inline", verticalAlign: "-2px" }} /> Ruta en Nubceo:</p>
               <p style={{ margin: "0 0 12px 0", fontFamily: "monospace", color: T.n600, fontSize: 11 }}>
                 Dashboard → Mi negocio → Sucursales cabecera → Crear sucursal cabecera
@@ -1913,7 +1941,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
               borderRadius: 8,
               padding: 40,
               textAlign: "center",
-              background: "#eef4ff",
+              background: T.infoBg,
               cursor: "pointer",
               marginBottom: 20
             }}
@@ -2002,7 +2030,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
               onClick={() => { setMostrarUpload(false); setArchivo(null); setErrores([]); setDatosValidos([]); }}
               style={{
                 padding: "10px 20px",
-                background: "#fff",
+                background: T.card,
                 border: "1px solid " + T.n200,
                 borderRadius: 6,
                 cursor: "pointer",
@@ -2016,7 +2044,7 @@ function TabSucursales({ data, meta, persist, act, saving }) {
               onClick={() => setOpcionSeleccionada(null)}
               style={{
                 padding: "10px 20px",
-                background: "#fff",
+                background: T.card,
                 border: "1px solid " + T.n200,
                 borderRadius: 6,
                 cursor: "pointer",
@@ -2076,7 +2104,7 @@ function TabConexion({ data, persist, session, setAll }) {
             <div key={v} onClick={() => elegir(v)} style={{
               padding: "14px 16px", borderRadius: 12, cursor: "pointer", lineHeight: 1.5,
               border: "2px solid " + (via === v ? T.primary : T.n200),
-              background: via === v ? T.primary50 : "#fff",
+              background: via === v ? T.primary50 : T.card,
             }}>
               <div style={{ fontSize: 14.5, fontWeight: 700, color: via === v ? T.primary800 : T.n900, marginBottom: 4 }}>
                 {via === v ? "● " : "○ "}{titulo}
@@ -2224,7 +2252,7 @@ function SeccionCsv({ data, persist, titulo }) {
 
           {res.resumen.fixContable > 0 && (
             <div onClick={() => setFixContable(!fixContable)} style={{ display: "flex", gap: 9, alignItems: "center", cursor: "pointer", marginTop: 16, fontSize: 13.5, color: T.n800 }}>
-              <span style={{ width: 18, height: 18, borderRadius: 5, border: "2px solid " + (fixContable ? T.primary : T.n200), background: fixContable ? T.primary : "#fff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{fixContable ? "✓" : ""}</span>
+              <span style={{ width: 18, height: 18, borderRadius: 5, border: "2px solid " + (fixContable ? T.primary : T.n200), background: fixContable ? T.primary : T.card, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700 }}>{fixContable ? "✓" : ""}</span>
               Aplicar Smart Fix contable: donde Neto = Bruto e Impuestos está vacío, completar Impuestos = 0
             </div>
           )}
@@ -2263,7 +2291,7 @@ function PreviewVentas({ resultado, onEditCell }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
         <div onClick={() => setSoloErrores(!soloErrores)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: T.n800, userSelect: "none" }}>
-          <span style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, border: "2px solid " + (soloErrores ? T.primary : T.n200), background: soloErrores ? T.primary : "#fff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>{soloErrores ? "✓" : ""}</span>
+          <span style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, border: "2px solid " + (soloErrores ? T.primary : T.n200), background: soloErrores ? T.primary : T.card, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>{soloErrores ? "✓" : ""}</span>
           Ver solo filas con error ({conError})
         </div>
         <div style={{ fontSize: 12.5, color: T.n400 }}>{indices.length} fila{indices.length !== 1 ? "s" : ""}{soloErrores ? " con error" : " en total"}</div>
@@ -2300,7 +2328,7 @@ function PreviewVentas({ resultado, onEditCell }) {
                       const errMsg = errsPorCol[c];
                       const warnMsg = !errMsg && warnsPorCol[c];
                       return (
-                        <td key={c} title={errMsg || warnMsg || ""} style={{ padding: 0, borderBottom: "1px solid " + T.n100, background: errMsg ? T.errBg : warnMsg ? T.warnBg : "#fff" }}>
+                        <td key={c} title={errMsg || warnMsg || ""} style={{ padding: 0, borderBottom: "1px solid " + T.n100, background: errMsg ? T.errBg : warnMsg ? T.warnBg : T.card }}>
                           <input
                             defaultValue={val}
                             onBlur={(e) => { if (e.target.value !== val) onEditCell(rowIdx, c, e.target.value); }}
@@ -2482,8 +2510,8 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
         .kanban-scroll::-webkit-scrollbar-thumb:hover { background: ${T.primary}; }
       `}</style>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 6, marginBottom: 8 }}>
-        <span onClick={() => desplazar(-1)} title="Desplazar a la izquierda" style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid " + T.n200, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, color: T.n600 }}>←</span>
-        <span onClick={() => desplazar(1)} title="Desplazar a la derecha" style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid " + T.n200, background: "#fff", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, color: T.n600 }}>→</span>
+        <span onClick={() => desplazar(-1)} title="Desplazar a la izquierda" style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid " + T.n200, background: T.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, color: T.n600 }}>←</span>
+        <span onClick={() => desplazar(1)} title="Desplazar a la derecha" style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid " + T.n200, background: T.card, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", fontSize: 13, color: T.n600 }}>→</span>
       </div>
       <div ref={scrollRef} className="kanban-scroll" style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 12, scrollbarWidth: "thin" }}>
       {FASES.map((faseNombre, faseIdx) => {
@@ -2518,7 +2546,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onEnviarAvisos, enviandoA
                     onClick={() => onAbrir(cli.code)}
                     className="kanban-card"
                     style={{
-                      background: "#fff", border: "1px solid " + T.n200, borderRadius: 10, padding: 10, cursor: "grab",
+                      background: T.card, border: "1px solid " + T.n200, borderRadius: 10, padding: 10, cursor: "grab",
                       opacity: arrastrando === cli.code ? 0.4 : 1, boxShadow: "0 1px 3px rgba(13,17,32,0.06)",
                       transition: "transform .2s cubic-bezier(.16,1,.3,1), box-shadow .2s",
                     }}
@@ -2572,23 +2600,26 @@ const NAV_ITEMS = [
   ["config", Settings, "Configuración"],
   ["perfil", User, "Mi perfil"],
 ];
-function Sidebar({ activo, onCambiar }) {
+function Sidebar({ activo, onCambiar, open, onClose }) {
   return (
-    <div style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
-      <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: "var(--font-display)", textTransform: "uppercase", letterSpacing: ".06em", color: T.n400, padding: "0 12px 10px", marginBottom: 2 }}>Equipo</div>
-      <div style={{ display: "grid", gap: 2 }}>
-        {NAV_ITEMS.map(([id, Icon, lbl]) => (
-          <div key={id} onClick={() => onCambiar(id)} className="nub-nav-item" style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, cursor: "pointer",
-            fontSize: 13.5, fontWeight: activo === id ? 700 : 500, fontFamily: "var(--font-body)",
-            background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
-            transition: "background .15s, color .15s",
-          }}>
-            <Icon size={16} strokeWidth={activo === id ? 2.2 : 1.8} />{lbl}
-          </div>
-        ))}
+    <>
+      {open && <div className="nub-sidebar-overlay" onClick={onClose} style={{ display: "none", position: "fixed", inset: 0, top: 61, background: "rgba(13,17,32,0.3)", zIndex: 35 }} />}
+      <div className={"nub-sidebar" + (open ? " nub-sidebar--open" : "")} style={{ width: 210, flexShrink: 0, borderRight: "1px solid " + T.n200, background: T.card, padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
+        <div style={{ fontSize: 10.5, fontWeight: 700, fontFamily: "var(--font-display)", textTransform: "uppercase", letterSpacing: ".06em", color: T.n400, padding: "0 12px 10px", marginBottom: 2 }}>Equipo</div>
+        <div style={{ display: "grid", gap: 2 }}>
+          {NAV_ITEMS.map(([id, Icon, lbl]) => (
+            <div key={id} onClick={() => { onCambiar(id); if (onClose) onClose(); }} className="nub-nav-item" style={{
+              display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 8, cursor: "pointer",
+              fontSize: 13.5, fontWeight: activo === id ? 700 : 500, fontFamily: "var(--font-body)",
+              background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
+              transition: "background .15s, color .15s",
+            }}>
+              <Icon size={16} strokeWidth={activo === id ? 2.2 : 1.8} />{lbl}
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -2614,7 +2645,7 @@ function TicketsRedmineCard({ sel, sc, session, tieneFeature }) {
     })();
   }, [sel, sc]);
 
-  const selStyle = { width: "100%", height: 40, borderRadius: 8, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" };
+  const selStyle = { width: "100%", height: 40, borderRadius: 8, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: T.card };
   const taStyle = { width: "100%", boxSizing: "border-box", padding: 10, border: "1px solid " + T.n200, borderRadius: 8, fontSize: 14, fontFamily: "inherit", color: T.n800, resize: "vertical" };
 
   const crear = async () => {
@@ -2707,7 +2738,7 @@ function EquipoLista({ miembros, esSuperuser, onEliminar, onSetTipoUsuario, miCo
       {miembros.map((m) => {
         const tipo = m.tipo_usuario || (m.es_superadmin ? "superuser" : "admin");
         return (
-          <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: "1px solid " + T.n200, background: "#fff" }}>
+          <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: "1px solid " + T.n200, background: T.card }}>
             <div style={{ width: 34, height: 34, borderRadius: "50%", overflow: "hidden", background: T.n50, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: T.n400 }}>
               {m.foto ? <img src={m.foto} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <User size={16} />}
             </div>
@@ -2721,7 +2752,7 @@ function EquipoLista({ miembros, esSuperuser, onEliminar, onSetTipoUsuario, miCo
             </div>
             {esSuperuser && (
               <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                <select value={tipo} onChange={(e) => onSetTipoUsuario(m.id, e.target.value, m.nombre)} style={{ height: 30, borderRadius: 6, border: "1px solid " + T.n200, fontSize: 12.5, background: "#fff", padding: "0 8px", color: T.n800 }}>
+                <select value={tipo} onChange={(e) => onSetTipoUsuario(m.id, e.target.value, m.nombre)} style={{ height: 30, borderRadius: 6, border: "1px solid " + T.n200, fontSize: 12.5, background: T.card, padding: "0 8px", color: T.n800 }}>
                   <option value="colaborador">Colaborador</option>
                   <option value="admin">Admin</option>
                   <option value="superuser">Superuser</option>
@@ -2768,6 +2799,8 @@ function AdminPortal({ session, onLogout }) {
   const [avisosAutomaticos, setAvisosAutomaticos] = useState(false);
   const [cfgMsg, setCfgMsg] = useState("");
   const [modulo, setModulo] = useState("clientes"); // clientes | tablero | perfil | equipo | config
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { isDark, toggle: toggleTheme } = useTheme();
   const [nuevoCodigo, setNuevoCodigo] = useState("");
   const [confirmaCodigo, setConfirmaCodigo] = useState("");
   const [perfilMsg, setPerfilMsg] = useState("");
@@ -3249,21 +3282,21 @@ function AdminPortal({ session, onLogout }) {
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 <div>
                   <Label>Implementador/a</Label>
-                  <select value={meta.implementadorId || ""} onChange={(e) => asignar(sel, e.target.value || null, "implementador")} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                  <select value={meta.implementadorId || ""} onChange={(e) => asignar(sel, e.target.value || null, "implementador")} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: T.card }}>
                     <option value="">Sin asignar</option>
                     {team.filter((m) => m.rol === "implementador").map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                   </select>
                 </div>
                 <div>
                   <Label>Desarrollador/a</Label>
-                  <select value={meta.desarrolladorId || ""} onChange={(e) => asignar(sel, e.target.value || null, "desarrollador")} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                  <select value={meta.desarrolladorId || ""} onChange={(e) => asignar(sel, e.target.value || null, "desarrollador")} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: T.card }}>
                     <option value="">Sin asignar</option>
                     {team.filter((m) => m.rol === "desarrollador").map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                   </select>
                 </div>
                 <div>
                   <Label>Fase del proyecto</Label>
-                  <select value={meta.phase} onChange={(e) => cambiarFase(sel, Number(e.target.value))} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                  <select value={meta.phase} onChange={(e) => cambiarFase(sel, Number(e.target.value))} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: T.card }}>
                     {FASES.map((f, i) => <option key={f} value={i}>{i + 1} · {f}</option>)}
                   </select>
                 </div>
@@ -3355,7 +3388,7 @@ function AdminPortal({ session, onLogout }) {
                   <div><Label>Fee</Label><Input type="number" value={finFee} onChange={(e) => setFinFee(e.target.value)} placeholder="0" /></div>
                   <div>
                     <Label>Moneda</Label>
-                    <select value={finMoneda} onChange={(e) => setFinMoneda(e.target.value)} style={{ width: "100%", height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                    <select value={finMoneda} onChange={(e) => setFinMoneda(e.target.value)} style={{ width: "100%", height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: T.card }}>
                       <option value="ARS">ARS</option>
                       <option value="USD">USD</option>
                     </select>
@@ -3365,7 +3398,7 @@ function AdminPortal({ session, onLogout }) {
                 <div style={{ display: "grid", gridTemplateColumns: finEstado === "con_deuda" ? "1fr 1fr" : "1fr", gap: 10 }}>
                   <div>
                     <Label>Estado de pago</Label>
-                    <select value={finEstado} onChange={(e) => setFinEstado(e.target.value)} style={{ width: "100%", height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                    <select value={finEstado} onChange={(e) => setFinEstado(e.target.value)} style={{ width: "100%", height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: T.card }}>
                       <option value="al_dia">Al día</option>
                       <option value="con_deuda">Con deuda</option>
                     </select>
@@ -3534,7 +3567,7 @@ function AdminPortal({ session, onLogout }) {
                 {(selData.procesadoras || []).map((p) => (
                   <div key={p.codigo} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid " + T.n100 }}>
                     <span style={{ fontSize: 13.5, color: T.n800 }}>{p.nombre} <span style={{ color: T.n400, fontSize: 11.5 }}>({p.pais})</span></span>
-                    <select value={p.estado} onChange={(e) => cambiarEstadoProc(p.codigo, e.target.value)} style={{ height: 30, borderRadius: 6, border: "1px solid " + T.n200, fontSize: 12.5, fontFamily: "inherit", color: T.n800, background: "#fff", padding: "0 6px" }}>
+                    <select value={p.estado} onChange={(e) => cambiarEstadoProc(p.codigo, e.target.value)} style={{ height: 30, borderRadius: 6, border: "1px solid " + T.n200, fontSize: 12.5, fontFamily: "inherit", color: T.n800, background: T.card, padding: "0 6px" }}>
                       <option value="no_conectado">No conectado</option>
                       <option value="en_espera">En espera de doc/credenciales</option>
                       <option value="conectado">Conectado</option>
@@ -3635,9 +3668,9 @@ function AdminPortal({ session, onLogout }) {
 
   return (
     <div>
-      <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin />
+      <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin onToggleMenu={() => setSidebarOpen(v => !v)} isDark={isDark} onToggleTheme={toggleTheme} />
       <div style={{ display: "flex" }}>
-        <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); }} />
+        <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); }} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
         <div style={{ flex: 1, minWidth: 0, padding: "26px 24px 60px", maxWidth: 1180, margin: "0 auto" }}>
           {msg && <Alert tone="success" style={{ marginBottom: 16 }}>{msg}</Alert>}
 
@@ -3689,7 +3722,7 @@ function AdminPortal({ session, onLogout }) {
                   {newContactos.map((c, i) => (
                     <div key={i} style={{ display: "grid", gridTemplateColumns: "0.9fr 1.1fr 1.2fr 0.9fr auto", gap: 6 }}>
                       <select value={c.rol} onChange={(e) => setNewContactos(newContactos.map((x, j) => j === i ? { ...x, rol: e.target.value } : x))}
-                        style={{ height: 38, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 13, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                        style={{ height: 38, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 13, fontFamily: "inherit", color: T.n800, background: T.card }}>
                         {ROLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                       </select>
                       <Input placeholder="Nombre" value={c.nombre} onChange={(e) => setNewContactos(newContactos.map((x, j) => j === i ? { ...x, nombre: e.target.value } : x))} style={{ height: 38 }} />
@@ -3716,11 +3749,11 @@ function AdminPortal({ session, onLogout }) {
                 </h2>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
                   <Input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre o código…" style={{ maxWidth: 240 }} />
-                  <select value={filtroImpl} onChange={(e) => setFiltroImpl(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                  <select value={filtroImpl} onChange={(e) => setFiltroImpl(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: T.card }}>
                     <option value="">Todos los implementadores</option>
                     {implementadoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                   </select>
-                  <select value={filtroDev} onChange={(e) => setFiltroDev(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                  <select value={filtroDev} onChange={(e) => setFiltroDev(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: T.card }}>
                     <option value="">Todos los desarrolladores</option>
                     {devsTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                   </select>
@@ -3751,7 +3784,7 @@ function AdminPortal({ session, onLogout }) {
                     const pendRv = !cli.relevamientoEnviado;
                     const pct = Math.round((cli.completados / cli.totalPasos) * 100);
                     return (
-                      <div key={cli.code} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 12, border: "1px solid " + T.n200, background: "#fff" }}>
+                      <div key={cli.code} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 12, border: "1px solid " + T.n200, background: T.card }}>
                         <div onClick={() => abrir(cli.code)} style={{ width: 38, height: 38, borderRadius: 8, flexShrink: 0, cursor: "pointer", background: T.n50, border: "1px solid " + T.n200, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: T.n400 }}>
                           {cli.logo ? <img src={cli.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : cli.name.slice(0, 1).toUpperCase()}
                         </div>
@@ -3769,12 +3802,12 @@ function AdminPortal({ session, onLogout }) {
                         </div>
                         <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                           <select value={cli.implementadorId || ""} onChange={(e) => asignar(cli.code, e.target.value || null, "implementador")}
-                            style={{ fontSize: 12, borderRadius: 6, border: "1px solid " + T.n200, padding: "4px 6px", color: cli.implementadorId ? T.n800 : T.n400, background: "#fff", maxWidth: 150 }}>
+                            style={{ fontSize: 12, borderRadius: 6, border: "1px solid " + T.n200, padding: "4px 6px", color: cli.implementadorId ? T.n800 : T.n400, background: T.card, maxWidth: 150 }}>
                             <option value="">Sin implementador/a</option>
                             {implementadoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                           </select>
                           <select value={cli.desarrolladorId || ""} onChange={(e) => asignar(cli.code, e.target.value || null, "desarrollador")}
-                            style={{ fontSize: 12, borderRadius: 6, border: "1px solid " + T.n200, padding: "4px 6px", color: cli.desarrolladorId ? T.n800 : T.n400, background: "#fff", maxWidth: 150 }}>
+                            style={{ fontSize: 12, borderRadius: 6, border: "1px solid " + T.n200, padding: "4px 6px", color: cli.desarrolladorId ? T.n800 : T.n400, background: T.card, maxWidth: 150 }}>
                             <option value="">Sin desarrollador/a</option>
                             {devsTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                           </select>
@@ -3808,7 +3841,7 @@ function AdminPortal({ session, onLogout }) {
               </div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
                 <Input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre o código…" style={{ maxWidth: 240 }} />
-                <select value={filtroImpl} onChange={(e) => setFiltroImpl(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                <select value={filtroImpl} onChange={(e) => setFiltroImpl(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: T.card }}>
                   <option value="">Todos los implementadores</option>
                   {implementadoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
                 </select>
@@ -3818,7 +3851,7 @@ function AdminPortal({ session, onLogout }) {
         {/* Panel lateral rápido del tablero: se abre al hacer clic en una tarjeta */}
         {panelCliente && (
           <div onClick={() => setPanelCliente(null)} style={{ position: "fixed", inset: 0, background: "rgba(13,17,32,0.4)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ width: 380, maxWidth: "92vw", height: "100%", background: "#fff", padding: 24, overflowY: "auto", boxShadow: "-8px 0 24px rgba(13,17,32,0.18)" }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ width: 380, maxWidth: "92vw", height: "100%", background: T.card, padding: 24, overflowY: "auto", boxShadow: "-8px 0 24px rgba(13,17,32,0.18)" }}>
               {!panelData ? (
                 <div style={{ display: "grid", gap: 16 }}>
                   <div className="nub-skeleton" style={{ width: 180, height: 20, borderRadius: 6 }} />
@@ -3904,7 +3937,7 @@ function AdminPortal({ session, onLogout }) {
                   <div><Label>Mail (para que el cliente lo contacte)</Label><Input value={newImplEmail} onChange={(e) => setNewImplEmail(e.target.value)} placeholder="Ej: fernanda@nubceo.com" /></div>
                   <div>
                     <Label>Rol</Label>
-                    <select value={newImplRol} onChange={(e) => setNewImplRol(e.target.value)} style={{ width: "100%", height: 38, borderRadius: 8, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                    <select value={newImplRol} onChange={(e) => setNewImplRol(e.target.value)} style={{ width: "100%", height: 38, borderRadius: 8, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: T.card }}>
                       <option value="implementador">Implementador/a</option>
                       <option value="desarrollador">Desarrollador/a</option>
                       <option value="finanzas">Finanzas</option>
@@ -3913,7 +3946,7 @@ function AdminPortal({ session, onLogout }) {
                   {session.tipoUsuario === "superuser" && (
                     <div>
                       <Label>Tipo de usuario</Label>
-                      <select value={newImplTipo} onChange={(e) => setNewImplTipo(e.target.value)} style={{ width: "100%", height: 38, borderRadius: 8, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                      <select value={newImplTipo} onChange={(e) => setNewImplTipo(e.target.value)} style={{ width: "100%", height: 38, borderRadius: 8, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 14, fontFamily: "inherit", color: T.n800, background: T.card }}>
                         <option value="colaborador">Colaborador</option>
                         <option value="admin">Admin</option>
                         <option value="superuser">Superuser</option>
@@ -3995,7 +4028,7 @@ function AdminPortal({ session, onLogout }) {
                   <span style={{
                     width: 40, height: 22, borderRadius: 100, background: avisosAutomaticos ? T.primary : T.n200, position: "relative", transition: "background .15s", flexShrink: 0,
                   }}>
-                    <span style={{ position: "absolute", top: 2, left: avisosAutomaticos ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left .15s", boxShadow: "0 1px 2px rgba(0,0,0,0.2)" }} />
+                    <span style={{ position: "absolute", top: 2, left: avisosAutomaticos ? 20 : 2, width: 18, height: 18, borderRadius: "50%", background: T.card, transition: "left .15s", boxShadow: "0 1px 2px rgba(0,0,0,0.2)" }} />
                   </span>
                   <span style={{ fontSize: 14, fontWeight: 600, color: T.n800 }}>{avisosAutomaticos ? "Prendido — el cron manda los mails solo, todos los días" : "Apagado — no se manda nada solo, todo es manual"}</span>
                 </div>
@@ -4061,7 +4094,7 @@ function AdminPortal({ session, onLogout }) {
                         </div>
                       )}
                       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <select value={nuevoDia} onChange={(e) => setNuevoDia(Number(e.target.value))} style={{ height: 36, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 13, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                        <select value={nuevoDia} onChange={(e) => setNuevoDia(Number(e.target.value))} style={{ height: 36, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 13, fontFamily: "inherit", color: T.n800, background: T.card }}>
                           {DIAS_SEMANA.map((d, i) => <option key={i} value={i}>{d}</option>)}
                         </select>
                         <input type="time" value={nuevaHora} onChange={(e) => setNuevaHora(e.target.value)} step={900} style={{ height: 36, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 13, fontFamily: "inherit", color: T.n800 }} />
@@ -4115,7 +4148,7 @@ function FilaPlazo({ paso, completo, plazo, onGuardar, onQuitar, onEnviarAhora, 
   const enviarAhora = async () => { setEnviando(true); try { await onEnviarAhora(); } finally { setEnviando(false); } };
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: "1px solid " + (vencido ? T.errBorder : T.n200), background: vencido ? T.errBg : completo ? T.okBg : "#fff", flexWrap: "wrap" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, border: "1px solid " + (vencido ? T.errBorder : T.n200), background: vencido ? T.errBg : completo ? T.okBg : T.card, flexWrap: "wrap" }}>
       <div style={{ flex: "1 1 200px", minWidth: 180 }}>
         <div style={{ fontSize: 13.5, fontWeight: 700, color: T.n800 }}>{paso.nombre}</div>
         <div style={{ fontSize: 11, color: T.n400, marginBottom: 1 }}>Responsable: {paso.responsable}</div>
@@ -4125,17 +4158,17 @@ function FilaPlazo({ paso, completo, plazo, onGuardar, onQuitar, onEnviarAhora, 
       </div>
       {onToggleManual && (
         <div onClick={() => onToggleManual(!completo)} style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", fontSize: 12, color: T.n600, userSelect: "none" }}>
-          <span style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, border: "2px solid " + (completo ? T.primary : T.n200), background: completo ? T.primary : "#fff", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>{completo ? "✓" : ""}</span>
+          <span style={{ width: 16, height: 16, borderRadius: 4, flexShrink: 0, border: "2px solid " + (completo ? T.primary : T.n200), background: completo ? T.primary : T.card, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700 }}>{completo ? "✓" : ""}</span>
           Marcar completo
         </div>
       )}
       <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} disabled={completo}
-        style={{ height: 34, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 12.5, fontFamily: "inherit", color: T.n800, background: completo ? T.n50 : "#fff" }} />
+        style={{ height: 34, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 12.5, fontFamily: "inherit", color: T.n800, background: completo ? T.n50 : T.card }} />
       <Btn size="sm" variant="secondary" onClick={guardar} disabled={completo || !fecha || fecha === plazo?.fechaLimite}>Guardar</Btn>
       {plazo?.fechaLimite && (
         <select value={plazo?.cumplimiento || ""} onChange={(e) => onCumplimiento(e.target.value || null)}
           title="Confirmá si se cumplió el plazo — esto es lo que ve el cliente en su Cronograma"
-          style={{ height: 34, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 6px", fontSize: 12, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+          style={{ height: 34, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 6px", fontSize: 12, fontFamily: "inherit", color: T.n800, background: T.card }}>
           <option value="">Sin confirmar</option>
           <option value="cumplido_tiempo">✓ Cumplido a tiempo</option>
           <option value="cumplido_tarde">◐ Cumplido con atraso</option>
@@ -4160,7 +4193,7 @@ function AdminEvento({ e, onMinuta }) {
   const [editando, setEditando] = useState(false);
   const realizado = e.estado === "realizado";
   return (
-    <div style={{ border: "1px solid " + (realizado ? "#bbe8c9" : T.n200), borderRadius: 10, padding: "12px 14px", background: realizado ? T.okBg : "#fff" }}>
+    <div style={{ border: "1px solid " + (realizado ? "#bbe8c9" : T.n200), borderRadius: 10, padding: "12px 14px", background: realizado ? T.okBg : T.card }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <div>
           <span style={{ fontSize: 14, fontWeight: 600, color: realizado ? T.okTx : T.n900 }}>{EVENTO_NOMBRES[e.tipo] || e.tipo}</span>
@@ -4203,7 +4236,7 @@ function AdminPrueba({ etapa, titulo, prueba, onSave }) {
         Al pasar a <b>"Listas para mostrar"</b>, el cliente ve en su portal la invitación a agendar la reunión de resultados.
       </p>
       <Label>Status</Label>
-      <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: "100%", height: 38, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff", marginBottom: 10 }}>
+      <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ width: "100%", height: 38, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: T.card, marginBottom: 10 }}>
         <option value="pendiente">Pendiente</option>
         <option value="en_curso">En curso</option>
         <option value="listo_para_mostrar">Listas para mostrar resultados</option>
