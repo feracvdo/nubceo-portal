@@ -228,6 +228,168 @@
   .nub-app .nub-login__fases { display: none; }
 }
 
+/* ═══ v1.39 — Sistema visual ════════════════════════════════════════════ */
+
+/* Cifras alineadas en todo el portal (montos, fechas, contadores) */
+.nub-app { font-variant-numeric: tabular-nums; }
+.nub-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Encabezado de página */
+.nub-app .nub-pagehead { margin: 0 0 18px; }
+.nub-app .nub-pagehead__crumb { font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
+.nub-app .nub-pagehead__crumb b { color: #475569; font-weight: 500; }
+.nub-app .nub-pagehead__row { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; }
+.nub-app .nub-pagehead__title { font-size: 24px; font-weight: 750; letter-spacing: -0.02em; color: #02265c; margin: 0; line-height: 1.2; }
+.nub-app .nub-pagehead__desc { font-size: 13.5px; color: #475569; margin: 4px 0 0; max-width: 62ch; }
+.nub-app .nub-pagehead__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Estados vacíos */
+.nub-app .nub-empty { border: 1.5px dashed #d8dce6; border-radius: 12px; padding: 22px 18px; text-align: center; background: #fff; }
+.nub-app .nub-empty--compacto { padding: 12px 10px; background: transparent; border-width: 1px; }
+.nub-app .nub-empty__ic { width: 40px; height: 40px; border-radius: 10px; background: #e8f1fe; color: #0a6bf4; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.nub-app .nub-empty--compacto .nub-empty__ic { width: 28px; height: 28px; border-radius: 8px; margin-bottom: 4px; }
+.nub-app .nub-empty__t { font-size: 14px; font-weight: 650; color: #0f172a; }
+.nub-app .nub-empty--compacto .nub-empty__t { font-size: 12px; }
+.nub-app .nub-empty__d { font-size: 12.5px; color: #475569; margin-top: 3px; line-height: 1.5; }
+.nub-app .nub-empty--compacto .nub-empty__d { font-size: 11px; }
+
+/* Avatares e información sin caja */
+.nub-app .nub-av { border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; border: 2px solid #fff; }
+.nub-app .nub-av--azul { background: #e8f1fe; color: #033a8a; }
+.nub-app .nub-av--gris { background: #f1f5f9; color: #475569; }
+.nub-app .nub-info { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: #475569; white-space: nowrap; }
+.nub-app .nub-stale { font-weight: 700; white-space: nowrap; }
+.nub-app .nub-stale--hi { color: #b91c1c; }
+.nub-app .nub-stale--md { color: #92400e; }
+.nub-app .nub-stale--lo { color: #475569; font-weight: 500; }
+
+/* ═══ v1.39 — Portal del cliente: tu próximo paso ═══════════════════════ */
+.nub-app .nub-np { display: grid; grid-template-columns: minmax(0, 1fr) 260px; background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; margin-bottom: 24px; }
+.nub-app .nub-np__main { padding: 24px 26px; min-width: 0; }
+.nub-app .nub-np__side { padding: 24px 22px; background: #f8fafc; border-left: 1px solid #e2e8f0; display: grid; gap: 18px; align-content: start; }
+.nub-app .nub-np__where { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: #475569; margin-bottom: 12px; }
+.nub-app .nub-np__where b { color: #033a8a; }
+.nub-app .nub-np__hist { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #e2e8f0; background: #fff; color: #475569; font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 10px; border-radius: 8px; cursor: pointer; }
+.nub-app .nub-np__hist[aria-pressed="true"] { border-color: #0a6bf4; color: #0550c0; }
+.nub-app .nub-np__title { font-size: 23px; font-weight: 750; letter-spacing: -0.015em; line-height: 1.25; color: #0f172a; margin: 0 0 8px; }
+.nub-app .nub-np__desc { font-size: 14.5px; color: #475569; margin: 0; line-height: 1.55; max-width: 62ch; }
+.nub-app .nub-np__due { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; padding: 5px 12px; border-radius: 100px; margin: 14px 0 16px; }
+.nub-app .nub-np__due--neutro { background: #e8f1fe; color: #033a8a; }
+.nub-app .nub-np__due--ambar { background: #fef9c3; color: #854d0e; }
+.nub-app .nub-np__due--rojo { background: #fee2e2; color: #991b1b; }
+.nub-app .nub-np__aqui { font-size: 13px; color: #0550c0; font-weight: 600; padding: 10px 0; }
+.nub-app .nub-np__k { font-size: 12px; color: #475569; }
+.nub-app .nub-np__v { font-size: 15px; font-weight: 700; color: #0f172a; }
+.nub-app .nub-np__big { font-size: 34px; font-weight: 750; letter-spacing: -0.03em; color: #02265c; line-height: 1.1; }
+.nub-app .nub-np__mail { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 13px; font-weight: 600; color: #475569; border: 1px solid #e2e8f0; background: #fff; border-radius: 8px; padding: 8px 12px; text-decoration: none; }
+.nub-app .nub-np__mail:hover { border-color: #0a6bf4; color: #0550c0; }
+
+/* Recorrido de pasos: segmentos; solo se nombra el paso actual */
+.nub-app .nub-recorrido { list-style: none; margin: 22px 0 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; }
+.nub-app .nub-recorrido__seg button { display: block; width: 100%; border: 0; background: transparent; padding: 6px 0 0; text-align: left; cursor: pointer; font: inherit; position: relative; }
+.nub-app .nub-recorrido__seg button:disabled { cursor: not-allowed; }
+.nub-app .nub-recorrido__seg i { display: block; height: 6px; border-radius: 3px; background: #e2e8f0; transition: background 0.35s ease; }
+.nub-app .nub-recorrido__seg.is-hecho i { background: #02265c; }
+.nub-app .nub-recorrido__seg.is-actual i { background: #0a6bf4; }
+.nub-app .nub-recorrido__seg.is-pendiente i { background: #f59e0b; }
+.nub-app .nub-recorrido__seg.is-viendo i { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #b9d2fb; }
+.nub-app .nub-recorrido__seg button:not(:disabled):hover i { filter: brightness(0.92); }
+.nub-app .nub-recorrido__lbl { display: block; margin-top: 8px; font-size: 12.5px; font-weight: 700; color: #033a8a; white-space: nowrap; }
+
+/* Aviso flotante */
+.nub-app .nub-toast { position: fixed; right: 20px; bottom: 20px; z-index: 60; display: flex; align-items: flex-start; gap: 10px; max-width: 380px; background: #0f172a; color: #fff; padding: 12px 16px; border-radius: 12px; font-size: 13.5px; line-height: 1.45; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28); animation: nub-toast-in 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.1) both; }
+.nub-app .nub-toast--error { background: #450a0a; }
+@keyframes nub-toast-in { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+.nub-app .nub-toast__chk circle { stroke-dasharray: 63; stroke-dashoffset: 63; animation: nub-draw 0.5s 0.15s ease-out forwards; }
+.nub-app .nub-toast__chk path { stroke-dasharray: 20; stroke-dashoffset: 20; animation: nub-draw 0.35s 0.55s ease-out forwards; }
+@keyframes nub-draw { to { stroke-dashoffset: 0; } }
+
+/* Contenido que aparece suave (al cambiar de paso o pestaña, al terminar la carga) */
+.nub-app .nub-fade { animation: nub-fade-in 0.28s ease-out both; }
+@keyframes nub-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ═══ v1.39 — Panel del equipo ══════════════════════════════════════════ */
+
+/* Filtros rápidos */
+.nub-app .nub-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.nub-app .nub-chip { font: inherit; font-size: 12.5px; font-weight: 600; padding: 6px 12px; border-radius: 100px; background: #fff; border: 1px solid #e2e8f0; color: #475569; cursor: pointer; }
+.nub-app .nub-chip__n { color: #94a3b8; font-weight: 600; margin-left: 2px; }
+.nub-app .nub-chip[aria-pressed="true"] { background: #e8f1fe; border-color: #b9d2fb; color: #033a8a; }
+.nub-app .nub-chip--alerta[aria-pressed="true"] { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
+
+/* Tabla de clientes */
+.nub-app .nub-tabla-wrap { overflow-x: auto; border: 1px solid #e2e8f0; border-radius: 12px; }
+.nub-app .nub-tabla { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 860px; background: #fff; }
+.nub-app .nub-tabla th { text-align: left; font-size: 12px; font-weight: 600; color: #475569; padding: 10px 12px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+.nub-app .nub-tabla td { padding: 11px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.nub-app .nub-tabla tbody tr:last-child td { border-bottom: 0; }
+.nub-app .nub-tabla__fila { cursor: pointer; transition: background 0.15s ease; }
+.nub-app .nub-tabla__fila:hover { background: #f6f9ff; }
+.nub-app .nub-th-btn { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; font: inherit; font-weight: 600; color: #033a8a; cursor: pointer; padding: 0; }
+.nub-app .nub-logo { width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; background: #f8fafc; border: 1px solid #e2e8f0; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #94a3b8; }
+.nub-app .nub-logo img { width: 100%; height: 100%; object-fit: cover; }
+.nub-app .nub-link-fila { border: 0; background: transparent; padding: 0; font: inherit; font-size: 14px; font-weight: 650; color: #0f172a; cursor: pointer; text-align: left; }
+.nub-app .nub-link-fila:hover { color: #0550c0; }
+.nub-app .nub-ph9 { display: flex; gap: 2px; margin-bottom: 4px; }
+.nub-app .nub-ph9 i { width: 9px; height: 5px; border-radius: 2px; background: #e2e8f0; }
+.nub-app .nub-ph9 i.d { background: #02265c; }
+.nub-app .nub-ph9 i.c { background: #0a6bf4; }
+.nub-app .nub-fila-accion { border: 1px solid #e2e8f0; background: #fff; color: #475569; font: inherit; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 7px; cursor: pointer; opacity: 0; transition: opacity 0.15s ease; }
+.nub-app .nub-tabla__fila:hover .nub-fila-accion,
+.nub-app .nub-fila-accion:focus-visible { opacity: 1; }
+
+/* Semáforo de la tarjeta del kanban: borde izquierdo clickeable */
+.nub-app .nub-semaforo { position: absolute; left: 0; top: 0; bottom: 0; width: 5px; border: 0; padding: 0; cursor: pointer; }
+.nub-app .nub-semaforo:hover { width: 8px; }
+
+/* Ficha del cliente: contenido + columna de datos fija */
+.nub-app .nub-ficha { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 20px; align-items: start; }
+.nub-app .nub-ficha-aside { position: sticky; top: 124px; background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
+.nub-app .nub-kv { margin: 0; display: grid; gap: 12px; }
+.nub-app .nub-kv__f dt { font-size: 12px; color: #475569; }
+.nub-app .nub-kv__f dd { margin: 2px 0 0; font-size: 13.5px; font-weight: 650; color: #0f172a; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.nub-app .nub-tabs { display: flex; gap: 22px; border-bottom: 1px solid #e2e8f0; margin: 4px 0 18px; overflow-x: auto; }
+.nub-app .nub-tab { border: 0; background: transparent; font: inherit; font-size: 14px; font-weight: 500; color: #475569; padding: 10px 0 11px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; box-shadow: inset 0 -2px 0 transparent; }
+.nub-app .nub-tab:hover { color: #0f172a; }
+.nub-app .nub-tab[aria-selected="true"] { color: #033a8a; font-weight: 700; box-shadow: inset 0 -2px 0 #0a6bf4; }
+.nub-app .nub-tab__n { font-size: 11px; font-weight: 700; background: #f1f5f9; color: #475569; border-radius: 100px; padding: 0 7px; }
+.nub-app .nub-tab__n--alerta { background: #fee2e2; color: #991b1b; }
+
+/* Menú del equipo: grupos, usuario abajo y modo contraído */
+.nub-app .nub-nav-grupo { font-size: 11.5px; font-weight: 600; color: #94a3b8; padding: 0 11px 4px; }
+.nub-app .nub-mini-btn { display: flex; align-items: center; gap: 10px; border: 0; background: transparent; font: inherit; font-size: 12.5px; font-weight: 600; color: #94a3b8; padding: 7px 11px; border-radius: 8px; cursor: pointer; }
+.nub-app .nub-mini-btn:hover { background: #f1f5f9; color: #475569; }
+@media (min-width: 821px) {
+  .nub-app .nub-sidebar.is-mini .nub-nav-lbl,
+  .nub-app .nub-sidebar.is-mini .nub-nav-grupo { display: none; }
+  .nub-app .nub-sidebar.is-mini .nub-nav-item { justify-content: center; }
+  .nub-app .nub-sidebar.is-mini .nub-nav-badge { position: absolute; top: 2px; right: 2px; padding: 0 5px !important; min-width: 0 !important; font-size: 10px !important; }
+  .nub-app .nub-sidebar.is-mini .nub-mini-btn { justify-content: center; }
+}
+
+/* Panel lateral del tablero: entra deslizándose */
+.nub-app .nub-overlay { animation: nub-fade-only 0.22s ease-out both; }
+.nub-app .nub-panel-in { animation: nub-slide-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+@keyframes nub-fade-only { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nub-slide-in { from { transform: translateX(100%); } to { transform: none; } }
+
+/* En escritorio el menú acompaña el scroll: el usuario y "Contraer" quedan siempre a mano */
+@media (min-width: 821px) {
+  .nub-app .nub-sidebar { position: sticky; top: 61px; height: calc(100vh - 61px); min-height: 0 !important; overflow-y: auto; align-self: flex-start; }
+}
+
+@media (max-width: 980px) {
+  .nub-app .nub-ficha { grid-template-columns: minmax(0, 1fr); }
+  .nub-app .nub-ficha-aside { position: static; order: -1; }
+  .nub-app .nub-np { grid-template-columns: minmax(0, 1fr); }
+  .nub-app .nub-np__side { border-left: 0; border-top: 1px solid #e2e8f0; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+}
+@media (max-width: 820px) {
+  .nub-app .nub-sidebar { width: 240px !important; }
+  .nub-app .nub-np__main { padding: 18px; }
+  .nub-app .nub-np__title { font-size: 20px; }
+}
+
 /* Quien tenga activado "reducir movimiento" en su sistema no ve animaciones */
 @media (prefers-reduced-motion: reduce) {
   .nub-app *,
