@@ -25,7 +25,7 @@ const rnd = (len) => crypto.randomBytes(Math.ceil(len / 2)).toString("hex").slic
 const NOMBRES_EVENTO_SRV = {
   workshop: "Workshop de relevamiento", reunion_tecnica: "Reunión técnica de API",
   capacitacion_conciliador: "Capacitación Conciliador", capacitacion_cash: "Capacitación Nubceo Cash",
-  resultados_sandbox: "Presentación de resultados sandbox", golive: "Evento de go-live",
+  resultados_sandbox: "Presentación de resultados de pruebas", golive: "Evento de go-live",
   workshop_cierre: "Workshop de cierre",
 };
 
@@ -183,6 +183,7 @@ async function assemble(cliente) {
       name: cliente.nombre, razonSocial: cliente.razon_social || null, cuits: cliente.cuits || [], erpPdv: cliente.erp_pdv || [], estadoContrato: cliente.estado_contrato || "sin_firmar", fechaIngreso: cliente.fecha_ingreso || null, comercial: cliente.comercial || null, comerciales: cliente.comerciales || [], autoimplementacion: !!cliente.autoimplementacion, tenant: cliente.tenant_productivo || null, logo: cliente.logo || null,
       comercial: cliente.comercial || null,
       goLiveEstimado: cliente.go_live_estimado || null,
+      usaSandbox: cliente.usa_sandbox !== false,
       tenant: cliente.tenant_productivo, phase: faseActual, createdAt: cliente.creado_at, introLeida: cliente.intro_leida, sucursalesOmitido: cliente.sucursales_omitido,
       apiDesarrolloCompleto: !!cliente.api_desarrollo_completo,
       finanzas: {
@@ -487,15 +488,15 @@ export default async function handler(req, res) {
       if (!ya) {
         try {
           const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "redmine").maybeSingle();
-          const payloads = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId, cli.cuits, await redmineAsignadoDelCliente(cli));
+          const payloads = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId, cli.cuits, await redmineAsignadoDelCliente(cli), cli.usa_sandbox !== false);
           const result = await sendToRedmine(payloads, await redmineKeyDelCliente(cli));
           await db.from("redmine_altas").insert({
             cliente_id: cli.id, estado: result.estado, detalle: result.detalle, payloads,
             feature_issue_id: result.issueIds?.[0] || null, user_story_issue_id: result.issueIds?.[1] || null,
           });
           await addHistory(cli.id, "Portal (automático)", result.estado === "enviado"
-            ? "Se crearon en Redmine la Implementación del cliente y la Solicitud de tenant sandbox"
-            : "Se preparó el alta en Redmine (Implementación + Solicitud de tenant sandbox) — " + result.detalle);
+            ? "Se registró el inicio de la implementación con el equipo técnico de Nubceo"
+            : "Se preparó el inicio de la implementación con el equipo técnico de Nubceo");
         } catch (redmineErr) {
           console.error("Redmine onboarding error (no fatal):", redmineErr.message);
           // Continúa sin Redmine por ahora — se puede reintentar después con "retryRedmine"
@@ -848,8 +849,10 @@ export default async function handler(req, res) {
           tieneArchivoSucursales: pasos.sucursales,
           omitioSucursales: !!cli.sucursales_omitido && !pasos.sucursales,
           tieneVentas: !!ventas,
-          completados: Object.values(pasos).filter(Boolean).length,
-          totalPasos: 8,
+          // Sin sandbox, el paso de pruebas no existe para el cliente: no cuenta en el avance.
+          completados: Object.entries(pasos).filter(([k, v]) => v && (k !== "sandbox" || cli.usa_sandbox !== false)).length,
+          totalPasos: cli.usa_sandbox === false ? 7 : 8,
+          usaSandbox: cli.usa_sandbox !== false,
           ultimaActividad: cli.ultima_actividad || null,
           estadoSeguimiento: cli.estado_seguimiento || "gris",
         });
@@ -946,6 +949,7 @@ export default async function handler(req, res) {
         comercial: (req.body.comercial || "").trim() || null,
         comerciales: Array.isArray(req.body.comerciales) ? req.body.comerciales : [],
         autoimplementacion: !!req.body.autoimplementacion,
+        usa_sandbox: req.body.usaSandbox !== false,
         go_live_estimado: req.body.goLiveEstimado || null,
         fecha_ingreso: req.body.fechaIngreso || null,
       }).select().single();
@@ -982,6 +986,7 @@ export default async function handler(req, res) {
       if (req.body.comercial !== undefined) upd.comercial = (req.body.comercial || "").trim() || null;
       if (req.body.comerciales !== undefined) upd.comerciales = Array.isArray(req.body.comerciales) ? req.body.comerciales : [];
       if (req.body.autoimplementacion !== undefined) upd.autoimplementacion = !!req.body.autoimplementacion;
+      if (req.body.usaSandbox !== undefined) upd.usa_sandbox = !!req.body.usaSandbox;
       if (req.body.fechaIngreso !== undefined) upd.fecha_ingreso = req.body.fechaIngreso || null;
       if (req.body.razonSocial !== undefined) upd.razon_social = (req.body.razonSocial || "").trim() || null;
       if (req.body.cuits !== undefined) upd.cuits = Array.isArray(req.body.cuits) ? req.body.cuits.map((c) => String(c).trim()).filter(Boolean) : [];
@@ -1241,18 +1246,21 @@ export default async function handler(req, res) {
       // así, si algo se completó después del primer login (ej: el CUIT), el reintento ya sale
       // bien en vez de reenviar para siempre el payload viejo guardado la primera vez.
       const { data: cfgRow } = await db.from("config").select("valor").eq("clave", "redmine").maybeSingle();
-      const payloadsCompletos = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId, cli.cuits, asignadoValido(req.body.asignadoId) || await redmineAsignadoDelCliente(cli));
+      const payloadsCompletos = buildRedminePayloads(cli.nombre, cli.tenant_productivo, cli.codigo, cfgRow?.valor?.projectId, cli.cuits, asignadoValido(req.body.asignadoId) || await redmineAsignadoDelCliente(cli), cli.usa_sandbox !== false);
       // Si la Feature ya se había creado bien en un intento anterior, NO la volvemos a crear
       // (evita duplicarla) — solo reintentamos lo que falta, colgado de esa Feature real.
-      const payloads = rm.feature_issue_id ? [payloadsCompletos[1]] : payloadsCompletos;
-      const result = await sendToRedmine(payloads, await redmineKeyDelCliente(cli), rm.feature_issue_id || null);
+      const payloads = (rm.feature_issue_id ? [payloadsCompletos[1]] : payloadsCompletos).filter(Boolean);
+      // Sin sandbox y con la Implementación ya creada, no queda nada por reenviar.
+      const result = payloads.length
+        ? await sendToRedmine(payloads, await redmineKeyDelCliente(cli), rm.feature_issue_id || null)
+        : { estado: "enviado", detalle: "Sin pendientes: el cliente no usa sandbox", issueIds: [] };
       const featureId = rm.feature_issue_id || result.issueIds?.[0] || null;
       const userStoryId = rm.feature_issue_id ? (result.issueIds?.[0] || rm.user_story_issue_id) : (result.issueIds?.[1] || rm.user_story_issue_id);
       await db.from("redmine_altas").update({
         payloads: payloadsCompletos, estado: result.estado, detalle: result.detalle, actualizado_at: new Date().toISOString(),
         feature_issue_id: featureId, user_story_issue_id: userStoryId,
       }).eq("id", rm.id);
-      await addHistory(cli.id, who || "Equipo", result.estado === "enviado" ? "Reenvió el alta a Redmine: creadas la Implementación y la Solicitud de sandbox" : "Reintentó el envío a Redmine — " + result.detalle);
+      await addHistory(cli.id, who || "Equipo", result.estado === "enviado" ? "Reenvió el inicio de la implementación al equipo técnico" : "Reintentó el envío a Redmine — " + result.detalle);
       return res.json(await assemble(cli));
     }
 
