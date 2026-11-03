@@ -485,3 +485,10 @@ body:has(.nub-app) {
   .nub-app .nub-tut__bar { padding: 12px 18px; }
   .nub-app .nub-paises, .nub-app .nub-procs, .nub-app .nub-grid2 { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ═══ v1.41 — Lo que falta completar, en rojo ═══ */
+.nub-app .nub-tut__hint--error { color: #b91c1c; font-weight: 600; }
+.nub-app .nub-falta { outline: 2px solid #dc2626; outline-offset: 6px; border-radius: 12px; }
+.nub-app .nub-falta--caja { padding: 4px; }
+/* En el panel del equipo el aviso flotante no tapa el botón del chat */
+.nub-app .nub-toast--equipo { right: 92px; }
