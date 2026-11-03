@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
-import { CONECTORES, ESTADOS_PROCESADORA, DOCS, COLUMNAS_OBLIGATORIAS, TEMPLATE_SUCURSALES, PLATFORM_CODES_VALIDOS, PREFIJO_OTRA, codigoOtra } from "../lib/nubceo";
+import { CONECTORES, PAISES, ID_FISCAL, ESTADOS_PROCESADORA, DOCS, COLUMNAS_OBLIGATORIAS, TEMPLATE_SUCURSALES, PLATFORM_CODES_VALIDOS, PREFIJO_OTRA, codigoOtra } from "../lib/nubceo";
 import { validarVentas, validarTabla, exportarNubceo } from "../lib/validadorVentas";
 import { convertirSucursales, exportarTemplateSucursales } from "../lib/sucursalesTemplate";
 import MailsCard from "./MailsCard";
@@ -42,7 +42,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.39.1";
+const APP_VERSION = "1.40.0";
 const APP_VERSION_FECHA = "2026-11-03";
 
 const FASES = [
@@ -706,6 +706,7 @@ const Nav = ({ name, who, onLogout, admin, implementador, extra, onMenu }) => (
 
 const PASOS = [
   { id: "procesadoras", n: "Procesadoras" },
+  { id: "empresa", n: "Datos de tu empresa" },
   { id: "introduccion", n: "Introducción" },
   { id: "relevamiento", n: "Relevamiento" },
   { id: "sucursales", n: "Sucursales" },
@@ -962,7 +963,8 @@ function ClientSidebar({ activo, onCambiar, abierto, onCerrar }) {
 
 // ─── Tu próximo paso: una sola acción, con su plazo y a quién preguntarle ───
 const PROXIMO_TXT = {
-  procesadoras: ["Contanos con qué procesadoras cobran", "Marcá las plataformas de pago que usan y en qué estado está cada conexión. Con esto preparamos la vinculación.", "Marcar procesadoras"],
+  procesadoras: ["Contanos con qué procesadoras cobran", "Elegí tu país, marcá las plataformas de pago que usan y en qué estado está cada conexión.", "Marcar procesadoras"],
+  empresa: ["Revisá los datos de tu empresa", "Confirmá lo que cargamos: razones sociales, contactos y sistemas. Te lleva un par de minutos.", "Revisar mis datos"],
   introduccion: ["Leé cómo va a ser tu implementación", "Cinco minutos para conocer las fases, quién hace qué y qué vamos a necesitar de tu equipo.", "Leer la introducción"],
   relevamiento: ["Completá el formulario de relevamiento", "Preguntas sobre cómo venden, cobran y facturan. Con tus respuestas armamos el workshop y la configuración de reglas.", "Completar relevamiento"],
   sucursales: ["Cargá tus sucursales", "Subí el archivo de sucursales con el formato de Nubceo para que cada venta quede asociada a su local.", "Cargar sucursales"],
@@ -982,6 +984,332 @@ function textoPlazo(fechaISO) {
   if (d === 0) return { txt: "Vence hoy", tono: "rojo" };
   if (d === 1) return { txt: "Vence mañana", tono: "ambar" };
   return { txt: "Vence el " + f + ", en " + d + " días", tono: d <= 3 ? "ambar" : "neutro" };
+}
+
+
+// ═════════════════ Modo tutorial: tarjetas cortas con Siguiente ═════════════════
+// "Siguiente" avanza dentro del paso; el paso se completa recién en la última parte.
+
+const BANDERA_SVG = {
+  ar: '<rect width="30" height="20" fill="#74ACDF"/><rect y="6.67" width="30" height="6.67" fill="#fff"/><circle cx="15" cy="10" r="2.2" fill="#F6B40E"/>',
+  uy: '<rect width="30" height="20" fill="#fff"/><rect y="2.22" width="30" height="2.22" fill="#0038A8"/><rect y="6.67" width="30" height="2.22" fill="#0038A8"/><rect y="11.11" width="30" height="2.22" fill="#0038A8"/><rect y="15.56" width="30" height="2.22" fill="#0038A8"/><rect width="13.3" height="11.1" fill="#fff"/><circle cx="6.6" cy="5.5" r="2.7" fill="#FCD116"/>',
+  py: '<rect width="30" height="6.67" fill="#D52B1E"/><rect y="6.67" width="30" height="6.67" fill="#fff"/><rect y="13.33" width="30" height="6.67" fill="#0038A8"/><circle cx="15" cy="10" r="2.1" fill="none" stroke="#0a7d32" stroke-width=".8"/>',
+  co: '<rect width="30" height="10" fill="#FCD116"/><rect y="10" width="30" height="5" fill="#003893"/><rect y="15" width="30" height="5" fill="#CE1126"/>',
+  cr: '<rect width="30" height="20" fill="#002B7F"/><rect y="3.33" width="30" height="13.34" fill="#fff"/><rect y="6.67" width="30" height="6.66" fill="#CE1126"/>',
+  pa: '<rect width="30" height="20" fill="#fff"/><rect x="15" width="15" height="10" fill="#DA121A"/><rect y="10" width="15" height="10" fill="#072357"/><polygon fill="#072357" points="7.5,2.4 8.1,4.2 10,4.2 8.5,5.3 9.1,7.1 7.5,6 5.9,7.1 6.5,5.3 5,4.2 6.9,4.2"/><polygon fill="#DA121A" points="22.5,12.4 23.1,14.2 25,14.2 23.5,15.3 24.1,17.1 22.5,16 20.9,17.1 21.5,15.3 20,14.2 21.9,14.2"/>',
+};
+const Bandera = ({ c, w = 36 }) => (
+  <svg width={w} height={Math.round(w * 2 / 3)} viewBox="0 0 30 20" aria-hidden="true" focusable="false" className="nub-bandera" dangerouslySetInnerHTML={{ __html: BANDERA_SVG[c] || "" }} />
+);
+const codPais = (nombre) => (PAISES.find(([, n]) => n === nombre) || [])[0] || null;
+
+function Tutorial({ titulo, partes, onCompletar, completo, final, guardando }) {
+  const [i, setI] = useState(completo ? partes.length : 0);
+  const total = partes.length;
+  const enFinal = i >= total;
+  const p = partes[Math.min(i, total - 1)];
+  const ultima = i === total - 1;
+  const ok = p.ok !== false;
+  const siguiente = async () => {
+    if (ultima) { const r = await onCompletar(); if (r !== false) setI(total); }
+    else setI(i + 1);
+  };
+  return (
+    <section className="nub-tut" aria-label={titulo}>
+      <div className="nub-tut__top">
+        <div className="nub-tut__paso"><b>{titulo}</b></div>
+        <div className="nub-tut__barras" aria-hidden="true">
+          {partes.map((_, k) => <i key={k} className={enFinal || k < i ? "d" : k === i ? "c" : ""} />)}
+        </div>
+        <div className="nub-tut__paso">{enFinal ? "Paso completo" : "Parte " + (i + 1) + " de " + total}</div>
+      </div>
+      <div className="nub-tut__card">
+        {enFinal ? (
+          <div className="nub-tut__parte nub-tut__parte--solo nub-fade">
+            <div className="nub-tut__final">
+              <svg className="nub-tut__ck" width="60" height="60" viewBox="0 0 52 52" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="26" cy="26" r="24" /><path d="m16 27 7 7 13-14" /></svg>
+              {final}
+              <div style={{ marginTop: 14 }}><Btn variant="ghost" onClick={() => setI(0)}>Revisar o cambiar</Btn></div>
+            </div>
+          </div>
+        ) : (
+          <div className="nub-tut__parte nub-fade" key={i}>
+            <div>
+              {p.k && <div className="nub-tut__k">{p.k}</div>}
+              <h2 className="nub-tut__h">{p.h}</h2>
+              {p.texto && <p className="nub-tut__p">{p.texto}</p>}
+              {p.nota && <div className="nub-tut__nota">{p.nota}</div>}
+            </div>
+            <div style={{ minWidth: 0 }}>{p.contenido}</div>
+          </div>
+        )}
+        {!enFinal && (
+          <div className="nub-tut__bar">
+            <Btn variant="ghost" onClick={() => setI(i - 1)} style={{ visibility: i === 0 ? "hidden" : "visible" }}>Anterior</Btn>
+            <span className="nub-tut__hint">{p.hint || (ok ? "Lo que hacés se guarda al completar el paso." : "")}</span>
+            <Btn onClick={siguiente} disabled={!ok || guardando}>{ultima ? (guardando ? "Guardando…" : "Completar paso") : "Siguiente"}</Btn>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+const ESTADOS_TUT = [["conectado", "Conectada"], ["en_espera", "En espera"], ["no_conectado", "Sin conectar"]];
+const AYUDA_ESTADO = {
+  conectado: "Perfecto. Ya podemos ver sus liquidaciones.",
+  en_espera: "Tu implementador/a te ayuda a conseguir lo que falta. No frena tu avance.",
+  no_conectado: "No pasa nada: la vinculación la coordinamos con tu implementador/a.",
+};
+
+// ── Paso 1: Procesadoras ──
+function TabProcesadorasTut({ data, act, saving, onSeguir }) {
+  const rv = data.relevamiento || {};
+  const previas = data.procesadoras || [];
+  const paisPrevio = rv.pais || (previas[0] && (previas[0].pais || "").replace(/[^\p{L}\s]/gu, "").trim()) || null;
+  const [pais, setPais] = useState(PAISES.some(([, n]) => n === paisPrevio) ? paisPrevio : null);
+  const [sel, setSel] = useState(() => Object.fromEntries(previas.filter((p) => !(p.codigo || "").startsWith(PREFIJO_OTRA)).map((p) => [p.codigo, p.estado])));
+  const [otras, setOtras] = useState(() => previas.filter((p) => (p.codigo || "").startsWith(PREFIJO_OTRA)).map((p) => ({ nombre: (p.nombre || "").replace(/^Otra:\s*/i, ""), estado: p.estado })));
+  const [otraTxt, setOtraTxt] = useState("");
+  const conns = (pais && CONECTORES[pais]) || [];
+  const elegidas = conns.filter((c) => sel[c.code] !== undefined);
+  const cant = elegidas.length + otras.length;
+  const elegirPais = (n) => { if (n !== pais) { setSel({}); setOtras([]); } setPais(n); };
+  const toggle = (code) => setSel((s) => { const x = { ...s }; if (x[code] !== undefined) delete x[code]; else x[code] = ""; return x; });
+  const agregarOtra = () => { const v = otraTxt.trim(); if (v && !otras.some((o) => o.nombre.toLowerCase() === v.toLowerCase())) setOtras([...otras, { nombre: v, estado: "" }]); setOtraTxt(""); };
+  const filas = [...elegidas.map((c) => ({ key: c.code, nombre: c.nombre, estado: sel[c.code], set: (e) => setSel({ ...sel, [c.code]: e }) })),
+    ...otras.map((o, k) => ({ key: "otra" + k, nombre: o.nombre, estado: o.estado, set: (e) => setOtras(otras.map((x, j) => j === k ? { ...x, estado: e } : x)) }))];
+  const cuenta = (e) => filas.filter((f) => (f.estado || "no_conectado") === e).length;
+  const completar = async () => {
+    const suf = codPais(pais) || "xx";
+    const lista = [
+      ...elegidas.map((c) => ({ codigo: c.code, nombre: c.nombre, pais, estado: sel[c.code] || "no_conectado" })),
+      ...otras.map((o, k) => ({ codigo: PREFIJO_OTRA + suf + "_" + (k + 1), nombre: "Otra: " + o.nombre, pais, estado: o.estado || "no_conectado" })),
+    ];
+    const r = await act("saveProcesadoras", { lista, pais, confirmar: true, log: "Confirmó sus procesadoras en " + pais + " (" + lista.length + ")" });
+    return !!r;
+  };
+  const partes = [
+    { k: "Dónde operan", h: "¿En qué país opera tu empresa?", texto: "Así te mostramos solo las procesadoras que trabajan en ese país.",
+      nota: "Si operan en más de un país, elegí el principal. Los demás los vemos con tu implementador/a.",
+      ok: !!pais, hint: pais ? null : "Elegí un país para seguir.",
+      contenido: (
+        <div className="nub-paises" role="group" aria-label="País">
+          {PAISES.map(([c, n]) => (
+            <button key={c} type="button" className="nub-pais" aria-pressed={pais === n} onClick={() => elegirPais(n)}><Bandera c={c} /><span>{n}</span></button>
+          ))}
+        </div>
+      ) },
+    { k: "Con quién cobran", h: "¿Con qué procesadoras cobran" + (pais ? " en " + pais : "") + "?",
+      texto: "Marcá todas las que usan hoy para cobrar con tarjeta, QR o billetera. Si alguna no está en la lista, agregala abajo.",
+      nota: "Una procesadora es la empresa que te liquida las ventas: la que te manda el resumen de lo que te va a pagar y cuándo.",
+      ok: cant > 0, hint: cant ? cant + (cant === 1 ? " procesadora marcada." : " procesadoras marcadas.") : "Marcá al menos una procesadora para seguir.",
+      contenido: (
+        <div>
+          {conns.length === 0 && <div className="nub-tut__nota nub-tut__nota--azul" style={{ marginBottom: 12 }}>Todavía no tenemos procesadoras precargadas para {pais}. Agregá las que usan y tu implementador/a las confirma.</div>}
+          <div className="nub-procs" role="group" aria-label="Procesadoras">
+            {conns.map((c) => (
+              <button key={c.code} type="button" role="checkbox" aria-checked={sel[c.code] !== undefined} className="nub-proc" onClick={() => toggle(c.code)}>
+                <span className="nub-proc__box">{sel[c.code] !== undefined && <Icon n="check" size={12} stroke={3.2} />}</span>{c.nombre}
+              </button>
+            ))}
+            {otras.map((o, k) => (
+              <button key={"o" + k} type="button" role="checkbox" aria-checked="true" className="nub-proc" onClick={() => setOtras(otras.filter((_, j) => j !== k))} title="Clic para quitar">
+                <span className="nub-proc__box"><Icon n="check" size={12} stroke={3.2} /></span>{o.nombre}
+              </button>
+            ))}
+          </div>
+          <Label>¿Usan otra que no está en la lista?</Label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Input value={otraTxt} onChange={(e) => setOtraTxt(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); agregarOtra(); } }} placeholder="Nombre de la procesadora" />
+            <Btn variant="secondary" onClick={agregarOtra}>Agregar</Btn>
+          </div>
+        </div>
+      ) },
+    { k: "Estado de cada una", h: "¿Cómo está la vinculación de cada procesadora?",
+      texto: "Contanos en qué punto está cada una. Podés seguir con cualquier estado: las que falten las resolvemos juntos.",
+      nota: <><b>Conectada:</b> ya nos diste el acceso. <b>En espera:</b> la pediste, pero falta documentación o credenciales. <b>Sin conectar:</b> todavía no se empezó.</>,
+      contenido: (
+        <div style={{ display: "grid", gap: 8 }}>
+          {filas.map((f) => (
+            <div key={f.key} className="nub-est">
+              <div className="nub-est__h">
+                <b>{f.nombre}</b>
+                <div className="nub-segs" role="group" aria-label={"Estado de " + f.nombre}>
+                  {ESTADOS_TUT.map(([e, l]) => <button key={e} type="button" data-e={e} aria-pressed={f.estado === e} onClick={() => f.set(e)}>{l}</button>)}
+                </div>
+              </div>
+              {f.estado && <div className="nub-est__d">{AYUDA_ESTADO[f.estado]}</div>}
+            </div>
+          ))}
+        </div>
+      ) },
+    { k: "Revisá antes de terminar", h: "Así quedan tus procesadoras",
+      texto: cuenta("conectado") + (cuenta("conectado") === 1 ? " conectada, " : " conectadas, ") + cuenta("en_espera") + " en espera y " + cuenta("no_conectado") + " sin conectar. Podés completar el paso igual: las que falten las vemos en la reunión de vinculación.",
+      nota: "Podés volver a este paso cuando quieras para actualizar los estados.",
+      contenido: (
+        <div className="nub-sum">
+          <div className="nub-sum__r"><span>País</span><b>{pais}</b></div>
+          {filas.map((f) => {
+            const e = f.estado || "no_conectado";
+            return <div key={f.key} className="nub-sum__r"><span>{f.nombre}</span><span className={"nub-pill nub-pill--" + e}>{ESTADOS_TUT.find(([x]) => x === e)[1]}</span></div>;
+          })}
+        </div>
+      ) },
+  ];
+  return (
+    <Tutorial titulo="Procesadoras" partes={partes} onCompletar={completar} guardando={saving} completo={!!rv.procesadorasConfirmadas}
+      final={<><h2 className="nub-tut__h">Procesadoras cargadas</h2><p className="nub-tut__p">Tu implementador/a ya recibió el aviso{(previas.some((x) => x.estado !== "conectado")) ? " y coordina con vos las que faltan" : ""}.</p><Btn onClick={onSeguir}>Seguir con Datos de tu empresa</Btn></>} />
+  );
+}
+
+const RUBROS = ["Gastronomía", "Supermercado", "Retail o comercio minorista", "Indumentaria y calzado", "Farmacia y perfumería", "Estación de servicio", "Salud", "Educación", "Turismo y hotelería", "E-commerce", "Servicios", "Otro"];
+const ROLES_TUT = [["sponsor", "Quien decide (sponsor)"], ["key_user", "Usuario principal (key user)"], ["desarrollador", "Desarrollo o sistemas"], ["otro", "Otro"]];
+
+// ── Paso 2: Datos de tu empresa ──
+function TabEmpresaTut({ data, meta, act, saving, onSeguir }) {
+  const rv = data.relevamiento || {};
+  const cp = codPais(rv.pais) || "ar";
+  const [fiscalLbl, fiscalLen] = ID_FISCAL[cp] || ["CUIT", 11];
+  const [rubro, setRubro] = useState(rv.rubro || "");
+  const [rubroOtro, setRubroOtro] = useState(rv.rubroOtro || "");
+  const [razones, setRazones] = useState(() => rv.razones && rv.razones.length ? rv.razones
+    : (meta.cuits || []).length ? meta.cuits.map((c, k) => ({ rs: k === 0 ? (meta.razonSocial || "") : "", id: c }))
+    : [{ rs: meta.razonSocial || "", id: "" }]);
+  const [contactos, setContactos] = useState(() => (data.involucrados || []).map((c) => ({ ...c })));
+  const [pdv, setPdv] = useState(rv.pdv || meta.erpPdv || []);
+  const [erp, setErp] = useState(rv.erp || []);
+  const [inPdv, setInPdv] = useState(""), [inErp, setInErp] = useState("");
+  const errId = (v) => {
+    const d = String(v || "").replace(/\D/g, "");
+    if (!String(v || "").trim()) return "Completalo o quitá esta razón social.";
+    if (fiscalLen && d.length !== fiscalLen) return "El " + fiscalLbl + " tiene " + fiscalLen + " números.";
+    if (d.length < 6) return "Revisá el número: parece incompleto.";
+    return "";
+  };
+  const mailOk = (m) => !m || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m);
+  const rsOk = razones.length > 0 && razones.every((r) => r.rs.trim() && !errId(r.id));
+  const ctOk = contactos.every((c) => (c.nombre || "").trim() && mailOk(c.email));
+  const setR = (k, campo, v) => setRazones(razones.map((r, j) => j === k ? { ...r, [campo]: v, tocado: campo === "id" ? true : r.tocado } : r));
+  const setC = (k, campo, v) => setContactos(contactos.map((c, j) => j === k ? { ...c, [campo]: v } : c));
+  const Chips = ({ lista, set }) => (
+    <div className="nub-chipsx">
+      {lista.length === 0 && <span style={{ fontSize: 13, color: T.n400 }}>Ninguno cargado</span>}
+      {lista.map((v, j) => <span key={v} className="nub-chipx">{v}<button type="button" aria-label={"Quitar " + v} onClick={() => set(lista.filter((_, x) => x !== j))}><Icon n="x" size={11} stroke={3} /></button></span>)}
+    </div>
+  );
+  const sumar = (v, lista, set, limpiar) => { const t = v.trim(); if (t && !lista.includes(t)) set([...lista, t]); limpiar(""); };
+  const completar = async () => {
+    const r = await act("confirmarEmpresa", {
+      rubro, rubroOtro: rubro === "Otro" ? rubroOtro : "",
+      razones: razones.map(({ rs, id }) => ({ rs, id })),
+      contactos: contactos.map(({ id, nombre, cargo, email, telefono, rol }) => ({ id, nombre, cargo, email, telefono, rol })),
+      pdv, erp,
+    });
+    return !!r;
+  };
+  const partes = [
+    { k: "Revisá lo que cargamos", h: "Tu empresa en Nubceo", texto: "Cargamos estos datos cuando arrancamos. En las próximas tarjetas los revisás y corregís lo que haga falta.",
+      contenido: (
+        <div>
+          <Label>Nombre de la empresa</Label>
+          <Input value={meta.name || ""} readOnly style={{ background: T.n50, color: T.n600 }} />
+          <div style={{ fontSize: 12.5, color: T.n600, marginTop: 6 }}>Es el nombre con el que ingresás al portal. Si está mal escrito, avisale a tu implementador/a.</div>
+          {meta.tenant && (
+            <div className="nub-tenant">
+              <div><small>Tu número de cliente en Nubceo</small><div className="nub-tenant__n">{meta.tenant}</div></div>
+              <div style={{ fontSize: 12.5, color: T.n600, lineHeight: 1.5 }}>Es fijo y no se puede cambiar. Tenelo a mano cuando hables con soporte.</div>
+            </div>
+          )}
+        </div>
+      ) },
+    { k: "Tu actividad", h: "¿A qué se dedica tu empresa?", texto: "Nos ayuda a anticipar cómo venden y cobran: no es lo mismo un restaurante que una farmacia o una estación de servicio.",
+      ok: !!rubro && (rubro !== "Otro" || !!rubroOtro.trim()), hint: rubro ? null : "Elegí el rubro que mejor los describe.",
+      contenido: (
+        <div>
+          <div className="nub-procs" role="radiogroup" aria-label="Rubro">
+            {RUBROS.map((r) => (
+              <button key={r} type="button" role="radio" aria-checked={rubro === r} className="nub-proc nub-proc--radio" onClick={() => setRubro(r)}>
+                <span className="nub-proc__box nub-proc__box--radio" />{r}
+              </button>
+            ))}
+          </div>
+          {rubro === "Otro" && <div style={{ marginTop: 12 }}><Label>Contanos cuál</Label><Input value={rubroOtro} onChange={(e) => setRubroOtro(e.target.value)} placeholder="Ej: venta de repuestos" /></div>}
+        </div>
+      ) },
+    { k: "Identificación fiscal", h: "Razones sociales y " + fiscalLbl, texto: "Estas son las que tenemos. Si facturan con otras, agregalas.",
+      nota: "No hace falta cargar todas: con las que usan para vender y cobrar alcanza. Las demás las podés sumar después.",
+      ok: rsOk, hint: rsOk ? null : "Revisá los campos marcados en rojo.",
+      contenido: (
+        <div>
+          {razones.map((r, k) => {
+            const e = errId(r.id);
+            return (
+              <div key={k} className="nub-dato">
+                <div className="nub-dato__h"><b>{k === 0 ? "Principal" : "Razón social " + (k + 1)}</b>{razones.length > 1 && <button type="button" className="nub-lnk" onClick={() => setRazones(razones.filter((_, j) => j !== k))}>Quitar</button>}</div>
+                <div className="nub-grid2">
+                  <div><Label>Razón social</Label><Input value={r.rs} onChange={(ev) => setR(k, "rs", ev.target.value)} style={r.rs.trim() ? null : { borderColor: "#dc2626" }} /></div>
+                  <div><Label>{fiscalLbl}</Label><Input value={r.id} inputMode="numeric" onChange={(ev) => setR(k, "id", ev.target.value)} style={e && r.tocado ? { borderColor: "#dc2626" } : null} />
+                    {e && r.tocado && <div style={{ fontSize: 12, color: "#991b1b", marginTop: 4 }}>{e}</div>}</div>
+                </div>
+              </div>
+            );
+          })}
+          <button type="button" className="nub-lnk" onClick={() => setRazones([...razones, { rs: "", id: "" }])}>Agregar otra razón social</button>
+        </div>
+      ) },
+    { k: "Contactos", h: "¿Quiénes participan de la implementación?", texto: "Son las personas a las que les escribimos y a las que invitamos a las reuniones. Revisá sus datos y sumá a quien falte.",
+      nota: "No hace falta cargar a todo el equipo. Con quien decide, quien va a usar Nubceo todos los días y, si hay integración, quien la desarrolla, alcanza.",
+      ok: ctOk, hint: ctOk ? null : "Cada contacto necesita nombre y un mail válido.",
+      contenido: (
+        <div>
+          {contactos.map((c, k) => (
+            <div key={c.id || "n" + k} className="nub-dato">
+              <div className="nub-dato__h"><b>{c.id ? c.nombre || "Contacto" : "Nuevo contacto"}</b><button type="button" className="nub-lnk" onClick={() => setContactos(contactos.filter((_, j) => j !== k))}>Quitar</button></div>
+              <div className="nub-grid2">
+                <div><Label>Nombre y apellido</Label><Input value={c.nombre || ""} onChange={(e) => setC(k, "nombre", e.target.value)} /></div>
+                <div><Label>Rol en la implementación</Label>
+                  <select value={c.rol || "otro"} onChange={(e) => setC(k, "rol", e.target.value)} className="nub-select">
+                    {ROLES_TUT.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  </select></div>
+                <div><Label>Mail</Label><Input type="email" value={c.email || ""} onChange={(e) => setC(k, "email", e.target.value)} style={mailOk(c.email) ? null : { borderColor: "#dc2626" }} /></div>
+                <div><Label>Celular (opcional)</Label><Input inputMode="tel" value={c.telefono || ""} onChange={(e) => setC(k, "telefono", e.target.value)} placeholder="+54 11 ..." /></div>
+              </div>
+            </div>
+          ))}
+          <button type="button" className="nub-lnk" onClick={() => setContactos([...contactos, { nombre: "", rol: "otro", email: "", telefono: "" }])}>Agregar otro contacto</button>
+        </div>
+      ) },
+    { k: "Tus sistemas", h: "¿Con qué sistemas venden y facturan?", texto: "Nos sirve para saber de dónde salen las ventas que vamos a conciliar.",
+      nota: "El punto de venta es donde se registra cada venta (la caja). El ERP es el sistema de gestión o facturación.",
+      contenido: (
+        <div>
+          <Label>Punto de venta</Label>
+          <Chips lista={pdv} set={setPdv} />
+          <div style={{ display: "flex", gap: 8 }}><Input value={inPdv} onChange={(e) => setInPdv(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sumar(inPdv, pdv, setPdv, setInPdv); } }} placeholder="Agregar sistema de punto de venta" /><Btn variant="secondary" onClick={() => sumar(inPdv, pdv, setPdv, setInPdv)}>Agregar</Btn></div>
+          <div style={{ height: 18 }} />
+          <Label>ERP o sistema de gestión</Label>
+          <Chips lista={erp} set={setErp} />
+          <div style={{ display: "flex", gap: 8 }}><Input value={inErp} onChange={(e) => setInErp(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); sumar(inErp, erp, setErp, setInErp); } }} placeholder="Agregar ERP" /><Btn variant="secondary" onClick={() => sumar(inErp, erp, setErp, setInErp)}>Agregar</Btn></div>
+        </div>
+      ) },
+    { k: "Confirmá", h: "¿Está todo bien?", texto: "Al confirmar, tu implementador/a recibe estos datos actualizados.",
+      contenido: (
+        <div className="nub-sum">
+          <div className="nub-sum__r"><span>Empresa</span><b>{meta.name}</b></div>
+          {meta.tenant && <div className="nub-sum__r"><span>Número de cliente</span><b>{meta.tenant}</b></div>}
+          <div className="nub-sum__r"><span>Rubro</span><b>{rubro === "Otro" ? rubroOtro : rubro}</b></div>
+          {razones.map((r, k) => <div key={k} className="nub-sum__r"><span>{r.rs}</span><span>{fiscalLbl} {r.id}</span></div>)}
+          {contactos.map((c, k) => <div key={k} className="nub-sum__r"><span>{c.nombre}</span><span style={{ color: T.n600 }}>{(ROLES_TUT.find(([v]) => v === c.rol) || ROLES_TUT[3])[1]}</span></div>)}
+          <div className="nub-sum__r"><span>Punto de venta</span><b>{pdv.join(", ") || "Sin cargar"}</b></div>
+          <div className="nub-sum__r"><span>ERP</span><b>{erp.join(", ") || "Sin cargar"}</b></div>
+        </div>
+      ) },
+  ];
+  return (
+    <Tutorial titulo="Datos de tu empresa" partes={partes} onCompletar={completar} guardando={saving} completo={!!rv.empresaConfirmada}
+      final={<><h2 className="nub-tut__h">Datos confirmados</h2><p className="nub-tut__p">Tu implementador/a ya recibió el aviso.</p><Btn onClick={onSeguir}>Seguir con la Introducción</Btn></>} />
+  );
 }
 
 function ProximoPaso({ meta, data, pasos, completo, unlocked, proximo, completados, tab, setTab, omitioSucursales }) {
@@ -1188,7 +1516,8 @@ function ClientPortal({ session, onLogout }) {
   // "completo" = el paso está realmente terminado (lo que se muestra);
   // "avanzable" = alcanza para desbloquear el siguiente (sucursales se puede omitir)
   const completo = {
-    procesadoras: (data.procesadoras || []).length > 0,
+    procesadoras: !!rv.procesadorasConfirmadas || (data.procesadoras || []).some((p) => p.estado === "conectado"),
+    empresa: !!rv.empresaConfirmada || !!meta.introLeida,
     introduccion: !!meta.introLeida,
     relevamiento: !!data.relevamientoEnviado,
     sucursales: !!data.sucursalesArchivo,
@@ -1225,7 +1554,8 @@ function ClientPortal({ session, onLogout }) {
               />
 
               <div key={tab} className="nub-fade">
-              {tab === "procesadoras" && <TabProcesadoras data={data} act={act} saving={saving} />}
+              {tab === "procesadoras" && <TabProcesadorasTut data={data} act={act} saving={saving} onSeguir={() => setTab("empresa")} />}
+              {tab === "empresa" && <TabEmpresaTut data={data} meta={meta} act={act} saving={saving} onSeguir={() => setTab("introduccion")} />}
               {tab === "introduccion" && <TabIntroduccion act={act} meta={meta} saving={saving} />}
               {tab === "relevamiento" && <TabRelevamiento data={data} persist={persist} saving={saving} rvOK={!!data.relevamientoEnviado} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
               {tab === "sucursales" && <TabSucursales data={data} meta={meta} persist={persist} act={act} saving={saving} />}
@@ -1348,6 +1678,7 @@ function TabProcesadoras({ data, act, saving }) {
 // ── Paso 2: Introducción ──
 const INTRO_PASOS = [
   ["Procesadoras", "Nos contás con qué plataformas cobrás y en qué estado está cada conexión. Con eso pedimos los accesos correctos desde el arranque."],
+  ["Datos de tu empresa", "Confirmás razones sociales, contactos y sistemas que usan, para que trabajemos con la información correcta."],
   ["Relevamiento", "Un formulario sobre cómo vende y cobra tu negocio, más los involucrados del proyecto. Con tus respuestas armamos el mapa de tu operación y preparamos el workshop, que agendás acá mismo al terminarlo."],
   ["Sucursales", "Cargás tu listado interno de sucursales y el portal lo convierte al formato oficial de Nubceo, validado y listo para subir a la plataforma."],
   ["Conexión API o CSV", "Definimos cómo van a llegar tus ventas a Nubceo. Si es por API, acá tenés tus credenciales, la documentación y la reunión técnica con nuestro equipo. Si es por CSV, el portal valida tu archivo y lo deja en el formato exacto."],
@@ -3312,6 +3643,8 @@ function FichaResumen({ meta, selData, nombreVendedor }) {
       <dl className="nub-kv">
         {fila("Go-live acordado", meta.goLiveEstimado ? fmtDateSolo(meta.goLiveEstimado) : "Sin fecha", sg && sg.tone === "red" ? <Badge tone="red">{diasHasta(meta.goLiveEstimado) < 0 ? "Vencido" : "Cerca"}</Badge> : null)}
         {fila("Contrato", contratoInfo(meta.estadoContrato).lbl)}
+        {rv.pais && fila("País", rv.pais)}
+        {rv.rubro && fila("Rubro", rv.rubro === "Otro" && rv.rubroOtro ? rv.rubroOtro : rv.rubro)}
         {fila("Ambiente de pruebas", meta.usaSandbox === false ? "Sin sandbox, directo en productivo" : "Con sandbox")}
         {fila("Tenant productivo", meta.tenant || "Sin cargar")}
         {fila("Conexión de ventas", via)}
@@ -4406,7 +4739,7 @@ function AdminPortal({ session, onLogout }) {
                 {(selData.procesadoras || []).length === 0 && <Badge tone="amber">El cliente todavía no marcó sus procesadoras</Badge>}
                 {(selData.procesadoras || []).map((p) => (
                   <div key={p.codigo} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid " + T.n100 }}>
-                    <span style={{ fontSize: 13.5, color: T.n800 }}>{p.nombre} <span style={{ color: T.n400, fontSize: 11.5 }}>({p.pais})</span></span>
+                    <span style={{ fontSize: 13.5, color: T.n800 }}>{p.nombre} <span style={{ color: T.n400, fontSize: 11.5 }}>({(p.pais || "").replace(/[^\p{L}\s]/gu, "").trim()})</span></span>
                     <select value={p.estado} onChange={(e) => cambiarEstadoProc(p.codigo, e.target.value)} style={{ height: 30, borderRadius: 6, border: "1px solid " + T.n200, fontSize: 12.5, fontFamily: "inherit", color: T.n800, background: "#fff", padding: "0 6px" }}>
                       <option value="no_conectado">No conectado</option>
                       <option value="en_espera">En espera de doc/credenciales</option>
