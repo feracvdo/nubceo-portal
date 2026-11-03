@@ -11,7 +11,7 @@ import {
 import { buildDiagrama } from "../../lib/diagrama";
 import * as gcal from "../../lib/googleCalendar";
 import { generarPlantilla } from "../../lib/plantillasMail";
-import { calcularPasos, computarPasos, faseSugerida, NOMBRE_PASO } from "../../lib/pasos";
+import { calcularPasos, computarPasos, faseSugerida, NOMBRE_PASO, ORDEN_PASOS } from "../../lib/pasos";
 import { hitosPara, hitosAutoimpPara, calcularHitos, NOMBRE_HITO_GENERICO } from "../../lib/hitos";
 import { STEPS as AUTO_STEPS } from "../../lib/autoimp/contenido";
 import { procesarAvisoPlazo, enviarAvisosPendientesDeCliente } from "../../lib/avisosPlazos";
@@ -215,6 +215,14 @@ async function assemble(cliente) {
       hitosCompletos,
     },
   };
+}
+
+// Suma claves a las respuestas del relevamiento sin pisar el resto ni el estado de envío.
+async function mergeRespuestas(cid, extra) {
+  const { data: actual } = await db.from("relevamientos").select("respuestas").eq("cliente_id", cid).maybeSingle();
+  const respuestas = { ...(actual?.respuestas || {}), ...extra };
+  if (actual) await db.from("relevamientos").update({ respuestas, actualizado_at: new Date().toISOString() }).eq("cliente_id", cid);
+  else await db.from("relevamientos").insert({ cliente_id: cid, respuestas, actualizado_at: new Date().toISOString() });
 }
 
 // ── Objeto del portal → tablas (solo las secciones presentes) ──
@@ -520,7 +528,47 @@ export default async function handler(req, res) {
           estado: ["no_conectado", "en_espera", "conectado"].includes(p.estado) ? p.estado : "no_conectado",
         })));
       }
+      // Paso 1 en modo tutorial: el país elegido y la confirmación quedan en el relevamiento.
+      if (req.body.confirmar || req.body.pais) {
+        await mergeRespuestas(cli.id, { pais: req.body.pais || null, ...(req.body.confirmar ? { procesadorasConfirmadas: new Date().toISOString() } : {}) });
+      }
       if (req.body.log) await addHistory(cli.id, who || "Cliente", req.body.log);
+      return res.json(await assemble(cli));
+    }
+
+    // Paso 2: el cliente valida los datos de su empresa que cargó Nubceo.
+    if (action === "confirmarEmpresa") {
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      const limpia = (xs) => (Array.isArray(xs) ? xs : []).map((x) => String(x || "").trim()).filter(Boolean);
+      const razones = (Array.isArray(req.body.razones) ? req.body.razones : [])
+        .map((r) => ({ rs: String(r.rs || "").trim(), id: String(r.id || "").trim() })).filter((r) => r.rs || r.id);
+      if (!razones.length) return res.status(400).json({ error: "Cargá al menos una razón social." });
+      const pdv = limpia(req.body.pdv), erp = limpia(req.body.erp);
+      await db.from("clientes").update({
+        razon_social: razones[0].rs || null,
+        cuits: razones.map((r) => r.id).filter(Boolean),
+        erp_pdv: [...new Set([...pdv, ...erp])],
+      }).eq("id", cli.id);
+      // Contactos: el cliente edita, agrega y quita. Se sincroniza la tabla completa.
+      const contactos = (Array.isArray(req.body.contactos) ? req.body.contactos : []).filter((c) => (c.nombre || "").trim());
+      const ROLES_OK = ["sponsor", "key_user", "desarrollador", "otro"];
+      const fila = (c) => ({
+        nombre: c.nombre.trim(), cargo: (c.cargo || "").trim() || null, email: (c.email || "").trim() || null,
+        telefono: (c.telefono || "").trim() || null, rol: ROLES_OK.includes(c.rol) ? c.rol : "otro",
+      });
+      const { data: actuales } = await db.from("involucrados").select("id").eq("cliente_id", cli.id);
+      const idsQuedan = new Set(contactos.filter((c) => c.id).map((c) => c.id));
+      const borrar = (actuales || []).map((x) => x.id).filter((id) => !idsQuedan.has(id));
+      if (borrar.length) await db.from("involucrados").delete().in("id", borrar);
+      for (const c of contactos.filter((c) => c.id)) await db.from("involucrados").update(fila(c)).eq("id", c.id).eq("cliente_id", cli.id);
+      const nuevos = contactos.filter((c) => !c.id).map((c) => ({ cliente_id: cli.id, ...fila(c) }));
+      if (nuevos.length) await db.from("involucrados").insert(nuevos);
+      await mergeRespuestas(cli.id, {
+        rubro: String(req.body.rubro || "").trim() || null, rubroOtro: String(req.body.rubroOtro || "").trim() || null,
+        razones, pdv, erp, empresaConfirmada: new Date().toISOString(),
+      });
+      await addHistory(cli.id, who || "Cliente", "Confirmó los datos de la empresa (" + razones.length + " razón/es social/es, " + contactos.length + " contacto/s)");
       return res.json(await assemble(cli));
     }
 
@@ -851,7 +899,8 @@ export default async function handler(req, res) {
           tieneVentas: !!ventas,
           // Sin sandbox, el paso de pruebas no existe para el cliente: no cuenta en el avance.
           completados: Object.entries(pasos).filter(([k, v]) => v && (k !== "sandbox" || cli.usa_sandbox !== false)).length,
-          totalPasos: cli.usa_sandbox === false ? 7 : 8,
+          totalPasos: ORDEN_PASOS.length - (cli.usa_sandbox === false ? 1 : 0),
+          pais: respuestas.pais || null, rubro: respuestas.rubro || null,
           usaSandbox: cli.usa_sandbox !== false,
           ultimaActividad: cli.ultima_actividad || null,
           estadoSeguimiento: cli.estado_seguimiento || "gris",
