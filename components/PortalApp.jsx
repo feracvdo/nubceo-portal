@@ -42,7 +42,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.41.0";
+const APP_VERSION = "1.42.0";
 const APP_VERSION_FECHA = "2026-11-03";
 
 const FASES = [
@@ -1353,6 +1353,266 @@ function TabEmpresaTut({ data, meta, act, saving, onSeguir, avisar }) {
   );
 }
 
+
+// ═════════════ Relevamiento en modo tutorial ═════════════
+// Una pregunta por tarjeta, todas obligatorias. Las de una opción avanzan solas; el botón
+// Siguiente aparece en las de varias opciones, las de texto o cuando falta un detalle.
+// El borrador se guarda solo; una vez enviado queda cerrado.
+// Se arma la primera vez que se usa: RV_PREGUNTAS se declara más abajo en el archivo.
+let _rvSecciones = null;
+const rvSecciones = () => {
+  if (_rvSecciones) return _rvSecciones;
+  const out = []; let cur = -1;
+  RV_PREGUNTAS.forEach((q) => { if (q.sec) { out.push({ nombre: q.sec, desc: q.desc || "" }); cur = out.length - 1; } else if (q.id) q._sec = cur; });
+  _rvSecciones = out;
+  return out;
+};
+const rvPrincipales = (r) => RV_PREGUNTAS.filter((q) => q.id && !q.legado && !q.detalleDe && (!q.showIf || q.showIf(r)));
+const rvDetalle = (q, r) => RV_PREGUNTAS.find((d) => d.detalleDe === q.id && (!d.showIf || d.showIf(r))) || null;
+const rvRespondida = (q, r) => { const v = r[q.id]; return q.type === "multi" ? Array.isArray(v) && v.length > 0 : v !== undefined && v !== null && String(v).trim() !== ""; };
+const rvFaltaDetalle = (q, r) => {
+  const v = r[q.id];
+  const otro = q.otro && (q.type === "multi" ? (v || []).includes("otro") : v === "otro");
+  if (otro && !String(r[q.id + "Otro"] || "").trim()) return { campo: "otro", txt: "cuál es la otra opción" };
+  const d = rvDetalle(q, r);
+  if (d && !String(r[d.id] || "").trim()) return { campo: "detalle", txt: d.lbl.replace(/^¿/, "").replace(/\?$/, "").toLowerCase() };
+  return null;
+};
+const rvCompleta = (q, r) => rvRespondida(q, r) && !rvFaltaDetalle(q, r);
+const rvTexto = (q, r) => {
+  const base = fmtRespuesta(q, r);
+  const d = rvDetalle(q, r);
+  return base ? base + (d && r[d.id] ? " (" + r[d.id] + ")" : "") : "";
+};
+
+function InfoTip({ texto }) {
+  const [abierto, setAbierto] = useState(false);
+  if (!texto) return null;
+  return (
+    <span className={"nub-tip" + (abierto ? " is-open" : "")}>
+      <button type="button" aria-label="Qué significa esta pregunta" aria-expanded={abierto} onClick={() => setAbierto(!abierto)} onBlur={() => setAbierto(false)}>i</button>
+      <span className="nub-tip__tt" role="tooltip">{texto}</span>
+    </span>
+  );
+}
+
+function TabRelevamientoTut({ data, session, setAll, avisar }) {
+  rvSecciones();
+  const enviado = !!data.relevamientoEnviado;
+  const [R, setR] = useState(() => ({ ...(data.relevamiento || {}) }));
+  const [i, setI] = useState(() => {
+    const L = rvPrincipales(data.relevamiento || {});
+    const k = L.findIndex((q) => !rvCompleta(q, data.relevamiento || {}));
+    return k < 0 ? L.length : k;
+  });
+  const [marcar, setMarcar] = useState(false);
+  const [confirmar, setConfirmar] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [verResumenError, setVerResumenError] = useState(false);
+  const L = rvPrincipales(R);
+  const enResumen = i >= L.length;
+  const q = enResumen ? null : L[i];
+  const completas = L.filter((x) => rvCompleta(x, R)).length;
+  const pct = L.length ? Math.round((completas / L.length) * 100) : 0;
+  const faltan = L.length - completas;
+  const minutos = Math.max(1, Math.round(faltan * 0.4));
+  const pendientes = L.filter((x) => !rvCompleta(x, R));
+
+  // Borrador: se guarda solo, sin avisos, un momento después de cada cambio.
+  const primera = useRef(true);
+  useEffect(() => {
+    if (enviado) return;
+    if (primera.current) { primera.current = false; return; }
+    const id = setTimeout(() => {
+      api("saveClient", { sessionCode: session.code, code: session.code, who: session.who || "Cliente", data: { relevamiento: R } }).catch(() => {});
+    }, 900);
+    return () => clearTimeout(id);
+  }, [R, enviado, session]);
+
+  const set = (k, v) => setR((r) => ({ ...r, [k]: v }));
+  const irA = (n) => { setMarcar(false); setVerResumenError(false); setI(n); };
+  const siguiente = () => {
+    if (!q) return;
+    if (!rvCompleta(q, R)) { setMarcar(true); return; }
+    irA(i + 1);
+  };
+  const elegir = (val) => {
+    if (q.type === "multi") {
+      const a = Array.isArray(R[q.id]) ? R[q.id] : [];
+      set(q.id, a.includes(val) ? a.filter((x) => x !== val) : [...a, val]);
+      setMarcar(false);
+      return;
+    }
+    const nuevo = { ...R, [q.id]: val };
+    setR(nuevo); setMarcar(false);
+    if (rvCompleta(q, nuevo)) setTimeout(() => setI((n) => (n === i ? n + 1 : n)), 380);
+  };
+  const enviar = async () => {
+    setEnviando(true);
+    try {
+      const r = await api("saveClient", { sessionCode: session.code, code: session.code, who: session.who || "Cliente", data: { relevamiento: R, relevamientoEnviado: now() }, log: "Envió el relevamiento" });
+      setConfirmar(false); setAll(r);
+      avisar && avisar({ titulo: "Relevamiento enviado", detalle: "Tu implementador/a ya lo recibió para preparar el workshop." });
+    } catch (e) {
+      avisar && avisar({ titulo: "No se pudo enviar el relevamiento", detalle: e.message, tono: "error" });
+    } finally { setEnviando(false); }
+  };
+
+  if (enviado) {
+    const Lv = rvPrincipales(data.relevamiento || {});
+    return (
+      <section className="nub-tut">
+        <div className="nub-tut__card">
+          <div className="nub-tut__parte">
+            <div>
+              <div className="nub-tut__k">Relevamiento</div>
+              <h2 className="nub-tut__h">Tus respuestas</h2>
+              <p className="nub-tut__p"><span className="nub-lock"><Icon n="lock" size={12} /> Enviado el {fmtDate(data.relevamientoEnviado)}: ya no se puede editar</span></p>
+              <p className="nub-tut__p">Si necesitás corregir algo, escribile a tu implementador/a.</p>
+            </div>
+            <div className="nub-sum">
+              {Lv.map((x) => <div key={x.id} className="nub-sum__r"><span>{x.lbl}</span><b style={{ textAlign: "right" }}>{rvTexto(x, data.relevamiento || {}) || "Sin respuesta"}</b></div>)}
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const falta = q && marcar ? (!rvRespondida(q, R)
+    ? (q.type === "multi" ? "Marcá al menos una opción para seguir." : q.opts ? "Elegí una opción para seguir." : "Escribí tu respuesta para seguir.")
+    : (rvFaltaDetalle(q, R) ? "Falta completar: " + rvFaltaDetalle(q, R).txt + "." : null)) : null;
+  const opts = q && q.opts ? (q.otro ? [...q.opts, ["otro", "Otro"]] : q.opts) : [];
+  const det = q ? rvDetalle(q, R) : null;
+  const otroOn = q && q.otro && (q.type === "multi" ? (R[q.id] || []).includes("otro") : R[q.id] === "otro");
+  const fd = q ? rvFaltaDetalle(q, R) : null;
+  const conDetalle = q && q.type === "radio" && (otroOn || !!det);
+  const mostrarSiguiente = q && (q.type !== "radio" || conDetalle);
+
+  return (
+    <section className="nub-tut" aria-label="Relevamiento">
+      <div className="nub-rvprog">
+        <div className="nub-rvprog__top">
+          <span>{enResumen ? <b>Resumen</b> : <>Pregunta <b>{i + 1} de {L.length}</b></>} · {pct}% completo</span>
+          <span>{faltan ? "Te faltan unos " + minutos + " minuto" + (minutos === 1 ? "" : "s") : "Respondiste todo"}</span>
+        </div>
+        <div className="nub-rvprog__bar"><i style={{ width: pct + "%" }} /></div>
+        <div className="nub-rvprog__secs">
+          {rvSecciones().map((sec, k) => {
+            const qs = L.filter((x) => x._sec === k);
+            const ok = qs.filter((x) => rvCompleta(x, R)).length;
+            const cls = qs.length && ok === qs.length ? " is-ok" : (q && q._sec === k ? " is-on" : "");
+            return (
+              <button key={k} type="button" className={"nub-rvsec" + cls} onClick={() => { const pos = L.findIndex((x) => x._sec === k && !rvCompleta(x, R)); irA(pos >= 0 ? pos : L.findIndex((x) => x._sec === k)); }}>
+                {sec.nombre} <small>{ok}/{qs.length}</small>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="nub-tut__card">
+        {!enResumen ? (
+          <div className="nub-tut__parte nub-fade" key={q.id}>
+            <div>
+              <div className="nub-tut__k">{rvSecciones()[q._sec]?.nombre}</div>
+              <div style={{ fontSize: 12.5, color: T.n600 }}>{rvSecciones()[q._sec]?.desc}</div>
+              <div className="nub-qtitle">
+                <h2 className="nub-tut__h" style={{ margin: 0 }}>{q.lbl}</h2>
+                <InfoTip texto={q.info} />
+              </div>
+              {q.sub && <p className="nub-tut__p" style={{ marginTop: 10 }}>{q.sub}</p>}
+            </div>
+            <div style={{ minWidth: 0 }}>
+              {q.opts ? (
+                <div className={"nub-qopts" + (marcar && !rvRespondida(q, R) ? " nub-falta" : "")} role={q.type === "multi" ? "group" : "radiogroup"}>
+                  {opts.map(([v, l]) => {
+                    const on = q.type === "multi" ? (R[q.id] || []).includes(v) : R[q.id] === v;
+                    return (
+                      <button key={v} type="button" role={q.type === "multi" ? "checkbox" : "radio"} aria-checked={on} className={"nub-proc" + (q.type === "radio" ? " nub-proc--radio" : "")} onClick={() => elegir(v)}>
+                        <span className={"nub-proc__box" + (q.type === "radio" ? " nub-proc__box--radio" : "")}>{on && q.type === "multi" && <Icon n="check" size={12} stroke={3.2} />}</span>{l}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : q.type === "textarea" ? (
+                <textarea className={"nub-qta" + (marcar && !rvRespondida(q, R) ? " is-falta" : "")} value={R[q.id] || ""} onChange={(e) => { set(q.id, e.target.value); setMarcar(false); }} placeholder="Escribí tu respuesta" autoFocus />
+              ) : (
+                <Input value={R[q.id] || ""} onChange={(e) => { set(q.id, e.target.value); setMarcar(false); }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); siguiente(); } }} placeholder="Escribí tu respuesta" autoFocus
+                  style={marcar && !rvRespondida(q, R) ? { borderColor: "#dc2626", background: "#fef2f2" } : null} />
+              )}
+              {otroOn && (
+                <div style={{ marginTop: 12 }}>
+                  <Label>¿Cuál?</Label>
+                  <Input value={R[q.id + "Otro"] || ""} onChange={(e) => { set(q.id + "Otro", e.target.value); setMarcar(false); }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); siguiente(); } }} autoFocus
+                    style={marcar && fd && fd.campo === "otro" ? { borderColor: "#dc2626", background: "#fef2f2" } : null} />
+                </div>
+              )}
+              {det && (
+                <div style={{ marginTop: 12 }}>
+                  <Label>{det.lbl}</Label>
+                  <Input value={R[det.id] || ""} onChange={(e) => { set(det.id, e.target.value); setMarcar(false); }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); siguiente(); } }} autoFocus
+                    style={marcar && fd && fd.campo === "detalle" ? { borderColor: "#dc2626", background: "#fef2f2" } : null} />
+                </div>
+              )}
+              {falta && <div className="nub-qerr" role="alert">{falta}</div>}
+            </div>
+          </div>
+        ) : (
+          <div className="nub-tut__parte nub-fade">
+            <div>
+              <div className="nub-tut__k">Revisá antes de enviar</div>
+              <h2 className="nub-tut__h">{pendientes.length ? "Te quedan " + pendientes.length + " pregunta" + (pendientes.length === 1 ? "" : "s") + " por responder" : "Respondiste todo"}</h2>
+              <p className="nub-tut__p">Tocá cualquier respuesta para cambiarla. {pendientes.length ? "Todas las preguntas son obligatorias: completá las marcadas en rojo para poder enviar." : "Revisalas y, cuando estés seguro, enviá el relevamiento."}</p>
+              <div className="nub-tut__nota">Después de enviarlo queda cerrado y no se puede editar. Si necesitás cambiar algo, le escribís a tu implementador/a.</div>
+            </div>
+            <div>
+              {verResumenError && pendientes.length > 0 && (
+                <div className="nub-qerr" role="alert" style={{ marginTop: 0, marginBottom: 12 }}><b>No se puede enviar todavía.</b> Te falta responder: {pendientes.map((x) => x.lbl).join(" · ")}</div>
+              )}
+              <div className="nub-sum">
+                {L.map((x, k) => {
+                  const t = rvTexto(x, R), ok = rvCompleta(x, R);
+                  return (
+                    <button key={x.id} type="button" className="nub-sum__r nub-sum__r--btn" onClick={() => irA(k)}>
+                      <span style={{ textAlign: "left" }}>{x.lbl}</span>
+                      {ok ? <b style={{ textAlign: "right" }}>{t}</b> : <span className="nub-pend">{t ? "Falta el detalle" : "Sin responder"}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="nub-tut__bar">
+          <Btn variant="ghost" onClick={() => irA(Math.max(0, i - 1))} style={{ visibility: i === 0 ? "hidden" : "visible" }}>Anterior</Btn>
+          <span className={"nub-tut__hint" + ((enResumen && pendientes.length) || falta ? " nub-tut__hint--error" : "")}>
+            {enResumen
+              ? (pendientes.length ? "Completá las " + pendientes.length + " marcadas en rojo para poder enviar." : "Tus respuestas se guardan solas.")
+              : (q.type === "radio" ? (conDetalle ? "Completá el detalle y tocá Siguiente." : "Al elegir una opción pasás a la siguiente.") : q.type === "multi" ? "Marcá todas las que correspondan y tocá Siguiente." : "Escribí tu respuesta y tocá Siguiente.")}
+          </span>
+          {enResumen
+            ? <Btn onClick={() => pendientes.length ? setVerResumenError(true) : setConfirmar(true)}>Enviar relevamiento</Btn>
+            : <Btn onClick={siguiente} style={{ visibility: mostrarSiguiente ? "visible" : "hidden" }}>{i === L.length - 1 ? "Ver resumen" : "Siguiente"}</Btn>}
+        </div>
+      </div>
+
+      {confirmar && (
+        <div className="nub-overlay nub-modal" role="dialog" aria-modal="true" aria-labelledby="rvConfT" onClick={() => !enviando && setConfirmar(false)}>
+          <div className="nub-modal__box" onClick={(e) => e.stopPropagation()}>
+            <h2 id="rvConfT" style={{ fontSize: 19, margin: "0 0 8px", color: T.n900 }}>¿Confirmás el envío del relevamiento?</h2>
+            <p style={{ fontSize: 14, color: T.n600, margin: "0 0 18px", lineHeight: 1.55 }}>Revisaste todas las respuestas. Una vez enviado, el relevamiento queda cerrado y no vas a poder editarlo. Si después necesitás cambiar algo, lo hablás con tu implementador/a.</p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <Btn variant="ghost" onClick={() => setConfirmar(false)} disabled={enviando}>Volver a revisar</Btn>
+              <Btn onClick={enviar} disabled={enviando}>{enviando ? "Enviando…" : "Sí, enviar"}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ProximoPaso({ meta, data, pasos, completo, unlocked, proximo, completados, tab, setTab, omitioSucursales }) {
   const total = pasos.length;
   const pct = total ? Math.round((completados / total) * 100) : 0;
@@ -1598,7 +1858,7 @@ function ClientPortal({ session, onLogout }) {
               {tab === "procesadoras" && <TabProcesadorasTut data={data} act={act} saving={saving} avisar={mostrarToast} onSeguir={() => setTab("empresa")} />}
               {tab === "empresa" && <TabEmpresaTut data={data} meta={meta} act={act} saving={saving} avisar={mostrarToast} onSeguir={() => setTab("introduccion")} />}
               {tab === "introduccion" && <TabIntroduccion act={act} meta={meta} saving={saving} />}
-              {tab === "relevamiento" && <TabRelevamiento data={data} persist={persist} saving={saving} rvOK={!!data.relevamientoEnviado} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
+              {tab === "relevamiento" && <TabRelevamientoTut data={data} session={session} avisar={mostrarToast} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
               {tab === "sucursales" && <TabSucursales data={data} meta={meta} persist={persist} act={act} saving={saving} />}
               {tab === "conexion" && <TabConexion data={data} persist={persist} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
               {tab === "capacitacion" && <TabCapacitacion data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
@@ -1758,97 +2018,103 @@ function TabIntroduccion({ act, meta, saving }) {
 // ── Tab: Relevamiento (formulario ampliado) ──
 // type: radio | multi | text | textarea · otro: agrega opción "Otro" con detalle · info: explicación en lenguaje llano
 const RV_PREGUNTAS = [
-  { sec: "A · Cómo venden" },
-  { id: "a1", lbl: "¿Qué canales de venta tienen activos? (marcá todos)", type: "multi", otro: true,
-    opts: [["fisicas", "Tiendas físicas"], ["ecommerce", "E-commerce propio"], ["marketplaces", "Marketplaces (Mercado Libre, etc.)"], ["delivery", "Apps de delivery (PedidosYa, Rappi…)"], ["telefonica", "Venta telefónica / WhatsApp"], ["mayorista", "Mayorista / distribuidores"]],
-    info: "Un canal de venta es cada vía por la que le venden a sus clientes. Marcá todos los que usen aunque muevan poco volumen: cada canal puede tener su propia forma de cobrar y de liquidar, y eso cambia cómo se configura la conciliación." },
-  { id: "a2", lbl: "¿Qué sistema usan para registrar las ventas en cada canal? (PDV y/o ERP, con nombre y versión si la saben)", type: "textarea",
-    info: "El PDV (punto de venta) es el sistema donde se registra cada ticket o factura en el local (ej: Zetti, Maersoft, Neo). El ERP es el sistema de gestión general de la empresa (ej: SAP, Tango, Bejerman). Si usan sistemas distintos según el canal, aclaralo: por ejemplo 'locales con Neo, web con VTEX'." },
-  { id: "a3", lbl: "¿Registran siempre el total de la venta, aunque el cliente pague en cuotas?", type: "radio", otro: true,
-    opts: [["total", "Sí, siempre el total"], ["porcuota", "Registramos cada cuota"], ["depende", "Depende"]],
-    info: "Ejemplo: un cliente compra por $120.000 en 6 cuotas. Si en su sistema figura una venta de $120.000, registran el total. Si figuran 6 registros de $20.000, registran por cuota. Este dato es clave para armar el cruce entre ventas y cobros." },
-  { id: "a4", lbl: "¿Qué porcentaje aproximado de sus ventas con tarjeta es en cuotas?", type: "radio",
-    opts: [["bajo", "Casi nada (<10%)"], ["medio", "10% a 40%"], ["alto", "Más del 40%"], ["nose", "No sé"]],
-    info: "No hace falta un número exacto, alcanza con el orden de magnitud. Nos sirve para saber cuánto peso van a tener las cuotas en la conciliación." },
-  { id: "a5", lbl: "¿Todas las terminales de pago están integradas al sistema de ventas?", type: "radio", otro: true,
-    opts: [["todas", "Sí, todas"], ["algunas", "Algunas sin integrar"], ["ninguna", "Ninguna integrada"]],
-    info: "Terminal de pagos: el dispositivo donde se pasa o apoya la tarjeta (Clover, Mercado Pago Point, Posnet, Lapos, etc.). Está integrada cuando la terminal se conecta con el sistema de ventas y el importe pasa solo, sin que el cajero lo tipee a mano. Las terminales sin integrar suelen generar diferencias por errores de tipeo, y conviene saberlo de antemano." },
-  { id: "a6", lbl: "¿Aceptan pagos en moneda extranjera o venden desde el exterior?", type: "radio",
-    opts: [["no", "No"], ["si", "Sí"]],
-    info: "Por ejemplo: cobros en dólares, ventas a turistas con tarjetas del exterior, o un e-commerce que vende a otros países. Cambia cómo llegan los montos en las liquidaciones." },
-  { id: "a6detalle", lbl: "Si sí: contanos el detalle", type: "text", showIf: (r) => r.a6 === "si" },
+  // Relevamiento en modo tutorial (v1.42): una pregunta por tarjeta, todas obligatorias.
+  // Las entradas con detalleDe se muestran dentro de la tarjeta de su pregunta.
+  // Las marcadas como legado ya no se preguntan (se responden en los pasos 1 y 2) pero se
+  // siguen mostrando al equipo si un relevamiento viejo las tiene respondidas.
+  { sec: "Cómo venden", desc: "Canales, cuotas y terminales" },
+  { id: "a1", lbl: "¿Por qué canales venden?", sub: "Marcá todos, aunque alguno mueva poco volumen.", type: "multi", otro: true,
+    opts: [["fisicas", "Locales físicos"], ["ecommerce", "Tienda online propia"], ["marketplaces", "Marketplaces como Mercado Libre"], ["delivery", "Apps de delivery como PedidosYa o Rappi"], ["telefonica", "Teléfono o WhatsApp"], ["mayorista", "Mayorista o distribuidores"]],
+    info: "Cada canal puede tener su propia forma de cobrar y de liquidar, y eso cambia cómo se configura la conciliación." },
+  { id: "a3", lbl: "Cuando un cliente paga en cuotas, ¿qué registran en su sistema?", sub: "Ejemplo: una compra de $120.000 en 6 cuotas.", type: "radio",
+    opts: [["total", "Una venta de $120.000 (el total)"], ["porcuota", "Seis registros de $20.000 (cada cuota)"], ["depende", "Depende del canal o del medio de pago"]],
+    info: "Es uno de los datos más importantes del relevamiento: define cómo se cruzan las ventas con los cobros." },
+  { id: "a4", lbl: "¿Qué parte de sus ventas con tarjeta es en cuotas?", sub: "Alcanza con una idea aproximada.", type: "radio",
+    opts: [["bajo", "Casi nada, menos del 10%"], ["medio", "Entre 10% y 40%"], ["alto", "Más del 40%"], ["nose", "No sé"]],
+    info: "Las cuotas cambian cuándo y cómo les pagan las procesadoras. Saber cuánto pesan nos ayuda a priorizar esa parte de la configuración." },
+  { id: "a5", lbl: "¿Las terminales de pago están conectadas al sistema de ventas?", sub: "Si el importe pasa solo al posnet, está conectada. Si el cajero lo tipea, no.", type: "radio",
+    opts: [["todas", "Sí, todas"], ["algunas", "Algunas sí y otras no"], ["ninguna", "Ninguna"]],
+    info: "Terminal es el dispositivo donde se pasa la tarjeta (Clover, Point, Posnet, Lapos). Las que no están conectadas suelen generar diferencias por errores de tipeo." },
+  { id: "a6", lbl: "¿Cobran en moneda extranjera o venden al exterior?", type: "radio", opts: [["no", "No"], ["si", "Sí"]],
+    info: "Por ejemplo: cobros en dólares, ventas a turistas con tarjetas del exterior o una tienda online que vende a otros países." },
+  { id: "a6detalle", detalleDe: "a6", lbl: "Contanos el detalle", type: "text", showIf: (r) => r.a6 === "si" },
 
-  { sec: "B · Cómo cobran" },
-  { id: "b0", lbl: "¿Qué medios de pago y plataformas de cobro usan? (marcá todos)", type: "multi", otro: true,
-    otroLbl: "¿Usan otras? Escribilas acá, separadas por coma",
-    opts: [["prisma", "Prisma / Payway"], ["fiserv", "Fiserv"], ["mercadopago", "Mercado Pago"], ["naranja", "Naranja X"], ["amex", "American Express"], ["getnet", "Getnet"], ["cabal", "Cabal"], ["visanet", "VisaNet"], ["adyen", "Adyen"], ["gocuotas", "Go Cuotas"], ["pedidosya", "PedidosYa"], ["rappi", "Rappi"], ["ubereats", "Uber Eats"], ["didifood", "DiDi Food"], ["efectivo", "Efectivo"], ["transferencia", "Transferencia"]],
-    info: "Marcá todas las plataformas por las que reciben cobros: Nubceo tiene conectores directos para éstas y más. Si usan alguna que no está en la lista — sobre todo tarjetas regionales o provinciales (Sucrédito, Única, Sol…) o billeteras locales — marcá 'Otro' y escribilas: suelen ser justo las que necesitan configuración especial y conviene saberlo desde el inicio." },
-  { id: "b2", lbl: "¿Cómo les liquidan las ventas en cuotas?", type: "radio", otro: true,
-    opts: [["junto", "Todo junto (24/48hs)"], ["semanal", "Semanal"], ["cuota", "Cuota a cuota (cada mes, el valor de esa cuota)"], ["nose", "No sé"]],
-    info: "La liquidación es cuando la procesadora les deposita el dinero. Ejemplo de 'cuota a cuota': venden $120.000 en 6 cuotas y cobran $20.000 por mes durante 6 meses. Ejemplo de 'todo junto': cobran los $120.000 (menos comisiones) a las 48hs. Si cambia según la procesadora, elegí 'Otro' y detallá." },
-  { id: "b4", lbl: "¿Tienen promociones, acuerdos comerciales o descuentos financiados con procesadoras o bancos?", type: "radio",
-    opts: [["no", "No"], ["si", "Sí"]],
-    info: "Por ejemplo: cuotas sin interés bancarizadas, reintegros de billeteras, descuentos que financia en parte el banco o la marca. Estos acuerdos modifican los montos que les liquidan y hay que contemplarlos en las reglas." },
-  { id: "b4detalle", lbl: "Si sí: ¿cuáles y con quién?", type: "text", showIf: (r) => r.b4 === "si" },
-  { id: "b5", lbl: "¿Cobran propinas, recargos por servicio o redondeos a través de las terminales?", type: "radio",
-    opts: [["no", "No"], ["si", "Sí"]],
-    info: "Es común en gastronomía: la propina pasa por el posnet junto con la venta, pero en el sistema de ventas figura otro monto. Si pasa, lo contemplamos para que no genere diferencias." },
-  { id: "b5detalle", lbl: "Si sí: contanos cómo funciona", type: "text", showIf: (r) => r.b5 === "si" },
+  { sec: "Cómo cobran", desc: "Liquidaciones y acuerdos" },
+  { id: "b2", lbl: "¿Cómo les pagan las procesadoras las ventas en cuotas?", sub: "Ejemplo: venden $120.000 en 6 cuotas.", type: "radio", otro: true,
+    opts: [["junto", "Todo junto, a las 24 o 48 horas"], ["semanal", "Una vez por semana"], ["cuota", "Cuota a cuota: $20.000 por mes durante 6 meses"], ["nose", "No sé"]],
+    info: "Si cambia según la procesadora, elegí Otro y contanos cuál paga de cada forma." },
+  { id: "b4", lbl: "¿Tienen promociones o descuentos financiados con bancos o procesadoras?", type: "radio", opts: [["no", "No"], ["si", "Sí"]],
+    info: "Por ejemplo: cuotas sin interés de un banco, reintegros de billeteras o descuentos que paga en parte la marca. Cambian los montos que les liquidan." },
+  { id: "b4detalle", detalleDe: "b4", lbl: "¿Cuáles y con quién?", type: "text", showIf: (r) => r.b4 === "si" },
+  { id: "b5", lbl: "¿Cobran propinas, recargos o redondeos por el posnet?", type: "radio", opts: [["no", "No"], ["si", "Sí"]],
+    info: "Es común en gastronomía: la propina pasa por el posnet junto con la venta, pero en el sistema figura otro monto." },
+  { id: "b5detalle", detalleDe: "b5", lbl: "Contanos cómo funciona", type: "text", showIf: (r) => r.b5 === "si" },
 
-  { sec: "C · Cómo está armado el negocio" },
-  { id: "c1", lbl: "¿Con cuántas razones sociales (CUIT) operan las ventas a conciliar?", type: "radio",
-    opts: [["una", "Una sola"], ["varias", "Más de una"]],
-    info: "Una razón social es cada empresa con CUIT propio que factura ventas. Si operan con más de una (por ejemplo, una para locales y otra para el e-commerce), la estructura en Nubceo se arma distinto desde el inicio." },
-  { id: "c1detalle", lbl: "Si son varias: ¿cuáles y qué vende cada una?", type: "text", showIf: (r) => r.c1 === "varias" },
-  { id: "c2", lbl: "¿Cuántas sucursales o puntos de venta activos tienen?", type: "text" },
-  { id: "c3", lbl: "¿Cada sucursal tiene su propio número de comercio en cada procesadora?", type: "radio", otro: true,
-    opts: [["propios", "Cada una el suyo"], ["compartidos", "Hay compartidos"], ["nose", "No sé"]],
-    info: "El número de comercio (o 'número de establecimiento') es el código que cada procesadora le asigna a cada local; aparece en los cupones y en las liquidaciones. Si varias sucursales comparten el mismo número, definimos juntos cómo atribuir cada cobro a su sucursal." },
-  { id: "c4", lbl: "¿Está previsto abrir, cerrar o mudar sucursales en los próximos 3 meses?", type: "radio",
-    opts: [["no", "No"], ["si", "Sí"]] },
-  { id: "c4detalle", lbl: "Si sí: ¿qué cambia y cuándo?", type: "text", showIf: (r) => r.c4 === "si" },
-  { id: "c5", lbl: "Volumen aproximado: ¿cuántas transacciones por mes en total?", type: "text",
-    info: "Un número aproximado alcanza (ej: '15.000 por mes'). Nos sirve para dimensionar los datos de prueba y los tiempos de carga." },
+  { sec: "Tus sucursales", desc: "Locales, comercios y volumen" },
+  { id: "c2", lbl: "¿Cuántos locales o puntos de venta activos tienen?", type: "radio",
+    opts: [["1", "Uno"], ["2-5", "Entre 2 y 5"], ["6-20", "Entre 6 y 20"], ["21-100", "Entre 21 y 100"], ["100+", "Más de 100"]],
+    info: "Cada local termina siendo una sucursal en Nubceo. La cantidad nos sirve para planificar la carga de sucursales y las pruebas." },
+  { id: "c3", lbl: "¿Cada local tiene su propio número de comercio en cada procesadora?", sub: "Es el número que aparece en los cupones y en las liquidaciones.", type: "radio", otro: true,
+    opts: [["propios", "Sí, cada local tiene el suyo"], ["compartidos", "Hay locales que comparten número"], ["nose", "No sé"]],
+    info: "Si varios locales comparten el número, definimos juntos cómo asignar cada cobro a su local." },
+  { id: "c4", lbl: "¿Van a abrir, cerrar o mudar locales en los próximos 3 meses?", type: "radio", opts: [["no", "No"], ["si", "Sí"]],
+    info: "Un local nuevo, cerrado o mudado cambia sus números de comercio. Si lo sabemos antes, lo dejamos previsto en la configuración." },
+  { id: "c4detalle", detalleDe: "c4", lbl: "¿Qué cambia y cuándo?", type: "text", showIf: (r) => r.c4 === "si" },
+  { id: "c5", lbl: "¿Cuántas operaciones con tarjeta, QR o billetera hacen por mes en total?", sub: "Sumando todos los locales y canales.", type: "radio",
+    opts: [["<5k", "Menos de 5.000"], ["5-20k", "Entre 5.000 y 20.000"], ["20-100k", "Entre 20.000 y 100.000"], ["100k+", "Más de 100.000"], ["nose", "No sé"]],
+    info: "Nos sirve para dimensionar los datos de prueba y los tiempos de carga." },
 
-  { sec: "D · Cómo van a llegar los datos a Nubceo" },
-  { id: "d1", lbl: "Para enviar las ventas a Nubceo, ¿van por API o por archivo (CSV)?", type: "radio",
-    opts: [["api", "API"], ["csv", "CSV"], ["indef", "No está definido"]],
-    info: "API: sus sistemas envían las ventas a Nubceo automáticamente; requiere un desarrollo del lado de ustedes (o cotizado con Nubceo), pero después no hay tarea manual. CSV: cargan un archivo con las ventas de forma periódica; no requiere desarrollo, pero sí disciplina de carga. Si no está definido, lo charlamos en el workshop." },
-  { id: "d2", lbl: "Si van por API: ¿quién desarrolla la integración?", type: "radio", otro: true, showIf: (r) => r.d1 === "api",
-    opts: [["interno", "Nuestro equipo de sistemas"], ["proveedor", "El proveedor del PDV/ERP"], ["freelance", "Un desarrollador externo"], ["nubceo", "Nubceo (desarrollo cotizado)"], ["indef", "No está definido"]] },
-  { id: "d3", lbl: "Si van por API: ¿el desarrollo está aprobado, con recursos y fecha?", type: "radio", showIf: (r) => r.d1 === "api",
-    opts: [["aprobada", "Aprobado y con fecha"], ["eval", "En evaluación"], ["no", "No / sin fecha"]],
-    info: "Con 'aprobado' nos referimos a que el proyecto tiene el OK interno y alguien asignado para hacerlo. Es la pregunta más importante para armar un cronograma realista: si todavía está en evaluación, conviene arrancar por CSV en paralelo para no frenar la implementación." },
-  { id: "d4", lbl: "Si van por CSV: ¿quién arma y carga el archivo, y con qué frecuencia?", type: "text", showIf: (r) => r.d1 === "csv",
-    info: "Necesitamos nombre y rol de la persona concreta (ej: 'Laura, de administración, carga semanal'). La carga periódica del CSV es lo que mantiene viva la conciliación: sin un responsable definido, es el punto donde más implementaciones se traban." },
-  { id: "d5", lbl: "¿Quién es el referente técnico? (nombre, rol, mail y teléfono)", type: "text",
-    info: "Es la persona a la que le vamos a escribir por credenciales, API o archivos. Puede ser de sistemas propio o del proveedor del PDV." },
-  { id: "d6", lbl: "¿Y el referente del negocio u operación? (nombre, rol y mail)", type: "text",
-    info: "Quien va a usar la conciliación en el día a día: tesorería, administración, medios de pago. Idealmente una persona distinta del referente técnico, así siempre hay dos contactos activos." },
+  { sec: "Cómo llegan las ventas", desc: "API o archivo CSV" },
+  { id: "d1", lbl: "¿Cómo van a enviarle las ventas a Nubceo?", type: "radio",
+    opts: [["api", "Por API: el sistema las envía solo"], ["csv", "Por archivo CSV: lo cargamos cada tanto"], ["indef", "Todavía no lo sabemos"]],
+    info: "API requiere un desarrollo, pero después no hay tarea manual. CSV no requiere desarrollo, pero sí una persona que cargue el archivo con regularidad. Si no lo saben, lo charlamos en el workshop." },
+  { id: "d2", lbl: "¿Quién va a desarrollar la integración por API?", type: "radio", otro: true, showIf: (r) => r.d1 === "api",
+    opts: [["interno", "Nuestro equipo de sistemas"], ["proveedor", "El proveedor del punto de venta o ERP"], ["freelance", "Un desarrollador externo"], ["nubceo", "Nubceo, con un desarrollo cotizado"], ["indef", "No está definido"]],
+    info: "Quién desarrolla define los tiempos y a quién le pasamos la documentación técnica y las credenciales." },
+  { id: "d3", lbl: "¿El desarrollo de la API está aprobado, con alguien asignado y fecha?", type: "radio", showIf: (r) => r.d1 === "api",
+    opts: [["aprobada", "Sí, aprobado y con fecha"], ["eval", "Está en evaluación"], ["no", "No, todavía sin fecha"]],
+    info: "Si está en evaluación, conviene arrancar por CSV en paralelo para no frenar la implementación." },
+  { id: "d4", lbl: "¿Quién va a cargar el archivo y cada cuánto?", sub: "Ejemplo: Laura, de administración, todos los lunes.", type: "text", showIf: (r) => r.d1 === "csv",
+    info: "La carga periódica es lo que mantiene viva la conciliación. Sin una persona definida, es donde más se traban las implementaciones." },
 
-  { sec: "E · Cómo concilian hoy" },
-  { id: "e1", lbl: "¿Cómo concilian ventas contra cobros actualmente?", type: "radio", otro: true,
-    opts: [["no", "No conciliamos"], ["excel", "A mano con Excel"], ["herramienta", "Con otra herramienta"], ["tercero", "Lo hace un tercero / estudio"]],
-    info: "Conciliar es cruzar lo que vendieron contra lo que efectivamente les pagaron las procesadoras, para detectar diferencias. Si hoy no lo hacen, no pasa nada: justamente para eso está el Conciliador." },
-  { id: "e1detalle", lbl: "Si usan una herramienta o un tercero: ¿cuál?", type: "text", showIf: (r) => r.e1 === "herramienta" || r.e1 === "tercero" },
-  { id: "e2", lbl: "Si concilian: ¿qué porcentaje aproximado les cierra sin diferencias?", type: "text" },
-  { id: "e3", lbl: "¿Cuáles son hoy los principales motivos de diferencias o de transacciones que no pueden cruzar?", type: "textarea",
-    info: "Ejemplos frecuentes: la venta figura un día y el cobro otro (fechas corridas); el monto difiere por comisiones o impuestos; cupones que no aparecen; interpretación de bines por tokenización; contracargos (cuando el banco les debita una venta que el cliente desconoció). Todo lo que menciones acá lo contemplamos directamente en las reglas." },
-  { id: "e4", lbl: "¿Cómo manejan devoluciones, anulaciones y contracargos? ¿Se registran en el mismo sistema de ventas?", type: "textarea",
-    info: "Una devolución es cuando le reintegran la compra al cliente; una anulación, cuando se cancela la venta el mismo día; un contracargo, cuando el banco les debita una venta desconocida. Si estos movimientos se registran en otro sistema (o no se registran), lo definimos para que no queden puntas sueltas." },
+  { sec: "Cómo concilian hoy", desc: "Lo que funciona y lo que no" },
+  { id: "e1", lbl: "Hoy, ¿cómo controlan que lo vendido coincida con lo cobrado?", type: "radio", otro: true,
+    opts: [["no", "No lo controlamos"], ["excel", "A mano, con Excel"], ["herramienta", "Con otra herramienta"], ["tercero", "Lo hace un estudio o un tercero"]],
+    info: "Si hoy no lo hacen, no pasa nada: para eso está el Conciliador." },
+  { id: "e1detalle", detalleDe: "e1", lbl: "¿Cuál o quién?", type: "text", showIf: (r) => r.e1 === "herramienta" || r.e1 === "tercero" },
+  { id: "e2", lbl: "¿Qué parte les cierra sin diferencias?", type: "radio", showIf: (r) => !!r.e1 && r.e1 !== "no",
+    opts: [["<50", "Menos de la mitad"], ["50-80", "Entre 50% y 80%"], ["80-95", "Entre 80% y 95%"], ["95+", "Más del 95%"], ["nose", "No sé"]],
+    info: "Es el porcentaje de ventas que hoy encuentran su cobro sin diferencias. Nos sirve como punto de partida para medir la mejora." },
+  { id: "e3", lbl: "¿Por qué suelen aparecer diferencias?", sub: "Marcá las que les pasan.", type: "multi", otro: true,
+    opts: [["fechas", "La venta y el cobro tienen fechas distintas"], ["comisiones", "El monto cambia por comisiones o impuestos"], ["faltantes", "Hay cupones que no aparecen"], ["contracargos", "Contracargos o desconocimientos"], ["cuotas", "Ventas en cuotas"], ["nose", "No sabemos"]],
+    info: "Cada motivo que marquen se transforma en una regla de conciliación. Cuantos más conozcamos, más alto arranca el porcentaje conciliado." },
+  { id: "e4", lbl: "Las devoluciones y anulaciones, ¿se registran en el mismo sistema de ventas?", type: "radio",
+    opts: [["si", "Sí, en el mismo sistema"], ["otro_sistema", "En otro sistema"], ["no", "No se registran"], ["nose", "No sé"]],
+    info: "Si se registran en otro lado o no se registran, lo definimos para que no queden diferencias sin explicar." },
 
-  { sec: "F · Usuarios, informes y cierre" },
-  { id: "f4", lbl: "¿Quiénes van a usar Nubceo en el día a día? (áreas y roles)", type: "text",
-    info: "Por ejemplo: tesorería, administración, finanzas, sistemas, gerentes de sucursal. Nos sirve para armar los usuarios y permisos, y para saber a quién invitar a la capacitación." },
-  { id: "f5", lbl: "¿Qué informes o información necesitan obtener? ¿Necesitan exportar datos a otro sistema?", type: "textarea",
-    info: "Por ejemplo: control de comisiones y costos por acuerdos comerciales, análisis de bancos y planes de cuotas elegidos por sus clientes, exportar asientos al sistema contable. Si necesitan integrar con un ERP o contable (SAP, Bejerman, Tango…), mencionalo acá." },
-  { id: "f1", lbl: "En una frase: ¿qué tiene que pasar para que consideren esta implementación un éxito?", type: "text" },
-  { id: "f3", lbl: "¿Están migrando o por migrar de PDV, ERP o e-commerce en los próximos 6 meses?", type: "radio",
-    opts: [["no", "No"], ["si", "Sí"]],
-    info: "Cambiar de sistema en medio de la implementación afecta directamente el envío de datos a Nubceo. Si hay una migración prevista, conviene saberlo ahora para elegir el mejor momento de cada paso — no es un problema, es planificación." },
-  { id: "f3detalle", lbl: "Si sí: ¿qué y cuándo?", type: "text", showIf: (r) => r.f3 === "si" },
-  { id: "f2", lbl: "¿Hay algo de su operación que sea distinto de lo habitual o que les preocupe que no funcione? Vale cualquier cosa.", type: "textarea",
-    info: "Acuerdos especiales con un banco, una sucursal que opera distinto, un sistema viejo por cambiar, cobros que van a una cuenta particular… Todo lo que en su empresa se resuelve 'de una forma especial' nos interesa conocerlo antes del workshop." },
+  { sec: "Uso y cierre", desc: "Quiénes, para qué y qué les preocupa" },
+  { id: "f4", lbl: "¿Qué áreas van a usar Nubceo?", type: "multi", otro: true,
+    opts: [["tesoreria", "Tesorería"], ["administracion", "Administración"], ["finanzas", "Finanzas"], ["contabilidad", "Contabilidad"], ["sistemas", "Sistemas"], ["sucursales", "Gerentes de local"]],
+    info: "Nos sirve para armar usuarios y permisos y para saber a quién invitar a la capacitación." },
+  { id: "f5", lbl: "¿Qué les gustaría obtener de Nubceo?", type: "multi", otro: true,
+    opts: [["diferencias", "Detectar diferencias y cobros faltantes"], ["comisiones", "Controlar comisiones y costos"], ["proyeccion", "Saber cuándo y cuánto van a cobrar"], ["contable", "Exportar asientos al sistema contable"], ["reportes", "Reportes para gerencia"]],
+    info: "Así configuramos los reportes y, si hace falta, la exportación a su sistema contable desde el principio." },
+  { id: "f3", lbl: "¿Van a cambiar de sistema de ventas, ERP o tienda online en los próximos 6 meses?", type: "radio", opts: [["no", "No"], ["si", "Sí"]],
+    info: "Un cambio de sistema en medio de la implementación afecta el envío de ventas. Saberlo ahora ayuda a elegir el mejor momento." },
+  { id: "f3detalle", detalleDe: "f3", lbl: "¿Qué y cuándo?", type: "text", showIf: (r) => r.f3 === "si" },
+  { id: "f1", lbl: "En una frase: ¿qué tiene que pasar para que esta implementación sea un éxito?", type: "text",
+    info: "Es la meta de la implementación en sus palabras. La usamos para revisar juntos, al final, si se cumplió." },
+  { id: "f2", lbl: "¿Hay algo de su operación que sea distinto o que les preocupe?", sub: "Un acuerdo con un banco, un local que opera distinto, un sistema viejo por cambiar. Si no hay nada, contanos eso.", type: "textarea",
+    info: "Todo lo que en su empresa se resuelve de forma especial conviene saberlo antes del workshop." },
+
+  // ── Legado: ya no se preguntan; se muestran al equipo si estaban respondidas ──
+  { id: "a2", legado: true, lbl: "Sistemas de venta por canal (relevamiento anterior)", type: "textarea" },
+  { id: "b0", legado: true, lbl: "Medios de pago y plataformas (relevamiento anterior)", type: "multi", otro: true,
+    opts: [["prisma", "Prisma / Payway"], ["fiserv", "Fiserv"], ["mercadopago", "Mercado Pago"], ["naranja", "Naranja X"], ["amex", "American Express"], ["getnet", "Getnet"], ["cabal", "Cabal"], ["visanet", "VisaNet"], ["adyen", "Adyen"], ["gocuotas", "Go Cuotas"], ["pedidosya", "PedidosYa"], ["rappi", "Rappi"], ["ubereats", "Uber Eats"], ["didifood", "DiDi Food"], ["efectivo", "Efectivo"], ["transferencia", "Transferencia"]] },
+  { id: "c1", legado: true, lbl: "Razones sociales (relevamiento anterior)", type: "radio", opts: [["una", "Una sola"], ["varias", "Más de una"]] },
+  { id: "c1detalle", legado: true, lbl: "Detalle de razones sociales (relevamiento anterior)", type: "text" },
+  { id: "d5", legado: true, lbl: "Referente técnico (relevamiento anterior)", type: "text" },
+  { id: "d6", legado: true, lbl: "Referente del negocio (relevamiento anterior)", type: "text" },
 ];
 
 function QItem({ q, rv, set, error, readOnly }) {
