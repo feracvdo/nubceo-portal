@@ -42,7 +42,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.42.0";
+const APP_VERSION = "1.43.0";
 const APP_VERSION_FECHA = "2026-11-03";
 
 const FASES = [
@@ -982,7 +982,7 @@ const PROXIMO_TXT = {
   empresa: ["Revisá los datos de tu empresa", "Confirmá lo que cargamos: razones sociales, contactos y sistemas. Te lleva un par de minutos.", "Revisar mis datos"],
   introduccion: ["Leé cómo va a ser tu implementación", "Cinco minutos para conocer las fases, quién hace qué y qué vamos a necesitar de tu equipo.", "Leer la introducción"],
   relevamiento: ["Completá el formulario de relevamiento", "Preguntas sobre cómo venden, cobran y facturan. Con tus respuestas armamos el workshop y la configuración de reglas.", "Completar relevamiento"],
-  sucursales: ["Cargá tus sucursales", "Subí el archivo de sucursales con el formato de Nubceo para que cada venta quede asociada a su local.", "Cargar sucursales"],
+  sucursales: ["Cargá tus sucursales", "Entendé cómo funcionan, cargá la lista de tus locales y seguí la guía para crearlos en Nubceo.", "Empezar con sucursales"],
   conexion: ["Definí cómo nos van a llegar las ventas", "Por API o por archivo CSV. Te explicamos cada opción y qué necesita tu equipo técnico.", "Ver opciones de conexión"],
   capacitacion: ["Agendá la capacitación de tu equipo", "Elegí un horario para que tu equipo aprenda a usar el Conciliador con sus propios datos.", "Agendar capacitación"],
   sandbox: ["Revisemos juntos los resultados de las pruebas", "Estamos probando la conciliación con tus datos. Cuando estén listos te pedimos un horario para mostrártelos.", "Ver estado de las pruebas"],
@@ -1613,6 +1613,245 @@ function TabRelevamientoTut({ data, session, setAll, avisar }) {
   );
 }
 
+
+// ═════════════ Paso de sucursales en modo tutorial ═════════════
+const TERMINOS = {
+  comercio: "Número de comercio: el código que cada procesadora le asigna a cada uno de tus locales. Aparece en los cupones y en las liquidaciones. Un mismo local puede tener un número distinto en cada procesadora.",
+  pdv: "Código de punto de venta: el código con el que tu sistema de ventas identifica a cada local (por ejemplo 014 o PALERMO). Va en cada venta que nos mandás.",
+  procesadora: "Procesadora: la empresa que te liquida los cobros con tarjeta, QR o billetera, como Payway, Fiserv o Mercado Pago.",
+  cabecera: "Sucursal cabecera: así se llama en Nubceo a cada uno de tus locales. Reúne el nombre, el código de punto de venta y los números de comercio de ese local.",
+  huerfano: "Número de comercio sin sucursal (huérfano): un número que Nubceo ya ve en tus liquidaciones pero que todavía no sabe a qué local pertenece.",
+  conciliar: "Conciliar: cruzar cada venta con su cobro para confirmar que te pagaron lo que corresponde.",
+};
+const Termino = ({ k, children }) => (
+  <span className="nub-term" tabIndex={0}>{children}<span className="nub-term__tt" role="tooltip">{TERMINOS[k]}</span></span>
+);
+const EXAMEN_SUC = [
+  { q: "Una venta llega con el código de punto de venta 014. ¿Cómo sabe Nubceo que es de Palermo?", o: ["Por el nombre que escribe el cajero", "Porque en la sucursal Palermo está cargado el código 014", "Por el monto de la venta"], ok: 1,
+    bien: "Exacto. El código de punto de venta de la sucursal tiene que ser el mismo que usa tu sistema de ventas.", mal: "Nubceo no adivina por nombre ni por monto: usa el código de punto de venta cargado en la sucursal." },
+  { q: "¿Qué es un número de comercio?", o: ["El número de factura de cada venta", "El código que cada procesadora le da a cada local", "El CUIT de la empresa"], ok: 1,
+    bien: "Correcto. Lo ves en los cupones y en las liquidaciones de cada procesadora.", mal: "El número de comercio lo asigna cada procesadora a cada local. No es la factura ni el CUIT." },
+  { q: "Palermo cobra con Payway y con Mercado Pago. ¿Cuántos números de comercio van en esa sucursal?", o: ["Uno solo", "Dos: uno de cada procesadora", "Ninguno, se asocian solos"], ok: 1,
+    bien: "Bien. Cada procesadora le da su propio número al local, y todos van a la misma sucursal.", mal: "Cada procesadora tiene su propio número para el local, así que son dos." },
+  { q: "En Nubceo ves un número de comercio sin sucursal. ¿Qué hacés?", o: ["Lo dejo así, no afecta", "Lo asigno a la sucursal a la que pertenece", "Lo borro"], ok: 1,
+    bien: "Perfecto. Mientras no tenga sucursal, sus cobros no se pueden cruzar con las ventas.", mal: "Si queda sin sucursal, sus cobros no se cruzan con las ventas. Hay que asignarlo a su local." },
+];
+const GUIA_SUC = {
+  masiva: [
+    ["Entrá a Nubceo", "Abrí cash.nubceo.com e ingresá con tu usuario.", "login"],
+    ["Abrí Mi negocio", "En el menú de la izquierda está todo lo de tu empresa y tus locales.", "inicio"],
+    ["Entrá a Sucursales cabecera", "Es donde se crean tus sucursales y se les asignan los números de comercio.", "negocio"],
+    ["Tocá Crear masivamente", "Con este botón se cargan todas las sucursales juntas desde una planilla.", "lista-masiva"],
+    ["Descargá la planilla de sucursales huérfanas", "Ya trae tus números de comercio, la procesadora, la empresa y el CUIT. Solo te faltan dos columnas.", "masiva-descargar"],
+    ["Completá las dos columnas amarillas", "En Excel, completá el código de punto de venta y el nombre de la sucursal de cada número de comercio. Si dos números son del mismo local, repetí el código y el nombre.", "excel"],
+    ["Subí la planilla completa", "Volvé a Crear masivamente y subí el archivo. Nubceo crea las sucursales y les asigna los números de comercio.", "masiva-subir"],
+    ["Revisá el resultado", "Nubceo te muestra cuántas sucursales creó. Si alguna fila tuvo un problema, corregila y volvé a subir la planilla.", "resultado"],
+  ],
+  una: [
+    ["Entrá a Nubceo", "Abrí cash.nubceo.com e ingresá con tu usuario.", "login"],
+    ["Abrí Mi negocio", "En el menú de la izquierda está todo lo de tu empresa y tus locales.", "inicio"],
+    ["Entrá a Sucursales cabecera", "Es donde se crean tus sucursales y se les asignan los números de comercio.", "negocio"],
+    ["Tocá Crear", "Vas a crear la primera sucursal de tu lista.", "lista-crear"],
+    ["Completá los datos de la sucursal", "Escribí el nombre del local y su código de punto de venta, igual que en el portal.", "form"],
+    ["Agregá sus números de comercio", "Por cada procesadora, elegí la plataforma y escribí el número de comercio de ese local. Después guardá.", "form2"],
+    ["Repetí con cada sucursal", "Cada sucursal aparece en la lista con sus números. Repetí Crear con cada local.", "creadas"],
+  ],
+};
+// Marca el lugar donde hay que hacer clic: resaltado, flecha y cursor animados.
+const Clic = ({ children, on, style }) => on
+  ? <span className="nub-clic" style={style}>{children}<span className="nub-clic__flecha" aria-hidden="true" /><span className="nub-clic__cursor" aria-hidden="true" /></span>
+  : <span style={style}>{children}</span>;
+
+function PantallaNubceo({ scr, sucs }) {
+  const sc = sucs.length ? sucs : [{ nombre: "Palermo", codigo: "014" }, { nombre: "Belgrano", codigo: "022" }];
+  const marco = (main, menuAct, clicMenu) => (
+    <div className="nub-nb">
+      <div className="nub-nb__top"><Wordmark height={14} /><span className="nub-nb__url">cash.nubceo.com</span></div>
+      <div className="nub-nb__in">
+        <div className="nub-nb__side">
+          <Clic on={clicMenu}><div className={menuAct ? "is-act" : ""}>Mi negocio</div></Clic>
+          <div>Ventas</div><div>Conciliación</div><div>Reportes</div>
+        </div>
+        <div className="nub-nb__main">{main}</div>
+      </div>
+      <span className="nub-nb__tag">Pantalla de ejemplo</span>
+    </div>
+  );
+  const cab = (hot) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <b>Sucursales cabecera</b>
+      <span style={{ display: "flex", gap: 6 }}><Clic on={hot === "crear"}><span className="nub-nb__btn">Crear</span></Clic><Clic on={hot === "masiva"}><span className="nub-nb__btn">Crear masivamente</span></Clic></span>
+    </div>
+  );
+  if (scr === "login") return (
+    <div className="nub-nb"><div className="nub-nb__top"><Wordmark height={14} /><span className="nub-nb__url">cash.nubceo.com/login</span></div>
+      <div style={{ padding: "34px 20px", display: "grid", justifyItems: "center", gap: 10, minHeight: 260, alignContent: "center" }}>
+        <span className="nub-nb__btn" style={{ width: 230, color: T.n400 }}>usuario@tuempresa.com</span>
+        <span className="nub-nb__btn" style={{ width: 230, color: T.n400 }}>contraseña</span>
+        <Clic on><span className="nub-nb__btn nub-nb__btn--p" style={{ width: 230, textAlign: "center" }}>Ingresar</span></Clic>
+      </div><span className="nub-nb__tag">Pantalla de ejemplo</span></div>
+  );
+  if (scr === "inicio") return marco(<><b>Inicio</b><div className="nub-nb__ph" /><div className="nub-nb__ph" /></>, false, true);
+  if (scr === "negocio") return marco(<><b>Mi negocio</b><div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}><span className="nub-nb__btn">Empresas</span><Clic on><span className="nub-nb__btn" style={{ display: "block" }}>Sucursales cabecera</span></Clic><span className="nub-nb__btn">Plataformas</span><span className="nub-nb__btn">Usuarios</span></div></>, true);
+  if (scr === "lista-masiva" || scr === "lista-crear") return marco(<>{cab(scr === "lista-crear" ? "crear" : "masiva")}<div style={{ marginTop: 12, fontSize: 11.5, color: "#854d0e", fontWeight: 600 }}>Hay números de comercio sin sucursal</div><div className="nub-nb__ph" /></>, true);
+  if (scr === "masiva-descargar" || scr === "masiva-subir") return marco(<><b>Crear sucursales masivamente</b><div style={{ marginTop: 10, fontSize: 12, color: T.n600, lineHeight: 1.6 }}>1. Descargá la planilla con tus sucursales huérfanas.<br />2. Completá el código de punto de venta y el nombre.<br />3. Subí el archivo.</div><div style={{ marginTop: 14, display: "flex", gap: 6 }}><Clic on={scr === "masiva-descargar"}><span className="nub-nb__btn">Descargar planilla</span></Clic><Clic on={scr === "masiva-subir"}><span className="nub-nb__btn nub-nb__btn--p">Subir archivo</span></Clic></div></>, true);
+  if (scr === "excel") return (
+    <div className="nub-nb"><div className="nub-nb__top"><b style={{ color: "#1d6f42", fontSize: 12 }}>Excel</b><span className="nub-nb__url">sucursales_huerfanas.xlsx</span></div>
+      <div style={{ padding: 12, overflowX: "auto", minHeight: 240 }}>
+        <table className="nub-xl"><thead><tr><th>Nombre de la empresa</th><th>CUIT</th><th>Código de sucursal PDV</th><th>Nombre de sucursal</th><th>Número de comercio</th><th>Código de plataforma</th></tr></thead>
+          <tbody>{[["1234567", "prisma_ar", 0], ["7654321", "prisma_ar", 1], ["MP-889201", "mercadopago_ar", 0]].map(([n, c, k], j) => { const x = sc[k % sc.length]; return (
+            <tr key={j}><td>Tu empresa</td><td>00-00000000-0</td><td className="y">{j === 0 ? <Clic on>{x.codigo || "(completar)"}</Clic> : (x.codigo || "(completar)")}</td><td className="y">{x.nombre}</td><td>{n}</td><td>{c}</td></tr>); })}</tbody></table>
+        <div style={{ fontSize: 11, color: T.n600, marginTop: 8 }}>En amarillo, lo que completás vos. El resto ya viene cargado.</div>
+      </div><span className="nub-nb__tag">Ejemplo con tus sucursales</span></div>
+  );
+  if (scr === "resultado") return marco(<><b>Resultado de la carga</b><Clic on style={{ display: "block", marginTop: 12 }}><div style={{ border: "1px solid #bbe8c9", background: "#f0fdf4", borderRadius: 8, padding: 10, color: "#166534", fontWeight: 600 }}>{sc.length} sucursales creadas con sus números de comercio</div></Clic></>, true);
+  if (scr === "form" || scr === "form2") return marco(<>
+    <b>Nueva sucursal</b>
+    <div className="nub-nb__lbl">Nombre</div><Clic on={scr === "form"} style={{ display: "block" }}><span className="nub-nb__btn" style={{ display: "block", color: T.n900 }}>{sc[0].nombre}</span></Clic>
+    <div className="nub-nb__lbl">Código de punto de venta</div><span className="nub-nb__btn" style={{ display: "block", color: T.n900 }}>{sc[0].codigo || "(si lo tenés)"}</span>
+    {scr === "form2" && <><div className="nub-nb__lbl">Números de comercio</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}><span className="nub-nb__btn">Payway</span><span className="nub-nb__btn">1234567</span><span className="nub-nb__btn">Mercado Pago</span><span className="nub-nb__btn">MP-889201</span></div>
+      <div style={{ textAlign: "right", marginTop: 10, display: "flex", gap: 6, justifyContent: "flex-end" }}><span className="nub-nb__btn">Cancelar</span><Clic on><span className="nub-nb__btn nub-nb__btn--p">Guardar</span></Clic></div></>}
+  </>, true);
+  if (scr === "creadas") return marco(<>{cab("")}<div style={{ marginTop: 10 }}>{sc.map((x, k) => <div key={k} className="nub-nb__row"><b>{x.nombre}</b><span>{x.codigo || "Sin código"}</span><span style={{ color: k === 0 ? "#166534" : T.n400 }}>{k === 0 ? "Creada" : "Por crear"}</span></div>)}</div></>, true);
+  return null;
+}
+
+function TabSucursalesTut({ data, meta, act, saving, avisar, onSeguir }) {
+  const rv = data.relevamiento || {};
+  const [resp, setResp] = useState(() => rv.sucursalesExamen ? EXAMEN_SUC.map((q) => q.ok) : EXAMEN_SUC.map(() => -1));
+  const [sucs, setSucs] = useState(() => (rv.sucursalesLista && rv.sucursalesLista.length ? rv.sucursalesLista : [{ nombre: "", codigo: "" }]).map((x) => ({ ...x })));
+  const [pegar, setPegar] = useState(false), [pegarTx, setPegarTx] = useState("");
+  const [flujo, setFlujo] = useState(null), [g, setG] = useState(0);
+  const [hecho, setHecho] = useState(!!rv.sucursalesConfirmadas);
+  const validas = sucs.filter((x) => x.nombre.trim());
+  const flujoAct = flujo || (validas.length > 5 ? "masiva" : "una");
+  const guia = GUIA_SUC[flujoAct];
+  const errSuc = () => {
+    const e = {}, nom = {}, cod = {};
+    sucs.forEach((x, k) => {
+      const n = x.nombre.trim().toLowerCase(), c = x.codigo.trim();
+      if (!n) e[k] = "Escribí el nombre de la sucursal.";
+      else if (nom[n] != null) e[k] = "Ya cargaste una sucursal con este nombre.";
+      nom[n] = k;
+      if (c) { if (cod[c] != null) e[k] = (e[k] ? e[k] + " " : "") + "El código " + c + " está repetido."; cod[c] = k; }
+    });
+    return e;
+  };
+  const guardar = async (extra) => !!(await act("guardarSucursales", { lista: validas, ...extra }));
+  const malas = resp.filter((r, k) => r !== EXAMEN_SUC[k].ok).length;
+  const partes = (marcar) => {
+    const e = marcar ? errSuc() : {};
+    return [
+      { k: "Por qué importan las sucursales", h: "Cada venta tiene que encontrar su cobro",
+        texto: <>Tu sistema de ventas identifica cada local con un <Termino k="pdv">código de punto de venta</Termino>. Las <Termino k="procesadora">procesadoras</Termino>, en cambio, te pagan por <Termino k="comercio">número de comercio</Termino>. Para <Termino k="conciliar">conciliar</Termino>, Nubceo necesita saber qué número corresponde a cada local, y esa unión se arma en la <Termino k="cabecera">sucursal cabecera</Termino>.</>,
+        contenido: (
+          <div className="nub-flow3 nub-aparecen">
+            <div className="nub-vb"><b>Venta en tu caja</b>Local <code>014</code><br />Ticket 88213, $ 25.400</div>
+            <div className="nub-vm">se unen por<br />la sucursal</div>
+            <div className="nub-vb"><b>Cobro de Payway</b>N.º de comercio <code>1234567</code><br />Liquidación del 12/11</div>
+            <div className="nub-vres"><b>Sucursal Palermo</b> = código de punto de venta <code>014</code> + comercio de Payway <code>1234567</code> + comercio de Mercado Pago <code>MP-889201</code></div>
+          </div>
+        ) },
+      { k: "Cómo se arma", h: "Una sucursal, varios números de comercio",
+        texto: <>Un mismo local puede tener un número distinto en cada procesadora, y todos van a la misma sucursal. Los números que Nubceo ve en tus liquidaciones pero todavía no tienen local aparecen como <Termino k="huerfano">sucursales huérfanas</Termino>.</>,
+        nota: "Lo hacés una sola vez. Después solo hay que actualizarlo si abrís, cerrás o mudás un local.",
+        contenido: (
+          <div className="nub-aparecen" style={{ display: "grid", gap: 10 }}>
+            <div className="nub-vb"><b>Sucursal Palermo</b>Código de punto de venta <code>014</code></div>
+            <div className="nub-vb" style={{ marginLeft: 24 }}>Payway <code>1234567</code></div>
+            <div className="nub-vb" style={{ marginLeft: 24 }}>Mercado Pago <code>MP-889201</code></div>
+            <div className="nub-vb" style={{ marginLeft: 24, borderStyle: "dashed", background: "#fff" }}>Fiserv <code>40028812</code> <span style={{ color: "#854d0e", fontWeight: 600 }}>todavía sin sucursal</span></div>
+          </div>
+        ) },
+      { k: "Comprobá que se entendió", h: "Examen rápido", texto: "Cuatro preguntas. Si alguna sale mal, te explicamos por qué y la volvés a intentar. Para seguir, tienen que estar todas bien.",
+        nota: (EXAMEN_SUC.length - malas) + " de " + EXAMEN_SUC.length + " correctas",
+        faltan: malas ? [malas === 1 ? "responder bien 1 pregunta del examen" : "responder bien " + malas + " preguntas del examen"] : [],
+        contenido: (
+          <div>
+            {EXAMEN_SUC.map((q, k) => (
+              <div key={k} style={{ marginBottom: 16 }}>
+                <div style={{ fontWeight: 650, color: T.n900, marginBottom: 8, fontSize: 14.5 }}>{k + 1}. {q.q}</div>
+                {q.o.map((o, j) => (
+                  <button key={j} type="button" className={"nub-qz" + (resp[k] === j ? (j === q.ok ? " is-ok" : " is-mal") : "")} onClick={() => setResp(resp.map((r, x) => x === k ? j : r))}>{o}</button>
+                ))}
+                {resp[k] >= 0 && <div className={"nub-qz__fb " + (resp[k] === q.ok ? "is-ok" : "is-mal")}>{resp[k] === q.ok ? q.bien : q.mal + " Probá de nuevo."}</div>}
+              </div>
+            ))}
+          </div>
+        ) },
+      { k: "Tus locales", h: "Cargá todas tus sucursales",
+        texto: <>Escribí el nombre de cada local y, si lo tenés, su <Termino k="pdv">código de punto de venta</Termino>. Con esta lista vas a hacer la carga en Nubceo.</>,
+        nota: "El nombre es obligatorio. El código es opcional: si no lo sabés, lo completamos después con tu equipo de sistemas.",
+        faltan: !validas.length ? ["cargar al menos una sucursal"] : Object.keys(errSuc()).length ? ["corregir las sucursales marcadas en rojo"] : [],
+        contenido: (
+          <div>
+            <table className="nub-suc"><thead><tr><th style={{ width: "55%" }}>Nombre de la sucursal</th><th>Código de punto de venta (opcional)</th><th /></tr></thead>
+              <tbody>{sucs.map((x, k) => (
+                <tr key={k}>
+                  <td><Input value={x.nombre} placeholder="Ej: Palermo" onChange={(ev) => setSucs(sucs.map((y, j) => j === k ? { ...y, nombre: ev.target.value } : y))} style={e[k] ? { borderColor: "#dc2626", background: "#fef2f2" } : null} />
+                    {e[k] && <div style={{ fontSize: 12, color: "#991b1b", marginTop: 3 }}>{e[k]}</div>}</td>
+                  <td><Input value={x.codigo} placeholder="Ej: 014" onChange={(ev) => setSucs(sucs.map((y, j) => j === k ? { ...y, codigo: ev.target.value } : y))} /></td>
+                  <td>{sucs.length > 1 && <button type="button" className="nub-lnk" style={{ color: T.n400 }} onClick={() => setSucs(sucs.filter((_, j) => j !== k))}>Quitar</button>}</td>
+                </tr>
+              ))}</tbody></table>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 6 }}>
+              <button type="button" className="nub-lnk" onClick={() => setSucs([...sucs, { nombre: "", codigo: "" }])}>Agregar otra sucursal</button>
+              <button type="button" className="nub-lnk" onClick={() => setPegar(!pegar)}>Pegar una lista desde Excel</button>
+            </div>
+            {pegar && (
+              <div style={{ marginTop: 10, fontSize: 13, color: T.n600 }}>Pegá dos columnas (nombre y código) copiadas de Excel; una sucursal por renglón.
+                <textarea className="nub-qta" style={{ minHeight: 90, marginTop: 6 }} value={pegarTx} onChange={(ev) => setPegarTx(ev.target.value)} />
+                <Btn variant="secondary" size="sm" onClick={() => {
+                  const nuevas = pegarTx.split(/\n/).map((l) => l.split(/\t|;/)).filter((a) => a[0] && a[0].trim()).map((a) => ({ nombre: a[0].trim(), codigo: (a[1] || "").trim() }));
+                  setSucs([...sucs.filter((x) => x.nombre.trim() || x.codigo.trim()), ...nuevas]); setPegarTx(""); setPegar(false);
+                  avisar && avisar({ titulo: "Agregaste " + nuevas.length + (nuevas.length === 1 ? " sucursal" : " sucursales") });
+                }}>Agregar a la lista</Btn>
+              </div>
+            )}
+          </div>
+        ) },
+      { k: "Hacelo en Nubceo", h: guia[g][0], texto: guia[g][1],
+        nota: <>
+          <div className="nub-flujos" role="group" aria-label="Forma de carga">
+            {[["masiva", "Carga masiva con planilla"], ["una", "Una por una"]].map(([f, l]) => <button key={f} type="button" aria-pressed={flujoAct === f} onClick={() => { setFlujo(f); setG(0); }}>{l}</button>)}
+          </div>
+          <div style={{ fontSize: 12.5, color: "#166534", fontWeight: 600, marginTop: 6 }}>{validas.length > 5 ? "Con " + validas.length + " sucursales te conviene la carga masiva." : "Con " + validas.length + " sucursal" + (validas.length === 1 ? "" : "es") + " podés cargarlas una por una."}</div>
+          <div className="nub-tut__barras" style={{ marginTop: 12, maxWidth: "none" }}>{guia.map((_, k) => <i key={k} className={k < g ? "d" : k === g ? "c" : ""} />)}</div>
+          <div style={{ display: "flex", gap: 14, marginTop: 8 }}>
+            {g > 0 && <button type="button" className="nub-lnk" onClick={() => setG(g - 1)}>Paso anterior de la guía</button>}
+            {g < guia.length - 1 && <button type="button" className="nub-lnk" onClick={() => setG(g + 1)}>Paso siguiente de la guía</button>}
+          </div>
+        </>,
+        contenido: <div key={flujoAct + g} className="nub-fade"><PantallaNubceo scr={guia[g][2]} sucs={validas} /><div className="nub-guia"><b>{g + 1}</b><span>Paso {g + 1} de {guia.length} de la guía: {guia[g][0]}</span></div></div> },
+      { k: "Cerrá el paso", h: "¿Ya cargaste tus sucursales en Nubceo?",
+        texto: "Cuando estén todas y no te quede ningún número de comercio sin sucursal, marcalo acá. Si preferís hacerlo con ayuda, podés omitir el paso por ahora: tu implementador/a lo retoma con vos.",
+        faltan: hecho ? [] : ["marcar que cargaste tus sucursales en Nubceo, u omitir el paso"],
+        contenido: (
+          <div>
+            <div className={marcar && !hecho ? "nub-falta" : undefined}>
+              <button type="button" role="checkbox" aria-checked={hecho} className="nub-proc" style={{ width: "100%" }} onClick={() => setHecho(!hecho)}>
+                <span className="nub-proc__box">{hecho && <Icon n="check" size={12} stroke={3.2} />}</span>Cargué mis sucursales en Nubceo y no quedan números de comercio sin sucursal.
+              </button>
+            </div>
+            <div className="nub-sum" style={{ marginTop: 12 }}>
+              <div className="nub-sum__r"><span>Sucursales cargadas en el portal</span><b>{validas.length}</b></div>
+              {validas.map((x, k) => <div key={k} className="nub-sum__r"><span>{x.nombre}</span><span style={{ color: T.n600 }}>{x.codigo ? "Código " + x.codigo : "Sin código"}</span></div>)}
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <Btn variant="ghost" disabled={saving} onClick={async () => { if (await guardar({ examen: true, omitir: true })) { avisar && avisar({ titulo: "Paso omitido por ahora", detalle: "Tu implementador/a ya recibió el aviso. Seguís con Conexión de ventas." }); onSeguir(); } }}>Omitir por ahora y seguir</Btn>
+            </div>
+          </div>
+        ) },
+    ];
+  };
+  return (
+    <Tutorial titulo="Sucursales" partes={partes} guardando={saving} completo={!!rv.sucursalesConfirmadas}
+      onCompletar={() => guardar({ examen: true, confirmar: true })}
+      final={<><h2 className="nub-tut__h">Sucursales listas</h2><p className="nub-tut__p">Cargaste {validas.length} {validas.length === 1 ? "sucursal" : "sucursales"} en Nubceo. Tu implementador/a ya recibió el aviso.</p><Btn onClick={onSeguir}>Seguir con Conexión de ventas</Btn></>} />
+  );
+}
+
 function ProximoPaso({ meta, data, pasos, completo, unlocked, proximo, completados, tab, setTab, omitioSucursales }) {
   const total = pasos.length;
   const pct = total ? Math.round((completados / total) * 100) : 0;
@@ -1821,7 +2060,7 @@ function ClientPortal({ session, onLogout }) {
     empresa: !!rv.empresaConfirmada || !!meta.introLeida,
     introduccion: !!meta.introLeida,
     relevamiento: !!data.relevamientoEnviado,
-    sucursales: !!data.sucursalesArchivo,
+    sucursales: !!data.sucursalesArchivo || !!rv.sucursalesConfirmadas,
     conexion: rv.conexionLeida ? true : (rv.d1 === "api" ? !!data.apiCreds : rv.d1 === "csv" ? csvOk : rv.d1 === "ambos" ? (!!data.apiCreds && csvOk) : false),
     capacitacion: tieneEvento("capacitacion_conciliador") || tieneEvento("capacitacion_cash"),
     sandbox: tieneEvento("resultados_sandbox", true),
@@ -1859,7 +2098,7 @@ function ClientPortal({ session, onLogout }) {
               {tab === "empresa" && <TabEmpresaTut data={data} meta={meta} act={act} saving={saving} avisar={mostrarToast} onSeguir={() => setTab("introduccion")} />}
               {tab === "introduccion" && <TabIntroduccion act={act} meta={meta} saving={saving} />}
               {tab === "relevamiento" && <TabRelevamientoTut data={data} session={session} avisar={mostrarToast} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
-              {tab === "sucursales" && <TabSucursales data={data} meta={meta} persist={persist} act={act} saving={saving} />}
+              {tab === "sucursales" && <TabSucursalesTut data={data} meta={meta} act={act} saving={saving} avisar={mostrarToast} onSeguir={() => setTab("conexion")} />}
               {tab === "conexion" && <TabConexion data={data} persist={persist} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
               {tab === "capacitacion" && <TabCapacitacion data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
               {tab === "sandbox" && <TabPruebasEtapa etapa="sandbox" tipoEvento="resultados_sandbox" data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
