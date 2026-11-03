@@ -42,7 +42,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.40.0";
+const APP_VERSION = "1.41.0";
 const APP_VERSION_FECHA = "2026-11-03";
 
 const FASES = [
@@ -59,6 +59,21 @@ const FASES = [
 
 
 // ─── Capa de datos: todo pasa por /api/portal (el navegador nunca toca la base) ───
+const apiBase = (...args) => api(...args);
+
+// Acciones del panel del equipo que se confirman con un aviso flotante.
+const AVISOS_EQUIPO = {
+  setPhase: "Fase actualizada", assignClient: "Asignación guardada", setComerciales: "Vendedores actualizados",
+  setEstadoCliente: "Seguimiento actualizado", setEstadoContrato: "Estado del contrato actualizado",
+  setClientInfo: "Datos del cliente guardados", setFinanzas: "Datos financieros guardados", addNote: "Nota agregada",
+  setPlazo: "Plazo guardado", quitarPlazo: "Plazo quitado", setCumplimientoPlazo: "Cumplimiento del plazo actualizado",
+  setPrueba: "Estado de las pruebas actualizado", setMinuta: "Minuta guardada", saveProcesadoras: "Procesadora actualizada",
+  setApiDesarrolloCompleto: "Estado del desarrollo de la API actualizado", saveConfig: "Configuración guardada",
+  updateTeamEmail: "Mail actualizado", setMyAvailability: "Disponibilidad guardada", retryRedmine: "Alta reenviada a Redmine",
+  crearTicketRedmine: "Ticket creado en Redmine", marcarNotificacionesLeidas: "Notificaciones marcadas como leídas",
+  agendarEvento: "Reunión agendada", changeMyCode: "Código actualizado",
+};
+
 async function api(action, payload = {}) {
   const res = await fetch("/api/portal", {
     method: "POST",
@@ -272,11 +287,11 @@ function useCuentaRegresiva(objetivo, dur = 900) {
 }
 
 // ─── Aviso flotante (abajo a la derecha) con check que se dibuja ───
-const Toast = ({ toast }) => {
+const Toast = ({ toast, className }) => {
   if (!toast) return null;
   const ok = toast.tono !== "error";
   return (
-    <div className={"nub-toast" + (ok ? "" : " nub-toast--error")} role="status" aria-live="polite" key={toast.id}>
+    <div className={"nub-toast" + (ok ? "" : " nub-toast--error") + (className ? " " + className : "")} role="status" aria-live="polite" key={toast.id}>
       {ok ? (
         <svg className="nub-toast__chk" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m8 12.5 2.6 2.6L16 9.5" /></svg>
       ) : <Icon n="warning" size={20} style={{ color: "#fca5a5" }} />}
@@ -1003,16 +1018,22 @@ const Bandera = ({ c, w = 36 }) => (
 );
 const codPais = (nombre) => (PAISES.find(([, n]) => n === nombre) || [])[0] || null;
 
-function Tutorial({ titulo, partes, onCompletar, completo, final, guardando }) {
-  const [i, setI] = useState(completo ? partes.length : 0);
+function Tutorial({ titulo, partes: armarPartes, onCompletar, completo, final, guardando }) {
+  const [i, setI] = useState(completo ? 99 : 0);
+  // Si el cliente intenta seguir con algo sin completar, se marca en rojo y se dice qué falta.
+  const [marcar, setMarcar] = useState(false);
+  const partes = armarPartes(marcar);
   const total = partes.length;
   const enFinal = i >= total;
   const p = partes[Math.min(i, total - 1)];
   const ultima = i === total - 1;
-  const ok = p.ok !== false;
+  const faltan = p.faltan || [];
+  const ok = faltan.length === 0;
+  const irA = (n) => { setMarcar(false); setI(n); };
   const siguiente = async () => {
-    if (ultima) { const r = await onCompletar(); if (r !== false) setI(total); }
-    else setI(i + 1);
+    if (!ok) { setMarcar(true); return; }
+    if (ultima) { const r = await onCompletar(); if (r !== false) irA(total); }
+    else irA(i + 1);
   };
   return (
     <section className="nub-tut" aria-label={titulo}>
@@ -1029,7 +1050,7 @@ function Tutorial({ titulo, partes, onCompletar, completo, final, guardando }) {
             <div className="nub-tut__final">
               <svg className="nub-tut__ck" width="60" height="60" viewBox="0 0 52 52" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="26" cy="26" r="24" /><path d="m16 27 7 7 13-14" /></svg>
               {final}
-              <div style={{ marginTop: 14 }}><Btn variant="ghost" onClick={() => setI(0)}>Revisar o cambiar</Btn></div>
+              <div style={{ marginTop: 14 }}><Btn variant="ghost" onClick={() => irA(0)}>Revisar o cambiar</Btn></div>
             </div>
           </div>
         ) : (
@@ -1045,9 +1066,11 @@ function Tutorial({ titulo, partes, onCompletar, completo, final, guardando }) {
         )}
         {!enFinal && (
           <div className="nub-tut__bar">
-            <Btn variant="ghost" onClick={() => setI(i - 1)} style={{ visibility: i === 0 ? "hidden" : "visible" }}>Anterior</Btn>
-            <span className="nub-tut__hint">{p.hint || (ok ? "Lo que hacés se guarda al completar el paso." : "")}</span>
-            <Btn onClick={siguiente} disabled={!ok || guardando}>{ultima ? (guardando ? "Guardando…" : "Completar paso") : "Siguiente"}</Btn>
+            <Btn variant="ghost" onClick={() => irA(i - 1)} style={{ visibility: i === 0 ? "hidden" : "visible" }}>Anterior</Btn>
+            <span className={"nub-tut__hint" + (marcar && !ok ? " nub-tut__hint--error" : "")} role={marcar && !ok ? "alert" : undefined}>
+              {marcar && !ok ? "Falta completar: " + faltan.join(", ") + "." : (p.hint || "Lo que hacés se guarda al completar el paso.")}
+            </span>
+            <Btn onClick={siguiente} disabled={guardando}>{ultima ? (guardando ? "Guardando…" : "Completar paso") : "Siguiente"}</Btn>
           </div>
         )}
       </div>
@@ -1063,7 +1086,7 @@ const AYUDA_ESTADO = {
 };
 
 // ── Paso 1: Procesadoras ──
-function TabProcesadorasTut({ data, act, saving, onSeguir }) {
+function TabProcesadorasTut({ data, act, saving, onSeguir, avisar }) {
   const rv = data.relevamiento || {};
   const previas = data.procesadoras || [];
   const paisPrevio = rv.pais || (previas[0] && (previas[0].pais || "").replace(/[^\p{L}\s]/gu, "").trim()) || null;
@@ -1076,7 +1099,11 @@ function TabProcesadorasTut({ data, act, saving, onSeguir }) {
   const cant = elegidas.length + otras.length;
   const elegirPais = (n) => { if (n !== pais) { setSel({}); setOtras([]); } setPais(n); };
   const toggle = (code) => setSel((s) => { const x = { ...s }; if (x[code] !== undefined) delete x[code]; else x[code] = ""; return x; });
-  const agregarOtra = () => { const v = otraTxt.trim(); if (v && !otras.some((o) => o.nombre.toLowerCase() === v.toLowerCase())) setOtras([...otras, { nombre: v, estado: "" }]); setOtraTxt(""); };
+  const agregarOtra = () => {
+    const v = otraTxt.trim();
+    if (v && !otras.some((o) => o.nombre.toLowerCase() === v.toLowerCase())) { setOtras([...otras, { nombre: v, estado: "" }]); avisar && avisar({ titulo: "Agregaste " + v, detalle: "Se guarda al completar el paso." }); }
+    setOtraTxt("");
+  };
   const filas = [...elegidas.map((c) => ({ key: c.code, nombre: c.nombre, estado: sel[c.code], set: (e) => setSel({ ...sel, [c.code]: e }) })),
     ...otras.map((o, k) => ({ key: "otra" + k, nombre: o.nombre, estado: o.estado, set: (e) => setOtras(otras.map((x, j) => j === k ? { ...x, estado: e } : x)) }))];
   const cuenta = (e) => filas.filter((f) => (f.estado || "no_conectado") === e).length;
@@ -1089,12 +1116,12 @@ function TabProcesadorasTut({ data, act, saving, onSeguir }) {
     const r = await act("saveProcesadoras", { lista, pais, confirmar: true, log: "Confirmó sus procesadoras en " + pais + " (" + lista.length + ")" });
     return !!r;
   };
-  const partes = [
+  const partes = (marcar) => [
     { k: "Dónde operan", h: "¿En qué país opera tu empresa?", texto: "Así te mostramos solo las procesadoras que trabajan en ese país.",
       nota: "Si operan en más de un país, elegí el principal. Los demás los vemos con tu implementador/a.",
-      ok: !!pais, hint: pais ? null : "Elegí un país para seguir.",
+      faltan: pais ? [] : ["el país"],
       contenido: (
-        <div className="nub-paises" role="group" aria-label="País">
+        <div className={"nub-paises" + (marcar && !pais ? " nub-falta" : "")} role="group" aria-label="País">
           {PAISES.map(([c, n]) => (
             <button key={c} type="button" className="nub-pais" aria-pressed={pais === n} onClick={() => elegirPais(n)}><Bandera c={c} /><span>{n}</span></button>
           ))}
@@ -1103,9 +1130,9 @@ function TabProcesadorasTut({ data, act, saving, onSeguir }) {
     { k: "Con quién cobran", h: "¿Con qué procesadoras cobran" + (pais ? " en " + pais : "") + "?",
       texto: "Marcá todas las que usan hoy para cobrar con tarjeta, QR o billetera. Si alguna no está en la lista, agregala abajo.",
       nota: "Una procesadora es la empresa que te liquida las ventas: la que te manda el resumen de lo que te va a pagar y cuándo.",
-      ok: cant > 0, hint: cant ? cant + (cant === 1 ? " procesadora marcada." : " procesadoras marcadas.") : "Marcá al menos una procesadora para seguir.",
+      faltan: cant ? [] : ["marcar al menos una procesadora"], hint: cant ? cant + (cant === 1 ? " procesadora marcada." : " procesadoras marcadas.") : null,
       contenido: (
-        <div>
+        <div className={marcar && !cant ? "nub-falta nub-falta--caja" : undefined}>
           {conns.length === 0 && <div className="nub-tut__nota nub-tut__nota--azul" style={{ marginBottom: 12 }}>Todavía no tenemos procesadoras precargadas para {pais}. Agregá las que usan y tu implementador/a las confirma.</div>}
           <div className="nub-procs" role="group" aria-label="Procesadoras">
             {conns.map((c) => (
@@ -1167,7 +1194,7 @@ const RUBROS = ["Gastronomía", "Supermercado", "Retail o comercio minorista", "
 const ROLES_TUT = [["sponsor", "Quien decide (sponsor)"], ["key_user", "Usuario principal (key user)"], ["desarrollador", "Desarrollo o sistemas"], ["otro", "Otro"]];
 
 // ── Paso 2: Datos de tu empresa ──
-function TabEmpresaTut({ data, meta, act, saving, onSeguir }) {
+function TabEmpresaTut({ data, meta, act, saving, onSeguir, avisar }) {
   const rv = data.relevamiento || {};
   const cp = codPais(rv.pais) || "ar";
   const [fiscalLbl, fiscalLen] = ID_FISCAL[cp] || ["CUIT", 11];
@@ -1188,8 +1215,6 @@ function TabEmpresaTut({ data, meta, act, saving, onSeguir }) {
     return "";
   };
   const mailOk = (m) => !m || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(m);
-  const rsOk = razones.length > 0 && razones.every((r) => r.rs.trim() && !errId(r.id));
-  const ctOk = contactos.every((c) => (c.nombre || "").trim() && mailOk(c.email));
   const setR = (k, campo, v) => setRazones(razones.map((r, j) => j === k ? { ...r, [campo]: v, tocado: campo === "id" ? true : r.tocado } : r));
   const setC = (k, campo, v) => setContactos(contactos.map((c, j) => j === k ? { ...c, [campo]: v } : c));
   const Chips = ({ lista, set }) => (
@@ -1198,7 +1223,7 @@ function TabEmpresaTut({ data, meta, act, saving, onSeguir }) {
       {lista.map((v, j) => <span key={v} className="nub-chipx">{v}<button type="button" aria-label={"Quitar " + v} onClick={() => set(lista.filter((_, x) => x !== j))}><Icon n="x" size={11} stroke={3} /></button></span>)}
     </div>
   );
-  const sumar = (v, lista, set, limpiar) => { const t = v.trim(); if (t && !lista.includes(t)) set([...lista, t]); limpiar(""); };
+  const sumar = (v, lista, set, limpiar) => { const t = v.trim(); if (t && !lista.includes(t)) { set([...lista, t]); avisar && avisar({ titulo: "Agregaste " + t }); } limpiar(""); };
   const completar = async () => {
     const r = await act("confirmarEmpresa", {
       rubro, rubroOtro: rubro === "Otro" ? rubroOtro : "",
@@ -1208,7 +1233,20 @@ function TabEmpresaTut({ data, meta, act, saving, onSeguir }) {
     });
     return !!r;
   };
-  const partes = [
+  const faltanRs = [];
+  razones.forEach((r, k) => {
+    const n = razones.length > 1 ? " de la razón social " + (k + 1) : "";
+    if (!r.rs.trim()) faltanRs.push("el nombre" + n);
+    if (errId(r.id)) faltanRs.push("el " + fiscalLbl + n);
+  });
+  const faltanCt = [];
+  contactos.forEach((c, k) => {
+    const n = " del contacto " + (k + 1);
+    if (!(c.nombre || "").trim()) faltanCt.push("el nombre" + n);
+    if (!mailOk(c.email)) faltanCt.push("un mail válido" + n);
+  });
+  const rojo = { borderColor: "#dc2626", background: "#fef2f2" };
+  const partes = (marcar) => [
     { k: "Revisá lo que cargamos", h: "Tu empresa en Nubceo", texto: "Cargamos estos datos cuando arrancamos. En las próximas tarjetas los revisás y corregís lo que haga falta.",
       contenido: (
         <div>
@@ -1224,22 +1262,22 @@ function TabEmpresaTut({ data, meta, act, saving, onSeguir }) {
         </div>
       ) },
     { k: "Tu actividad", h: "¿A qué se dedica tu empresa?", texto: "Nos ayuda a anticipar cómo venden y cobran: no es lo mismo un restaurante que una farmacia o una estación de servicio.",
-      ok: !!rubro && (rubro !== "Otro" || !!rubroOtro.trim()), hint: rubro ? null : "Elegí el rubro que mejor los describe.",
+      faltan: !rubro ? ["el rubro"] : rubro === "Otro" && !rubroOtro.trim() ? ["cuál es el rubro"] : [],
       contenido: (
         <div>
-          <div className="nub-procs" role="radiogroup" aria-label="Rubro">
+          <div className={"nub-procs" + (marcar && !rubro ? " nub-falta" : "")} role="radiogroup" aria-label="Rubro">
             {RUBROS.map((r) => (
               <button key={r} type="button" role="radio" aria-checked={rubro === r} className="nub-proc nub-proc--radio" onClick={() => setRubro(r)}>
                 <span className="nub-proc__box nub-proc__box--radio" />{r}
               </button>
             ))}
           </div>
-          {rubro === "Otro" && <div style={{ marginTop: 12 }}><Label>Contanos cuál</Label><Input value={rubroOtro} onChange={(e) => setRubroOtro(e.target.value)} placeholder="Ej: venta de repuestos" /></div>}
+          {rubro === "Otro" && <div style={{ marginTop: 12 }}><Label>Contanos cuál</Label><Input value={rubroOtro} onChange={(e) => setRubroOtro(e.target.value)} placeholder="Ej: venta de repuestos" style={marcar && !rubroOtro.trim() ? rojo : null} /></div>}
         </div>
       ) },
     { k: "Identificación fiscal", h: "Razones sociales y " + fiscalLbl, texto: "Estas son las que tenemos. Si facturan con otras, agregalas.",
       nota: "No hace falta cargar todas: con las que usan para vender y cobrar alcanza. Las demás las podés sumar después.",
-      ok: rsOk, hint: rsOk ? null : "Revisá los campos marcados en rojo.",
+      faltan: faltanRs,
       contenido: (
         <div>
           {razones.map((r, k) => {
@@ -1248,36 +1286,39 @@ function TabEmpresaTut({ data, meta, act, saving, onSeguir }) {
               <div key={k} className="nub-dato">
                 <div className="nub-dato__h"><b>{k === 0 ? "Principal" : "Razón social " + (k + 1)}</b>{razones.length > 1 && <button type="button" className="nub-lnk" onClick={() => setRazones(razones.filter((_, j) => j !== k))}>Quitar</button>}</div>
                 <div className="nub-grid2">
-                  <div><Label>Razón social</Label><Input value={r.rs} onChange={(ev) => setR(k, "rs", ev.target.value)} style={r.rs.trim() ? null : { borderColor: "#dc2626" }} /></div>
-                  <div><Label>{fiscalLbl}</Label><Input value={r.id} inputMode="numeric" onChange={(ev) => setR(k, "id", ev.target.value)} style={e && r.tocado ? { borderColor: "#dc2626" } : null} />
-                    {e && r.tocado && <div style={{ fontSize: 12, color: "#991b1b", marginTop: 4 }}>{e}</div>}</div>
+                  <div><Label>Razón social</Label><Input value={r.rs} onChange={(ev) => setR(k, "rs", ev.target.value)} style={!r.rs.trim() && (marcar || r.tocado) ? rojo : null} />
+                    {!r.rs.trim() && marcar && <div style={{ fontSize: 12, color: "#991b1b", marginTop: 4 }}>Completá la razón social.</div>}</div>
+                  <div><Label>{fiscalLbl}</Label><Input value={r.id} inputMode="numeric" onChange={(ev) => setR(k, "id", ev.target.value)} style={e && (r.tocado || marcar) ? rojo : null} />
+                    {e && (r.tocado || marcar) && <div style={{ fontSize: 12, color: "#991b1b", marginTop: 4 }}>{e}</div>}</div>
                 </div>
               </div>
             );
           })}
-          <button type="button" className="nub-lnk" onClick={() => setRazones([...razones, { rs: "", id: "" }])}>Agregar otra razón social</button>
+          <button type="button" className="nub-lnk" onClick={() => { setRazones([...razones, { rs: "", id: "" }]); avisar && avisar({ titulo: "Agregaste una razón social", detalle: "Completá el nombre y el " + fiscalLbl + "." }); }}>Agregar otra razón social</button>
         </div>
       ) },
     { k: "Contactos", h: "¿Quiénes participan de la implementación?", texto: "Son las personas a las que les escribimos y a las que invitamos a las reuniones. Revisá sus datos y sumá a quien falte.",
       nota: "No hace falta cargar a todo el equipo. Con quien decide, quien va a usar Nubceo todos los días y, si hay integración, quien la desarrolla, alcanza.",
-      ok: ctOk, hint: ctOk ? null : "Cada contacto necesita nombre y un mail válido.",
+      faltan: faltanCt,
       contenido: (
         <div>
           {contactos.map((c, k) => (
             <div key={c.id || "n" + k} className="nub-dato">
               <div className="nub-dato__h"><b>{c.id ? c.nombre || "Contacto" : "Nuevo contacto"}</b><button type="button" className="nub-lnk" onClick={() => setContactos(contactos.filter((_, j) => j !== k))}>Quitar</button></div>
               <div className="nub-grid2">
-                <div><Label>Nombre y apellido</Label><Input value={c.nombre || ""} onChange={(e) => setC(k, "nombre", e.target.value)} /></div>
+                <div><Label>Nombre y apellido</Label><Input value={c.nombre || ""} onChange={(e) => setC(k, "nombre", e.target.value)} style={marcar && !(c.nombre || "").trim() ? rojo : null} />
+                  {marcar && !(c.nombre || "").trim() && <div style={{ fontSize: 12, color: "#991b1b", marginTop: 4 }}>Completá el nombre.</div>}</div>
                 <div><Label>Rol en la implementación</Label>
                   <select value={c.rol || "otro"} onChange={(e) => setC(k, "rol", e.target.value)} className="nub-select">
                     {ROLES_TUT.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select></div>
-                <div><Label>Mail</Label><Input type="email" value={c.email || ""} onChange={(e) => setC(k, "email", e.target.value)} style={mailOk(c.email) ? null : { borderColor: "#dc2626" }} /></div>
+                <div><Label>Mail</Label><Input type="email" value={c.email || ""} onChange={(e) => setC(k, "email", e.target.value)} style={mailOk(c.email) ? null : rojo} />
+                  {!mailOk(c.email) && <div style={{ fontSize: 12, color: "#991b1b", marginTop: 4 }}>Revisá el mail: falta la @ o el dominio.</div>}</div>
                 <div><Label>Celular (opcional)</Label><Input inputMode="tel" value={c.telefono || ""} onChange={(e) => setC(k, "telefono", e.target.value)} placeholder="+54 11 ..." /></div>
               </div>
             </div>
           ))}
-          <button type="button" className="nub-lnk" onClick={() => setContactos([...contactos, { nombre: "", rol: "otro", email: "", telefono: "" }])}>Agregar otro contacto</button>
+          <button type="button" className="nub-lnk" onClick={() => { setContactos([...contactos, { nombre: "", rol: "otro", email: "", telefono: "" }]); avisar && avisar({ titulo: "Agregaste un contacto", detalle: "Completá su nombre y mail." }); }}>Agregar otro contacto</button>
         </div>
       ) },
     { k: "Tus sistemas", h: "¿Con qué sistemas venden y facturan?", texto: "Nos sirve para saber de dónde salen las ventas que vamos a conciliar.",
@@ -1554,8 +1595,8 @@ function ClientPortal({ session, onLogout }) {
               />
 
               <div key={tab} className="nub-fade">
-              {tab === "procesadoras" && <TabProcesadorasTut data={data} act={act} saving={saving} onSeguir={() => setTab("empresa")} />}
-              {tab === "empresa" && <TabEmpresaTut data={data} meta={meta} act={act} saving={saving} onSeguir={() => setTab("introduccion")} />}
+              {tab === "procesadoras" && <TabProcesadorasTut data={data} act={act} saving={saving} avisar={mostrarToast} onSeguir={() => setTab("empresa")} />}
+              {tab === "empresa" && <TabEmpresaTut data={data} meta={meta} act={act} saving={saving} avisar={mostrarToast} onSeguir={() => setTab("introduccion")} />}
               {tab === "introduccion" && <TabIntroduccion act={act} meta={meta} saving={saving} />}
               {tab === "relevamiento" && <TabRelevamiento data={data} persist={persist} saving={saving} rvOK={!!data.relevamientoEnviado} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
               {tab === "sucursales" && <TabSucursales data={data} meta={meta} persist={persist} act={act} saving={saving} />}
@@ -3333,9 +3374,11 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
                       <span style={{ fontSize: 11, color: T.n600 }}>{cli.completados}/{cli.totalPasos}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
-                      <span style={{ display: "inline-flex" }}>
-                        {cli.implementadorNombre ? <Avatar nombre={cli.implementadorNombre} size={22} /> : <Badge tone="amber">Sin asignar</Badge>}
-                        {cli.desarrolladorNombre && <Avatar nombre={cli.desarrolladorNombre} size={22} tono="gris" style={{ marginLeft: -6 }} />}
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+                        {cli.implementadorNombre
+                          ? <span style={{ fontSize: 12, fontWeight: 600, color: T.n800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cli.implementadorNombre}</span>
+                          : <Badge tone="amber">Sin asignar</Badge>}
+                        {cli.desarrolladorNombre && <Avatar nombre={cli.desarrolladorNombre} size={22} tono="gris" />}
                       </span>
                       {(() => {
                         const sg = semaforoGoLive(cli.goLiveEstimado);
@@ -3344,15 +3387,12 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
                         return <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: T.n600, whiteSpace: "nowrap" }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: col }} />{fmtCorta(cli.goLiveEstimado)}</span>;
                       })()}
                     </div>
-                    {(cli.estadoPago === "con_deuda" || alertas.length > 0 || cli.estadoContrato === "sin_firmar" || cli.autoimplementacion || cli.notasCount > 0) && (
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
-                        {cli.estadoPago === "con_deuda" && <Badge tone="red">Deuda {diasDesde(cli.deudaDesde)} d</Badge>}
-                        {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
-                        {cli.estadoContrato === "sin_firmar" && <Badge tone="amber">Sin contrato</Badge>}
-                        {cli.autoimplementacion && <span className="nub-info"><Icon n="rocket" size={12} /> Autoimpl.</span>}
-                        {cli.notasCount > 0 && <span className="nub-info"><Icon n="file" size={12} /> {cli.notasCount}</span>}
-                      </div>
-                    )}
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                      {(cli.fechaIngreso || cli.createdAt) && <span className="nub-info" title="Fecha de alta del cliente"><Icon n="calendar" size={12} /> Alta {fmtCorta((cli.fechaIngreso || cli.createdAt).slice(0, 10))}</span>}
+                      {cli.estadoPago === "con_deuda" && <Badge tone="red">Deuda {diasDesde(cli.deudaDesde)} d</Badge>}
+                      {cli.autoimplementacion && <span className="nub-info"><Icon n="rocket" size={12} /> Autoimpl.</span>}
+                      {cli.notasCount > 0 && <span className="nub-info"><Icon n="file" size={12} /> {cli.notasCount}</span>}
+                    </div>
                   </div>
                 );
               })}
@@ -3363,7 +3403,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
               )}
               {items.length === 0 && !esDestino && (
                 <EstadoVacio compacto titulo="Nadie en esta fase">
-                  Arrastrá una tarjeta acá cuando un cliente llegue a {faseNombre.toLowerCase()}.
+                  Arrastrá una tarjeta acá cuando un cliente llegue a {faseNombre}.
                 </EstadoVacio>
               )}
             </div>
@@ -3661,6 +3701,19 @@ function FichaResumen({ meta, selData, nombreVendedor }) {
 const FICHA_TABS = [["resumen", "Resumen"], ["relevamiento", "Relevamiento"], ["integracion", "Integración"], ["tickets", "Tickets"], ["reuniones", "Reuniones"], ["mails", "Mails"], ["historial", "Historial"]];
 
 function AdminPortal({ session, onLogout }) {
+  const [toastEq, setToastEq] = useState(null);
+  const aviso = useCallback((titulo, tono) => setToastEq({ titulo, tono, id: Date.now() }), []);
+  useEffect(() => {
+    if (!toastEq) return;
+    const id = setTimeout(() => setToastEq(null), toastEq.tono === "error" ? 6500 : 4500);
+    return () => clearTimeout(id);
+  }, [toastEq]);
+  // Dentro del panel, cada acción que cambia algo se confirma con un aviso.
+  const api = async (action, payload) => {
+    const r = await apiBase(action, payload);
+    if (AVISOS_EQUIPO[action]) aviso(AVISOS_EQUIPO[action]);
+    return r;
+  };
   const [fTab, setFTab] = useState("resumen");
   const [ordenClientes, setOrdenClientes] = useState("golive"); // golive | fase | nombre
   const [filtroRapido, setFiltroRapido] = useState(""); // "" | golive | sin_asignar | mios
@@ -3833,7 +3886,7 @@ function AdminPortal({ session, onLogout }) {
       setTeam(r2.team);
     } catch (e) {
       setClients([]);
-      setMsg("No se pudo cargar el listado: " + e.message);
+      aviso("No se pudo cargar el listado: " + e.message, "error");
     }
   }, [sc]);
 
@@ -3891,7 +3944,7 @@ function AdminPortal({ session, onLogout }) {
       await api("archiveClient", { sessionCode: sc, code, who: session.who });
       flash(nombre + " fue archivado. Podés restaurarlo desde 'Clientes archivados'.");
       if (sel === code) cerrarDetalle(); else cargarListado();
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const restaurarCliente = async (code, nombre) => {
@@ -3901,7 +3954,7 @@ function AdminPortal({ session, onLogout }) {
       flash(nombre + " fue restaurado.");
       cargarListado();
       cargarArchivados();
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const eliminarCliente = async (code, nombre) => {
@@ -3912,7 +3965,7 @@ function AdminPortal({ session, onLogout }) {
       flash(nombre + " fue eliminado. El código " + code + " quedó libre.");
       cargarArchivados();
       cargarListado();
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const cargarArchivados = useCallback(async () => {
@@ -3929,7 +3982,7 @@ function AdminPortal({ session, onLogout }) {
       await api("deleteTeamMember", { sessionCode: sc, teamId, who: session.who });
       flash(nombre + " fue eliminado/a del equipo.");
       cargarListado();
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const setTipoUsuario = async (teamId, tipo, nombre) => {
@@ -3939,7 +3992,7 @@ function AdminPortal({ session, onLogout }) {
       await api("setTipoUsuario", { sessionCode: sc, teamId, tipo, who: session.who });
       flash("Tipo de usuario actualizado ✓", 3000);
       cargarListado();
-    } catch (e) { flash(e.message, 5000); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const abrirPanelKanban = async (code) => {
@@ -3978,7 +4031,7 @@ function AdminPortal({ session, onLogout }) {
 
   const toggleAvisosAutomaticos = async (valor) => {
     setAvisosAutomaticos(valor);
-    try { await api("setAvisosConfig", { sessionCode: sc, automatico: valor, who: session.who }); } catch (e) { flash(e.message); setAvisosAutomaticos(!valor); }
+    try { await api("setAvisosConfig", { sessionCode: sc, automatico: valor, who: session.who }); } catch (e) { flash(e.message, 0, "error"); setAvisosAutomaticos(!valor); }
   };
 
   const [enviandoAvisosDe, setEnviandoAvisosDe] = useState(null); // código del cliente en curso
@@ -3991,11 +4044,11 @@ function AdminPortal({ session, onLogout }) {
       else if (enviados?.length) flash(code + ": se enviaron " + enviados.length + " aviso(s) — " + enviados.map((e) => e.paso).join(", "));
       else flash(code + ": no había ningún aviso pendiente para mandar ahora.");
       if (sel === code) { setSelMeta(r.meta); setSelData(r.data); }
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
     finally { setEnviandoAvisosDe(null); }
   };
 
-  const flash = (texto, ms = 4000) => { setMsg(texto); setTimeout(() => setMsg(""), ms); };
+  const flash = (texto, ms, tono) => aviso(texto, tono);
 
   const guardarConfig = async () => {
     try {
@@ -4017,7 +4070,7 @@ function AdminPortal({ session, onLogout }) {
       if (r.meta && r.meta.autoimplementacion) {
         try { const ap = await api("getAutoProgreso", { sessionCode: sc, code }); setAutoProg(ap); } catch (e) { /* opcional */ }
       }
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const cerrarDetalle = () => { setSel(null); setSelData(null); setSelMeta(null); setAutoProg(null); cargarListado(); };
@@ -4033,7 +4086,7 @@ function AdminPortal({ session, onLogout }) {
       setAltaAbierta(false); setNewName(""); setNewCode(""); setNewTenant(""); setNewRazonSocial(""); setNewCuits([]); setNewCuitInput(""); setNewLogo(null);
       setNewComerciales([]); setNewAutoimp(false); setNewUsaSandbox(true); setNewGoLive(""); setNewFechaIngreso(""); setNewErpPdv([]); setNewErpPdvInput(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
       cargarListado();
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const crearImplementador = async () => {
@@ -4044,7 +4097,7 @@ function AdminPortal({ session, onLogout }) {
       flash("Persona creada como " + etiquetaTipo + ". Su código de acceso es " + newImplCode.trim().toUpperCase() + ". Compartíselo por un canal seguro.", 5000);
       setNewImplName(""); setNewImplCode(""); setNewImplEmail(""); setNewImplRol("implementador"); setNewImplFoto(null);
       cargarListado();
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const cambiarFase = async (code, phase) => {
@@ -4054,7 +4107,7 @@ function AdminPortal({ session, onLogout }) {
       const r = await api("setPhase", { sessionCode: sc, code, fase: phase, faseNombre: FASES[phase], who: session.who });
       if (sel === code) { setSelMeta(r.meta); setSelData(r.data); }
     } catch (e) {
-      flash(e.message);
+      flash(e.message, 0, "error");
       cargarListado(); // si falló, recargamos de la base para no dejar el tablero desincronizado
     }
   };
@@ -4069,7 +4122,7 @@ function AdminPortal({ session, onLogout }) {
     try {
       const r = await api("assignClient", { sessionCode: sc, code, implementadorId, rol, who: session.who });
       if (sel === code) { setSelMeta(r.meta); setSelData(r.data); }
-    } catch (e) { flash(e.message); cargarListado(); }
+    } catch (e) { flash(e.message, 0, "error"); cargarListado(); }
   };
 
   // Asignar/quitar vendedores desde la lista, también optimista.
@@ -4078,7 +4131,7 @@ function AdminPortal({ session, onLogout }) {
     if (sel === code) setSelMeta((m) => (m ? { ...m, comerciales: nuevaLista } : m));
     try {
       await api("setComerciales", { sessionCode: sc, code, comerciales: nuevaLista, who: session.who });
-    } catch (e) { flash(e.message); cargarListado(); }
+    } catch (e) { flash(e.message, 0, "error"); cargarListado(); }
   };
 
   // Cambia el color de seguimiento del cliente en el tablero: gris → verde → amarillo → rojo → gris.
@@ -4091,7 +4144,7 @@ function AdminPortal({ session, onLogout }) {
     try {
       await api("setEstadoCliente", { sessionCode: sc, code, estado: nuevo, who: session.who });
     } catch (e) {
-      flash(e.message);
+      flash(e.message, 0, "error");
       cargarListado(); // si falló, recargamos para no dejar el tablero desincronizado
     }
   };
@@ -4111,7 +4164,7 @@ function AdminPortal({ session, onLogout }) {
     try {
       const r = await api("retryRedmine", { sessionCode: sc, code: sel, who: session.who });
       setSelData(r.data);
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const [generandoAlta, setGenerandoAlta] = useState(false);
@@ -4122,7 +4175,7 @@ function AdminPortal({ session, onLogout }) {
       const r = await api("onboarding", { sessionCode: sc, code: sel, who: session.who });
       setSelData(r.data); setSelMeta(r.meta);
       flash("Alta disparada ✓");
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
     finally { setGenerandoAlta(false); }
   };
 
@@ -4136,7 +4189,7 @@ function AdminPortal({ session, onLogout }) {
       setSelData(r.data);
       setFeatureIdManual("");
       flash("Ticket vinculado ✓");
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
     finally { setVinculando(false); }
   };
 
@@ -4145,7 +4198,7 @@ function AdminPortal({ session, onLogout }) {
     try {
       const r = await api("regenCreds", { sessionCode: sc, code: sel, who: session.who });
       setSelData(r.data);
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const cambiarEstadoProc = async (codigo, estado) => {
@@ -4154,7 +4207,7 @@ function AdminPortal({ session, onLogout }) {
       const lista = (selData.procesadoras || []).map((p) => p.codigo === codigo ? { ...p, estado } : p);
       const r = await api("saveProcesadoras", { sessionCode: sc, code: sel, lista, who: session.who, log: "Actualizó el estado de una procesadora: " + codigo + " → " + estado });
       setSelData(r.data);
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const cambiarPrueba = async (etapa, status, notas) => {
@@ -4162,7 +4215,7 @@ function AdminPortal({ session, onLogout }) {
     try {
       const r = await api("setPrueba", { sessionCode: sc, code: sel, etapa, status, notas, who: session.who });
       setSelData(r.data);
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const guardarMinuta = async (eventoId, minuta) => {
@@ -4170,7 +4223,7 @@ function AdminPortal({ session, onLogout }) {
     try {
       const r = await api("setMinuta", { sessionCode: sc, code: sel, eventoId, minuta: minuta.trim(), who: session.who });
       setSelData(r.data);
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const guardarPlazo = async (paso, fechaLimite) => {
@@ -4178,14 +4231,14 @@ function AdminPortal({ session, onLogout }) {
     try {
       const r = await api("setPlazo", { sessionCode: sc, code: sel, paso, fechaLimite, who: session.who });
       setSelData(r.data);
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
   const quitarPlazo = async (paso) => {
     if (!sel) return;
     try {
       const r = await api("quitarPlazo", { sessionCode: sc, code: sel, paso, who: session.who });
       setSelData(r.data);
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
   const [avisoMsg, setAvisoMsg] = useState("");
   const enviarAvisoAhora = async (paso) => {
@@ -4202,7 +4255,7 @@ function AdminPortal({ session, onLogout }) {
     try {
       const r = await api("setApiDesarrolloCompleto", { sessionCode: sc, code: sel, completo, who: session.who });
       setSelData(r.data);
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const cambiarCumplimiento = async (paso, cumplimiento) => {
@@ -4210,7 +4263,7 @@ function AdminPortal({ session, onLogout }) {
     try {
       const r = await api("setCumplimientoPlazo", { sessionCode: sc, code: sel, paso, cumplimiento, who: session.who });
       setSelData(r.data);
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const reabrirRelevamiento = async () => {
@@ -4220,7 +4273,7 @@ function AdminPortal({ session, onLogout }) {
       const r = await api("reabrirRelevamiento", { sessionCode: sc, code: sel, who: session.who });
       setSelMeta(r.meta); setSelData(r.data);
       flash("Relevamiento reabierto ✓");
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const guardarFinanzas = async () => {
@@ -4233,7 +4286,7 @@ function AdminPortal({ session, onLogout }) {
       setSelMeta(r.meta); setSelData(r.data);
       setEditandoFinanzas(false);
       cargarListado();
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   const agregarNota = async () => {
@@ -4242,7 +4295,7 @@ function AdminPortal({ session, onLogout }) {
       const r = await api("addNote", { sessionCode: sc, code: sel, texto: nota.trim(), who: session.who });
       setSelData(r.data);
       setNota("");
-    } catch (e) { flash(e.message); }
+    } catch (e) { flash(e.message, 0, "error"); }
   };
 
   // ── Vista detalle de un cliente ──
@@ -4253,6 +4306,7 @@ function AdminPortal({ session, onLogout }) {
       <div>
         <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin extra={<AyudaMemoria codigo={sc} />} />
         <ChatBot codigo={sc} />
+        <Toast toast={toastEq} className="nub-toast--equipo" />
         <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 20px 60px" }}>
           <div style={{ position: "sticky", top: 61, zIndex: 5, background: T.bg, marginBottom: 14, padding: "14px 0 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Btn variant="ghost" size="sm" onClick={cerrarDetalle}>← Volver al listado</Btn>
@@ -4440,7 +4494,7 @@ function AdminPortal({ session, onLogout }) {
                     <ImageUpload value={editLogo} onChange={setEditLogo} label="logo" />
                     <div style={{ display: "flex", gap: 8 }}>
                       <Btn variant="ghost" size="sm" onClick={() => setEditandoInfo(false)}>Cancelar</Btn>
-                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, nombre: editNombre, codigo: editCodigo, tenant: editTenant, comerciales: editComerciales, autoimplementacion: editAutoimp, usaSandbox: editUsaSandbox, fechaIngreso: editFechaIngreso || null, razonSocial: editRazonSocial, cuits: editCuits, erpPdv: editErpPdv, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); if (r.meta && r.meta.codigoNuevo) setSel(r.meta.codigoNuevo); setEditandoInfo(false); cargarListado(); flash("Datos actualizados ✓", 2000); } catch (e) { flash(e.message); } }}>Guardar</Btn>
+                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, nombre: editNombre, codigo: editCodigo, tenant: editTenant, comerciales: editComerciales, autoimplementacion: editAutoimp, usaSandbox: editUsaSandbox, fechaIngreso: editFechaIngreso || null, razonSocial: editRazonSocial, cuits: editCuits, erpPdv: editErpPdv, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); if (r.meta && r.meta.codigoNuevo) setSel(r.meta.codigoNuevo); setEditandoInfo(false); cargarListado(); flash("Datos actualizados ✓", 2000); } catch (e) { flash(e.message, 0, "error"); } }}>Guardar</Btn>
                     </div>
                   </div>
                 </div>
@@ -4821,7 +4875,7 @@ function AdminPortal({ session, onLogout }) {
       <div style={{ display: "flex" }}>
         <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); }} noLeidas={notifNoLeidas} abierto={menuAbierto} onCerrar={cerrarMenu} mini={menuMini} onAlternarMini={alternarMenuMini} who={session.who} />
         <div className="nub-main" style={{ flex: 1, minWidth: 0, padding: "26px 24px 60px", maxWidth: 1180, margin: "0 auto" }}>
-          {msg && <Alert tone="success" style={{ marginBottom: 16 }}>{msg}</Alert>}
+          <Toast toast={toastEq} className="nub-toast--equipo" />
           {modulo === "autoimp" && <PanelAutoimp codigo={sc} />}
 
           {/* ══════════ MÓDULO: CLIENTES ══════════ */}
