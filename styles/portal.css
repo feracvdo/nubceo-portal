@@ -492,3 +492,37 @@ body:has(.nub-app) {
 .nub-app .nub-falta--caja { padding: 4px; }
 /* En el panel del equipo el aviso flotante no tapa el botón del chat */
 .nub-app .nub-toast--equipo { right: 92px; }
+
+/* ═══ v1.42 — Relevamiento en modo tutorial ═══ */
+.nub-app .nub-rvprog { display: grid; gap: 10px; margin-bottom: 14px; }
+.nub-app .nub-rvprog__top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; font-size: 13px; color: #475569; }
+.nub-app .nub-rvprog__top b { color: #033a8a; }
+.nub-app .nub-rvprog__bar { height: 8px; border-radius: 100px; background: #dbe3ee; overflow: hidden; }
+.nub-app .nub-rvprog__bar i { display: block; height: 100%; background: #0a6bf4; border-radius: 100px; transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.nub-app .nub-rvprog__secs { display: flex; gap: 6px; flex-wrap: wrap; }
+.nub-app .nub-rvsec { font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 11px; border-radius: 100px; border: 1px solid #dbe3ee; background: #fff; color: #475569; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.nub-app .nub-rvsec small { font-weight: 600; opacity: 0.75; }
+.nub-app .nub-rvsec.is-on { border-color: #0a6bf4; color: #033a8a; background: #f6f9ff; }
+.nub-app .nub-rvsec.is-ok { background: #02265c; border-color: #02265c; color: #fff; }
+.nub-app .nub-qtitle { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; }
+.nub-app .nub-qopts { display: grid; gap: 8px; }
+.nub-app .nub-qopts .nub-proc { width: 100%; }
+.nub-app .nub-qta { font: inherit; font-size: 14.5px; width: 100%; min-height: 130px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px; resize: vertical; color: #0f172a; box-sizing: border-box; }
+.nub-app .nub-qta:focus { outline: none; border-color: #0a6bf4; box-shadow: 0 0 0 3px rgba(10, 107, 244, 0.15); }
+.nub-app .nub-qta.is-falta { border-color: #dc2626; background: #fef2f2; }
+.nub-app .nub-qerr { margin-top: 12px; font-size: 13.5px; font-weight: 600; color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 9px 12px; animation: nub-fade-in 0.25s ease-out both; }
+.nub-app .nub-pend { color: #b91c1c; font-weight: 700; white-space: nowrap; }
+.nub-app .nub-sum__r--btn { width: 100%; border: 0; border-bottom: 1px solid #f1f5f9; background: #fff; font: inherit; cursor: pointer; color: inherit; }
+.nub-app .nub-sum__r--btn:hover { background: #f8fafc; }
+.nub-app .nub-lock { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: #166534; background: #dcfce7; border-radius: 100px; padding: 3px 10px; }
+
+/* Ícono de información con explicación */
+.nub-app .nub-tip { position: relative; flex-shrink: 0; margin-top: 5px; }
+.nub-app .nub-tip > button { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #b9d2fb; background: #e8f1fe; color: #0550c0; font: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; line-height: 1; }
+.nub-app .nub-tip > button:hover, .nub-app .nub-tip.is-open > button { background: #0a6bf4; border-color: #0a6bf4; color: #fff; }
+.nub-app .nub-tip__tt { display: none; position: absolute; left: -12px; top: 30px; z-index: 20; width: 300px; max-width: 72vw; background: #0f172a; color: #fff; font-size: 13px; font-weight: 400; line-height: 1.55; border-radius: 10px; padding: 11px 13px; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25); }
+.nub-app .nub-tip:hover .nub-tip__tt, .nub-app .nub-tip.is-open .nub-tip__tt { display: block; }
+
+/* Ventana de confirmación */
+.nub-app .nub-modal { position: fixed; inset: 0; background: rgba(13, 17, 32, 0.45); z-index: 70; display: flex; align-items: center; justify-content: center; padding: 20px; }
+.nub-app .nub-modal__box { background: #fff; border-radius: 16px; max-width: 460px; width: 100%; padding: 24px; box-shadow: 0 20px 50px rgba(15, 23, 42, 0.3); animation: nub-fade-in 0.2s ease-out both; }
