@@ -579,6 +579,26 @@ export default async function handler(req, res) {
       return res.json(await assemble({ ...cli, intro_leida: true }));
     }
 
+    // Paso de sucursales en modo tutorial: lista de locales, examen aprobado y confirmación.
+    if (action === "guardarSucursales") {
+      const cli = await getCliente(cc);
+      if (!cli) return res.status(404).json({ error: "Cliente no encontrado" });
+      const lista = (Array.isArray(req.body.lista) ? req.body.lista : [])
+        .map((s) => ({ nombre: String(s.nombre || "").trim(), codigo: String(s.codigo || "").trim() }))
+        .filter((s) => s.nombre);
+      const extra = { sucursalesLista: lista };
+      if (req.body.examen) extra.sucursalesExamen = new Date().toISOString();
+      if (req.body.confirmar) extra.sucursalesConfirmadas = new Date().toISOString();
+      await mergeRespuestas(cli.id, extra);
+      if (req.body.omitir) {
+        await db.from("clientes").update({ sucursales_omitido: true }).eq("id", cli.id);
+        await addHistory(cli.id, who || "Cliente", "Cargó " + lista.length + " sucursal/es en el portal y omitió por ahora la carga en Nubceo");
+        return res.json(await assemble({ ...cli, sucursales_omitido: true }));
+      }
+      if (req.body.confirmar) await addHistory(cli.id, who || "Cliente", "Confirmó que cargó sus " + lista.length + " sucursal/es en Nubceo");
+      return res.json(await assemble(cli));
+    }
+
     if (action === "omitirSucursales") {
       const cli = await getCliente(cc);
       await db.from("clientes").update({ sucursales_omitido: true }).eq("id", cli.id);
