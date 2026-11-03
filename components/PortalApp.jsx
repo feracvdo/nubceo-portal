@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
+import { VINCULACION, REQUISITOS_GENERALES, manualDe } from "../lib/vinculacion";
 import { CONECTORES, PAISES, ID_FISCAL, ESTADOS_PROCESADORA, DOCS, COLUMNAS_OBLIGATORIAS, TEMPLATE_SUCURSALES, PLATFORM_CODES_VALIDOS, PREFIJO_OTRA, codigoOtra } from "../lib/nubceo";
 import { validarVentas, validarTabla, exportarNubceo } from "../lib/validadorVentas";
 import { convertirSucursales, exportarTemplateSucursales } from "../lib/sucursalesTemplate";
@@ -42,7 +43,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.43.0";
+const APP_VERSION = "1.44.1";
 const APP_VERSION_FECHA = "2026-11-03";
 
 const FASES = [
@@ -1018,6 +1019,88 @@ const Bandera = ({ c, w = 36 }) => (
 );
 const codPais = (nombre) => (PAISES.find(([, n]) => n === nombre) || [])[0] || null;
 
+
+// ─── Cómo vincular cada procesadora que el cliente confirmó ───
+const ESTADO_TXT = { conectado: ["Conectada", "conectado"], en_espera: ["En espera", "en_espera"], no_conectado: ["Sin conectar", "no_conectado"] };
+function GuiaVinculacion({ procesadoras }) {
+  const [abierta, setAbierta] = useState(null);
+  const lista = (procesadoras || []).filter((p) => p.estado !== "conectado").concat((procesadoras || []).filter((p) => p.estado === "conectado"));
+  useEffect(() => {
+    if (!abierta) return;
+    const fn = (e) => { if (e.key === "Escape") setAbierta(null); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [abierta]);
+  if (!lista.length) return null;
+  const g = abierta ? VINCULACION[abierta.codigo] : null;
+  const pendientes = lista.filter((p) => p.estado !== "conectado").length;
+  return (
+    <div className="nub-vinc">
+      <h3 className="nub-vinc__t">Cómo vincular tus procesadoras</h3>
+      <p className="nub-vinc__d">{pendientes ? "Tenés " + pendientes + (pendientes === 1 ? " procesadora por vincular" : " procesadoras por vincular") + ". Elegí una para ver los pasos, el video y el manual." : "Todas tus procesadoras están conectadas."}</p>
+      <div className="nub-vinc__grid">
+        {lista.map((p) => {
+          const info = VINCULACION[p.codigo];
+          const [eLbl, eCls] = ESTADO_TXT[p.estado] || ESTADO_TXT.no_conectado;
+          return (
+            <button key={p.codigo} type="button" className="nub-vinc__card" onClick={() => setAbierta(p)}>
+              <span className="nub-vinc__nom">{(p.nombre || "").replace(/^Otra:\s*/, "")}</span>
+              <span className={"nub-pill nub-pill--" + eCls}>{eLbl}</span>
+              <span className="nub-vinc__met">{info ? info.metodo + (info.demora ? " · " + info.demora : "") : "Te pasamos los pasos"}</span>
+              <span className="nub-vinc__ver">{p.estado === "conectado" ? "Ver cómo se vinculó" : "Ver cómo vincularla"}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {abierta && (
+        <div className="nub-overlay nub-modal" role="dialog" aria-modal="true" aria-labelledby="vincT" onClick={() => setAbierta(null)}>
+          <div className="nub-modal__box nub-vinc__panel" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+              <div>
+                <div className="nub-tut__k">Vincular procesadora</div>
+                <h2 id="vincT" className="nub-tut__h" style={{ marginBottom: 6 }}>{(abierta.nombre || "").replace(/^Otra:\s*/, "")}</h2>
+              </div>
+              <button type="button" className="nub-lnk" onClick={() => setAbierta(null)} aria-label="Cerrar"><Icon n="x" size={18} /></button>
+            </div>
+            {g ? (
+              <>
+                <div className="nub-vinc__datos">
+                  <div><small>Cómo se conecta</small><b>{g.metodo}</b></div>
+                  <div><small>Quién lo hace</small><b>{g.quien}</b></div>
+                  {g.demora && <div><small>Demora estimada</small><b>{g.demora}</b></div>}
+                </div>
+                {g.video && (
+                  <div className="nub-vinc__video">
+                    <iframe src={"https://www.youtube-nocookie.com/embed/" + g.video + "?rel=0"} title={"Tutorial de vinculación de " + abierta.nombre} allow="accelerometer; encrypted-media; picture-in-picture; fullscreen" allowFullScreen loading="lazy" />
+                  </div>
+                )}
+                <h3 className="nub-vinc__h">Antes de empezar</h3>
+                <ul className="nub-vinc__pre">
+                  {[...g.pre, ...REQUISITOS_GENERALES].map((x, k) => <li key={k}>{x}</li>)}
+                </ul>
+                <h3 className="nub-vinc__h">Paso a paso</h3>
+                <ol className="nub-vinc__pasos">
+                  {g.pasos.map(([t, d], k) => <li key={k}><b>{t}</b><span>{d}</span></li>)}
+                </ol>
+                {g.demora && g.demora !== "En el momento" && (
+                  <Alert tone="warning" style={{ marginTop: 12 }}>Esta alta demora {g.demora.toLowerCase()}: conviene pedirla hoy para no frenar la implementación.</Alert>
+                )}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
+                  <a className="nub-vinc__dl" href={manualDe(abierta.codigo)} download target="_blank" rel="noopener noreferrer"><Icon n="file" size={15} /> Descargar el manual (PDF)</a>
+                  <a className="nub-vinc__dl nub-vinc__dl--sec" href="mailto:team.cx@nubceo.com">Escribir al equipo de Nubceo</a>
+                </div>
+              </>
+            ) : (
+              <p className="nub-tut__p">Para esta procesadora te pasamos los pasos de vinculación por mail. Si tenés dudas, escribinos a <a href="mailto:team.cx@nubceo.com">team.cx@nubceo.com</a>.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Tutorial({ titulo, partes: armarPartes, onCompletar, completo, final, guardando }) {
   const [i, setI] = useState(completo ? 99 : 0);
   // Si el cliente intenta seguir con algo sin completar, se marca en rojo y se dice qué falta.
@@ -1186,7 +1269,7 @@ function TabProcesadorasTut({ data, act, saving, onSeguir, avisar }) {
   ];
   return (
     <Tutorial titulo="Procesadoras" partes={partes} onCompletar={completar} guardando={saving} completo={!!rv.procesadorasConfirmadas}
-      final={<><h2 className="nub-tut__h">Procesadoras cargadas</h2><p className="nub-tut__p">Tu implementador/a ya recibió el aviso{(previas.some((x) => x.estado !== "conectado")) ? " y coordina con vos las que faltan" : ""}.</p><Btn onClick={onSeguir}>Seguir con Datos de tu empresa</Btn></>} />
+      final={<><h2 className="nub-tut__h">Procesadoras cargadas</h2><p className="nub-tut__p">Tu implementador/a ya recibió el aviso{(previas.some((x) => x.estado !== "conectado")) ? " y coordina con vos las que faltan" : ""}.</p><Btn onClick={onSeguir}>Seguir con Datos de tu empresa</Btn><GuiaVinculacion procesadoras={previas} /></>} />
   );
 }
 
