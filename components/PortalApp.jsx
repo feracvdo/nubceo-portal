@@ -42,8 +42,8 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.38.0";
-const APP_VERSION_FECHA = "2026-11-02";
+const APP_VERSION = "1.39.0";
+const APP_VERSION_FECHA = "2026-11-03";
 
 const FASES = [
   "Vinculación",
@@ -205,6 +205,14 @@ const ICON_PATHS = {
   success: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "m9 12 2 2 4-4"],
   pending: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 8v4", "M12 16h.01"],
   left: ["m15 18-6-6 6-6"],
+  mail: ["M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "m22 6-10 7L2 6"],
+  clock: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 6v6l4 2"],
+  history: ["M3 12a9 9 0 1 0 3-6.7L3 8", "M3 3v5h5", "M12 7v5l4 2"],
+  file: ["M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z", "M14 2v6h6"],
+  inbox: ["M22 12h-6l-2 3h-4l-2-3H2", "M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"],
+  panel: ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z", "M9 3v18"],
+  sort: ["m7 15 5 5 5-5", "m7 9 5-5 5 5"],
+  flag: ["M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z", "M4 22v-7"],
   right: ["m9 18 6-6-6-6"],
 };
 const Icon = ({ n, size = 16, stroke = 2, style }) => (
@@ -212,6 +220,82 @@ const Icon = ({ n, size = 16, stroke = 2, style }) => (
     {(ICON_PATHS[n] || []).map((d, i) => <path key={i} d={d} />)}
   </svg>
 );
+
+// ─── Encabezado de página único: ubicación, título, una frase y las acciones ───
+const PageHeader = ({ crumb, title, desc, actions, style }) => (
+  <header className="nub-pagehead" style={style}>
+    {crumb && <div className="nub-pagehead__crumb">{crumb} / <b>{title}</b></div>}
+    <div className="nub-pagehead__row">
+      <div style={{ minWidth: 0 }}>
+        <h1 className="nub-pagehead__title">{title}</h1>
+        {desc && <p className="nub-pagehead__desc">{desc}</p>}
+      </div>
+      {actions && <div className="nub-pagehead__actions">{actions}</div>}
+    </div>
+  </header>
+);
+
+// ─── Estado vacío: explica qué pasa y qué hacer ───
+const EstadoVacio = ({ icon = "inbox", titulo, children, accion, compacto }) => (
+  <div className={"nub-empty" + (compacto ? " nub-empty--compacto" : "")}>
+    <span className="nub-empty__ic"><Icon n={icon} size={compacto ? 16 : 20} /></span>
+    <div className="nub-empty__t">{titulo}</div>
+    {children && <div className="nub-empty__d">{children}</div>}
+    {accion && <div style={{ marginTop: 10 }}>{accion}</div>}
+  </div>
+);
+
+// ─── Iniciales para avatares (Lucía Martín → LM) ───
+const iniciales = (nombre) => (nombre || "").trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("") || "?";
+const Avatar = ({ nombre, size = 24, tono = "azul", style }) => (
+  <span className={"nub-av nub-av--" + tono} title={nombre} style={{ width: size, height: size, fontSize: Math.round(size * 0.42), ...style }}>{iniciales(nombre)}</span>
+);
+
+// ─── Días sin actividad: el dato que más importa para el seguimiento ───
+const SinActividad = ({ iso, corto }) => {
+  if (!iso) return <span className="nub-stale nub-stale--hi">{corto ? "sin actividad" : "Sin actividad"}</span>;
+  const d = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
+  const cls = d >= 10 ? "hi" : d >= 7 ? "md" : "lo";
+  const txt = d === 0 ? "hoy" : corto ? d + " d sin actividad" : d + (d === 1 ? " día" : " días");
+  return <span className={"nub-stale nub-stale--" + cls} title={"Última actividad: " + fmtDate(iso)}>{txt}</span>;
+};
+
+// ─── Número que se cuenta al aparecer (se apaga con "reducir movimiento") ───
+function useCuentaRegresiva(objetivo, dur = 900) {
+  const [v, setV] = useState(0);
+  useEffect(() => {
+    let reduce = false;
+    try { reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) {}
+    if (reduce) { setV(objetivo); return; }
+    let raf, t0;
+    const paso = (ts) => {
+      if (!t0) t0 = ts;
+      const k = Math.min(1, (ts - t0) / dur);
+      setV(Math.round(objetivo * (1 - Math.pow(1 - k, 3))));
+      if (k < 1) raf = requestAnimationFrame(paso);
+    };
+    raf = requestAnimationFrame(paso);
+    return () => cancelAnimationFrame(raf);
+  }, [objetivo, dur]);
+  return v;
+}
+
+// ─── Aviso flotante (abajo a la derecha) con check que se dibuja ───
+const Toast = ({ toast }) => {
+  if (!toast) return null;
+  const ok = toast.tono !== "error";
+  return (
+    <div className={"nub-toast" + (ok ? "" : " nub-toast--error")} role="status" aria-live="polite" key={toast.id}>
+      {ok ? (
+        <svg className="nub-toast__chk" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4ade80" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10" /><path d="m8 12.5 2.6 2.6L16 9.5" /></svg>
+      ) : <Icon n="warning" size={20} style={{ color: "#fca5a5" }} />}
+      <div>
+        <div style={{ fontWeight: 700 }}>{toast.titulo}</div>
+        {toast.detalle && <div style={{ opacity: 0.78, marginTop: 2 }}>{toast.detalle}</div>}
+      </div>
+    </div>
+  );
+};
 
 // ─── Esqueletos de carga: reemplazan los "Cargando…" manteniendo la forma de la pantalla ───
 const Skeleton = ({ w = "100%", h = 14, r = 6, style }) => (
@@ -312,7 +396,7 @@ const ActionBar = ({ children, style }) => (
 
 // ─── Etiqueta pequeña en mayúsculas para agrupar (ej. "PASO 3", "EQUIPO") ───
 const Eyebrow = ({ children }) => (
-  <div style={{ fontSize: 11.5, fontWeight: 700, color: T.primary, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+  <div style={{ fontSize: 12.5, fontWeight: 650, color: T.primary600, marginBottom: 6 }}>
     {children}
   </div>
 );
@@ -331,7 +415,7 @@ const Input = (props) => (
 );
 
 const Label = ({ children }) => (
-  <div style={{ fontSize: 11, fontWeight: 600, color: T.n400, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+  <div style={{ fontSize: 13, fontWeight: 600, color: T.n800, marginBottom: 6 }}>
     {children}
   </div>
 );
@@ -636,7 +720,7 @@ const PASOS = [
   { id: "sucursales", n: "Sucursales" },
   { id: "conexion", n: "Conexión API / CSV" },
   { id: "capacitacion", n: "Capacitación" },
-  { id: "sandbox", n: "Pruebas sandbox" },
+  { id: "sandbox", n: "Pruebas con tus datos" },
   { id: "golive", n: "Go-live" },
 ];
 
@@ -645,7 +729,7 @@ const EVENTO_NOMBRES = {
   reunion_tecnica: "Reunión técnica de API",
   capacitacion_conciliador: "Capacitación Conciliador",
   capacitacion_cash: "Capacitación Nubceo Cash",
-  resultados_sandbox: "Presentación de resultados sandbox",
+  resultados_sandbox: "Presentación de resultados de pruebas",
   workshop_cierre: "Workshop de cierre",
   golive: "Evento de go-live",
 };
@@ -826,6 +910,13 @@ const EventoLinea = ({ e }) => (
   </div>
 );
 
+// "8 nov" (y el año solo si no es el actual): para tarjetas y tablas
+const fmtCorta = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso + "T00:00:00");
+  const mismoAnio = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("es-AR", mismoAnio ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" }).replace(".", "");
+};
 const fmtDateSolo = (iso) => {
   if (!iso) return "—";
   return new Date(iso + "T00:00:00").toLocaleDateString("es-AR", { day: "numeric", month: "short", year: "numeric" });
@@ -877,6 +968,146 @@ function ClientSidebar({ activo, onCambiar, abierto, onCerrar }) {
   );
 }
 
+
+// ─── Tu próximo paso: una sola acción, con su plazo y a quién preguntarle ───
+const PROXIMO_TXT = {
+  procesadoras: ["Contanos con qué procesadoras cobran", "Marcá las plataformas de pago que usan y en qué estado está cada conexión. Con esto preparamos la vinculación.", "Marcar procesadoras"],
+  introduccion: ["Leé cómo va a ser tu implementación", "Cinco minutos para conocer las fases, quién hace qué y qué vamos a necesitar de tu equipo.", "Leer la introducción"],
+  relevamiento: ["Completá el formulario de relevamiento", "Preguntas sobre cómo venden, cobran y facturan. Con tus respuestas armamos el workshop y la configuración de reglas.", "Completar relevamiento"],
+  sucursales: ["Cargá tus sucursales", "Subí el archivo de sucursales con el formato de Nubceo para que cada venta quede asociada a su local.", "Cargar sucursales"],
+  conexion: ["Definí cómo nos van a llegar las ventas", "Por API o por archivo CSV. Te explicamos cada opción y qué necesita tu equipo técnico.", "Ver opciones de conexión"],
+  capacitacion: ["Agendá la capacitación de tu equipo", "Elegí un horario para que tu equipo aprenda a usar el Conciliador con sus propios datos.", "Agendar capacitación"],
+  sandbox: ["Revisemos juntos los resultados de las pruebas", "Estamos probando la conciliación con tus datos. Cuando estén listos te pedimos un horario para mostrártelos.", "Ver estado de las pruebas"],
+  golive: ["Preparemos el go-live", "Pasamos la configuración probada a tu entorno productivo y coordinamos el lanzamiento con tu equipo.", "Ver el go-live"],
+};
+// Paso del cliente → hito con fecha límite en "Plazos y recordatorios"
+const PASO_A_HITO = { procesadoras: "vinculacion_procesadora", relevamiento: "relevamiento", sucursales: "sucursales", sandbox: "sandbox", golive: "golive" };
+
+function textoPlazo(fechaISO) {
+  if (!fechaISO) return null;
+  const d = diasHasta(fechaISO);
+  const f = new Date(fechaISO + "T00:00:00").toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" });
+  if (d < 0) return { txt: "Venció el " + f, tono: "rojo" };
+  if (d === 0) return { txt: "Vence hoy", tono: "rojo" };
+  if (d === 1) return { txt: "Vence mañana", tono: "ambar" };
+  return { txt: "Vence el " + f + ", en " + d + " días", tono: d <= 3 ? "ambar" : "neutro" };
+}
+
+function ProximoPaso({ meta, data, pasos, completo, unlocked, proximo, completados, tab, setTab, omitioSucursales }) {
+  const total = pasos.length;
+  const pct = total ? Math.round((completados / total) * 100) : 0;
+  const pctVisible = useCuentaRegresiva(pct);
+  // Al entrar, el cliente cae directo en el paso que tiene que hacer.
+  const yaPosicionado = useRef(false);
+  useEffect(() => {
+    if (yaPosicionado.current) return;
+    yaPosicionado.current = true;
+    if (proximo && tab === "procesadoras" && proximo.id !== "procesadoras") setTab(proximo.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const idxProx = proximo ? pasos.findIndex((p) => p.id === proximo.id) : -1;
+  const faseNombre = FASES[meta.phase] || FASES[0];
+  const [titulo, desc, cta] = proximo ? (PROXIMO_TXT[proximo.id] || [proximo.n, "", "Ir al paso"]) : [];
+  const hito = proximo && PASO_A_HITO[proximo.id];
+  const plazo = hito ? textoPlazo(data.plazos?.[hito]?.fechaLimite) : null;
+  const golive = meta.goLiveEstimado ? new Date(meta.goLiveEstimado + "T00:00:00") : null;
+  const semanas = golive ? Math.round(diasHasta(meta.goLiveEstimado) / 7) : null;
+  return (
+    <section className="nub-np" aria-label="Tu próximo paso">
+      <div className="nub-np__main">
+        <div className="nub-np__where">
+          <span>Estás en <b>{faseNombre}</b>, fase {meta.phase + 1} de {FASES.length} de tu implementación</span>
+          <button type="button" className="nub-np__hist" onClick={() => setTab("historial")} aria-pressed={tab === "historial"}>
+            <Icon n="history" size={14} /> Historial
+          </button>
+        </div>
+        {proximo ? (
+          <>
+            <h1 className="nub-np__title">Tu próximo paso: {titulo.charAt(0).toLowerCase() + titulo.slice(1)}</h1>
+            <p className="nub-np__desc">{desc}</p>
+            {plazo && <div className={"nub-np__due nub-np__due--" + plazo.tono}><Icon n="clock" size={14} /> {plazo.txt}</div>}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: plazo ? 0 : 16 }}>
+              {tab !== proximo.id
+                ? <Btn onClick={() => setTab(proximo.id)}>{cta}</Btn>
+                : <span className="nub-np__aqui">Estás en este paso: completalo más abajo.</span>}
+            </div>
+          </>
+        ) : (
+          <>
+            <h1 className="nub-np__title">Completaste todos tus pasos</h1>
+            <p className="nub-np__desc">Ahora el equipo de Nubceo acompaña el go-live y las primeras semanas de uso. Cualquier duda, escribile a tu implementador/a.</p>
+          </>
+        )}
+
+        {/* Recorrido: solo se nombra el paso en el que está el cliente */}
+        <ol className="nub-recorrido" aria-label={"Recorrido: " + completados + " de " + total + " pasos completos"}>
+          {pasos.map((p, i) => {
+            const ok = completo[p.id], libre = unlocked[p.id], actual = i === idxProx;
+            const estado = ok ? "hecho" : actual ? "actual" : libre ? "libre" : "bloqueado";
+            const pendiente = p.id === "sucursales" && omitioSucursales;
+            return (
+              <li key={p.id} className={"nub-recorrido__seg is-" + estado + (tab === p.id ? " is-viendo" : "") + (pendiente ? " is-pendiente" : "")}>
+                <button type="button" disabled={!libre} onClick={() => libre && setTab(p.id)}
+                  aria-label={"Paso " + (i + 1) + ": " + p.n + (ok ? ", completo" : actual ? ", en curso" : !libre ? ", bloqueado" : "")}
+                  title={p.n + (ok ? " (completo)" : !libre ? " (se habilita al completar los anteriores)" : "")}>
+                  <i />
+                  {actual && <span className="nub-recorrido__lbl">Paso {i + 1} de {total}: {p.n}</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+        {omitioSucursales && (
+          <Alert tone="warning" style={{ marginTop: 14 }}>
+            El paso de sucursales quedó <b>pendiente</b>. Podés seguir avanzando, pero lo necesitamos para terminar la implementación.
+          </Alert>
+        )}
+      </div>
+      <aside className="nub-np__side">
+        <div>
+          <div className="nub-np__k">Avance</div>
+          <div className="nub-np__big">{pctVisible}%</div>
+          <div className="nub-np__k">{completados} de {total} pasos</div>
+        </div>
+        <div>
+          <div className="nub-np__k">Go-live acordado</div>
+          <div className="nub-np__v">{golive ? golive.toLocaleDateString("es-AR", { day: "numeric", month: "long" }) : "A definir con tu implementador/a"}</div>
+          {semanas !== null && semanas > 0 && <div className="nub-np__k">Faltan {semanas} semana{semanas === 1 ? "" : "s"}</div>}
+        </div>
+        {meta.implementadorNombre && (
+          <div style={{ display: "grid", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Avatar nombre={meta.implementadorNombre} size={34} />
+              <div><div className="nub-np__v" style={{ fontSize: 14 }}>{meta.implementadorNombre}</div><div className="nub-np__k">Te acompaña en la implementación</div></div>
+            </div>
+            {meta.implementadorEmail && (
+              <a className="nub-np__mail" href={"mailto:" + meta.implementadorEmail + "?subject=" + encodeURIComponent("Consulta sobre la implementación de " + (meta.name || ""))}>
+                <Icon n="mail" size={14} /> Escribirle
+              </a>
+            )}
+          </div>
+        )}
+      </aside>
+    </section>
+  );
+}
+
+// Cuando un paso pasa a completo, se avisa una sola vez con el siguiente paso.
+function AvisoPasoCompletado({ completados, pasos, completo, proximo, implementador, prevRef, mostrar }) {
+  useEffect(() => {
+    const prev = prevRef.current;
+    prevRef.current = completados;
+    if (prev === null || completados <= prev) return;
+    const recien = pasos.filter((p) => completo[p.id]).slice(-1)[0];
+    mostrar({
+      titulo: "Completaste " + (recien ? recien.n : "un paso"),
+      detalle: (implementador ? implementador + " ya recibió el aviso." : "Tu implementador/a ya recibió el aviso.") + (proximo ? " Siguiente: " + proximo.n + "." : ""),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completados]);
+  return null;
+}
+
 function ClientPortal({ session, onLogout }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const cerrarMenu = useCallback(() => setMenuAbierto(false), []);
@@ -886,6 +1117,21 @@ function ClientPortal({ session, onLogout }) {
   const [modulo, setModulo] = useState("implementacion"); // implementacion | cronograma | perfil
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState("");
+  const [toast, setToast] = useState(null);
+  const mostrarToast = useCallback((t) => setToast({ ...t, id: Date.now() }), []);
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), toast.tono === "error" ? 6000 : 4800);
+    return () => clearTimeout(id);
+  }, [toast]);
+  // Los mensajes de guardado se muestran como aviso flotante, no como texto suelto arriba.
+  useEffect(() => {
+    if (!savedMsg) return;
+    const ok = /guardado/i.test(savedMsg);
+    if (ok) mostrarToast({ titulo: "Cambios guardados" });
+    else mostrarToast({ titulo: "No se pudo completar la acción", detalle: savedMsg, tono: "error" });
+  }, [savedMsg, mostrarToast]);
+  const completadosPrev = useRef(null);
 
   const reload = useCallback(async () => {
     try {
@@ -961,13 +1207,16 @@ function ClientPortal({ session, onLogout }) {
     golive: tieneEvento("golive", true),
   };
   const avanzable = { ...completo, sucursales: completo.sucursales || !!meta.sucursalesOmitido };
+  // Si el cliente no usa ambiente de pruebas, ese paso no existe para él.
+  const pasosCli = PASOS.filter((p) => p.id !== "sandbox" || meta.usaSandbox !== false);
   // Desbloqueo secuencial (sucursales es omitible)
   const unlocked = {};
   let prevOk = true;
-  for (const p of PASOS) { unlocked[p.id] = prevOk; prevOk = prevOk && avanzable[p.id]; }
-  const completados = PASOS.filter((p) => completo[p.id]).length;
+  for (const p of pasosCli) { unlocked[p.id] = prevOk; prevOk = prevOk && avanzable[p.id]; }
+  const completados = pasosCli.filter((p) => completo[p.id]).length;
   const omitioSucursales = !!meta.sucursalesOmitido && !data.sucursalesArchivo;
-  const idxTab = PASOS.findIndex((p) => p.id === tab);
+  const idxTab = pasosCli.findIndex((p) => p.id === tab);
+  const proximo = pasosCli.find((p) => !completo[p.id] && unlocked[p.id]) || null;
 
   return (
     <div>
@@ -978,46 +1227,13 @@ function ClientPortal({ session, onLogout }) {
 
           {modulo === "implementacion" && (
             <>
-              <Card style={{ marginBottom: SP.lg }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
-                  <div>
-                    <Label>Tu implementación</Label>
-                    <div style={{ fontSize: 21, fontWeight: 700, color: T.n900 }}>{completados} de {PASOS.length} pasos completados</div>
-                  </div>
-                  <div style={{ fontSize: 13, color: T.okTx, fontWeight: 700, minHeight: 18 }}>{savedMsg}</div>
-                </div>
-                <div style={{ height: 6, borderRadius: 100, background: T.n100, overflow: "hidden", marginBottom: 16, maxWidth: 320 }}>
-                  <div style={{ width: Math.round((completados / PASOS.length) * 100) + "%", height: "100%", background: completados === PASOS.length ? "#22c55e" : T.primary, borderRadius: 100, transition: "width .3s" }} />
-                </div>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {PASOS.map((p, i) => {
-                    const activo = tab === p.id, ok = completo[p.id], libre = unlocked[p.id];
-                    const pendiente = p.id === "sucursales" && omitioSucursales;
-                    return (
-                      <div key={p.id} role="button" tabIndex={libre ? 0 : -1} aria-disabled={!libre} aria-current={activo ? "step" : undefined} className={libre ? "nub-paso" : undefined}
-                        onClick={() => libre && setTab(p.id)} onKeyDown={alTeclear(() => libre && setTab(p.id))}
-                        title={libre ? (ok ? "Completado — podés volver a ver" : "") : "Completá los pasos anteriores para desbloquear"} style={{
-                        display: "flex", alignItems: "center", gap: 7, padding: "8px 13px", borderRadius: 100, fontSize: 13,
-                        cursor: libre ? "pointer" : "not-allowed", opacity: libre ? 1 : 0.45,
-                        fontWeight: activo ? 700 : 500,
-                        background: activo ? T.primary : ok ? T.okBg : pendiente ? T.warnBg : "#fff",
-                        color: activo ? "#fff" : ok ? T.okTx : pendiente ? T.warnTx : T.n600,
-                        border: "1px solid " + (activo ? T.primary : ok ? "#bbe8c9" : pendiente ? "#fde68a" : T.n200),
-                      }}>
-                        {ok ? <Icon n="check" size={14} stroke={3} /> : pendiente ? <Icon n="pending" size={14} /> : !libre ? <Icon n="lock" size={13} /> : null}
-                        <span>{i + 1}. {p.n}{pendiente ? " (pendiente)" : ""}</span>
-                      </div>
-                    );
-                  })}
-                  <div role="button" tabIndex={0} className="nub-paso" aria-current={tab === "historial" ? "step" : undefined} onClick={() => setTab("historial")} onKeyDown={alTeclear(() => setTab("historial"))} style={{ padding: "8px 13px", borderRadius: 100, fontSize: 13, cursor: "pointer", fontWeight: tab === "historial" ? 700 : 500, background: tab === "historial" ? T.primary : "transparent", color: tab === "historial" ? "#fff" : T.n400, border: "1px solid " + (tab === "historial" ? T.primary : T.n200) }}>Historial</div>
-                </div>
-                {omitioSucursales && (
-                  <Alert tone="warning" style={{ marginTop: 14 }}>
-                    El paso 4 (Sucursales) quedó <b>pendiente</b>. Podés seguir avanzando, pero es necesario completarlo para terminar la implementación — volvé cuando tengas el archivo.
-                  </Alert>
-                )}
-              </Card>
+              <ProximoPaso
+                meta={meta} data={data} pasos={pasosCli} completo={completo} unlocked={unlocked}
+                proximo={proximo} completados={completados} tab={tab} setTab={setTab}
+                omitioSucursales={omitioSucursales}
+              />
 
+              <div key={tab} className="nub-fade">
               {tab === "procesadoras" && <TabProcesadoras data={data} act={act} saving={saving} />}
               {tab === "introduccion" && <TabIntroduccion act={act} meta={meta} saving={saving} />}
               {tab === "relevamiento" && <TabRelevamiento data={data} persist={persist} saving={saving} rvOK={!!data.relevamientoEnviado} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
@@ -1027,22 +1243,26 @@ function ClientPortal({ session, onLogout }) {
               {tab === "sandbox" && <TabPruebasEtapa etapa="sandbox" tipoEvento="resultados_sandbox" data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
               {tab === "golive" && <TabPruebasEtapa etapa="golive" tipoEvento="golive" data={data} session={session} setAll={(r) => { setData(r.data); setMeta(r.meta); }} />}
               {tab === "historial" && <TabHistorial history={data.history} />}
+              </div>
 
               {/* Navegación entre pasos: volver atrás para ver/editar, avanzar al completar */}
               {idxTab >= 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
                   {idxTab > 0
-                    ? <Btn variant="ghost" onClick={() => setTab(PASOS[idxTab - 1].id)}>← Paso {idxTab}: {PASOS[idxTab - 1].n}</Btn>
+                    ? <Btn variant="ghost" onClick={() => setTab(pasosCli[idxTab - 1].id)}>Volver a {pasosCli[idxTab - 1].n}</Btn>
                     : <span />}
-                  {idxTab < PASOS.length - 1 && (
+                  {idxTab < pasosCli.length - 1 && (
                     avanzable[tab]
-                      ? <Btn onClick={() => setTab(PASOS[idxTab + 1].id)}>Siguiente — Paso {idxTab + 2}: {PASOS[idxTab + 1].n} →</Btn>
+                      ? <Btn onClick={() => setTab(pasosCli[idxTab + 1].id)}>Seguir con {pasosCli[idxTab + 1].n}</Btn>
                       : <span style={{ fontSize: 13, color: T.n400 }}>Completá este paso para pasar al siguiente</span>
                   )}
                 </div>
               )}
             </>
           )}
+
+          <AvisoPasoCompletado completados={completados} pasos={pasosCli} completo={completo} proximo={proximo} implementador={meta.implementadorNombre} prevRef={completadosPrev} mostrar={mostrarToast} />
+          <Toast toast={toast} />
 
           {modulo === "cronograma" && <TabCronograma data={data} />}
 
@@ -1141,7 +1361,7 @@ const INTRO_PASOS = [
   ["Sucursales", "Cargás tu listado interno de sucursales y el portal lo convierte al formato oficial de Nubceo, validado y listo para subir a la plataforma."],
   ["Conexión API o CSV", "Definimos cómo van a llegar tus ventas a Nubceo. Si es por API, acá tenés tus credenciales, la documentación y la reunión técnica con nuestro equipo. Si es por CSV, el portal valida tu archivo y lo deja en el formato exacto."],
   ["Capacitación", "Acceso a los manuales de Nubceo y agenda de capacitaciones de Conciliador y de Nubceo Cash para tu equipo."],
-  ["Pruebas sandbox", "Probamos la conciliación con tus datos reales en un entorno de pruebas. Te mostramos los resultados en una reunión y dejamos la minuta acá."],
+  ["Pruebas con tus datos", "Probamos la conciliación con tus datos reales en un entorno de pruebas. Te mostramos los resultados en una reunión y dejamos la minuta acá."],
   ["Go-live", "Pasamos todo a producción, repasamos reglas y resultados, y arranca el acompañamiento de hypercare."],
 ];
 
@@ -1613,7 +1833,7 @@ function TabRelevamiento({ data, persist, saving, rvOK, session, setAll }) {
           </>
         )}
         {RV_PREGUNTAS.map((q, i) => {
-          if (q.sec) return <div key={i} style={{ fontSize: 12, fontWeight: 700, color: T.primary, textTransform: "uppercase", letterSpacing: "0.07em", margin: "26px 0 14px", paddingBottom: 8, borderBottom: "1px solid " + T.primary50 }}>{q.sec}</div>;
+          if (q.sec) return <div key={i} style={{ fontSize: 12, fontWeight: 700, color: T.primary, textTransform: "none", margin: "26px 0 14px", paddingBottom: 8, borderBottom: "1px solid " + T.primary50 }}>{q.sec}</div>;
           if (q.showIf && !q.showIf(rv)) return null;
           return <QItem key={q.id} q={q} rv={rv} set={set} error={intentoEnviar && !contestada(q)} readOnly={rvOK} />;
         })}
@@ -2322,7 +2542,7 @@ function SeccionApi({ data, session, setAll, titulo }) {
 
   return (
     <>
-      {titulo && <div style={{ fontSize: 13, fontWeight: 700, color: T.primary, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: -6 }}>{titulo}</div>}
+      {titulo && <div style={{ fontSize: 13, fontWeight: 700, color: T.primary, textTransform: "none", marginBottom: -6 }}>{titulo}</div>}
 
       {/* Guía para generar credenciales en Nubceo (no se ingresan en el portal) */}
       <Card>
@@ -2354,7 +2574,7 @@ function SeccionApi({ data, session, setAll, titulo }) {
         {reunion ? <EventoLinea e={reunion} /> : (
           <>
             <p style={{ fontSize: 13.5, color: T.n600, lineHeight: 1.55, margin: "0 0 14px" }}>
-              Coordiná una reunión técnica con Eduardo André o Santiago Suarez para repasar la integración con tu equipo de desarrollo: autenticación, estructura del endpoint de ventas y dudas del sandbox. Antes de confirmar podés sumar a tu desarrollador aunque no esté cargado como involucrado.
+              Coordiná una reunión técnica con Eduardo André o Santiago Suarez para repasar la integración con tu equipo de desarrollo: autenticación, estructura del endpoint de ventas y dudas sobre las pruebas. Antes de confirmar podés sumar a tu desarrollador aunque no esté cargado como involucrado.
             </p>
             <Agendador session={session} tipo="reunion_tecnica" invitadosDefault={involucrados} onDone={setAll} />
           </>
@@ -2606,7 +2826,7 @@ function TabPruebasEtapa({ etapa, tipoEvento, data, session, setAll }) {
   const evs = (data.eventos || []).filter((e) => e.tipo === tipoEvento && e.estado !== "cancelado");
   const agendado = evs.find((e) => e.estado === "agendado");
   const realizado = evs.find((e) => e.estado === "realizado");
-  const titulo = etapa === "sandbox" ? "Pruebas en sandbox" : "Go-live";
+  const titulo = etapa === "sandbox" ? "Pruebas con tus datos" : "Go-live";
   const involucrados = (data.involucrados || []).filter((p) => (p.nombre || "").trim() && (p.email || "").trim());
   return (
     <div style={{ display: "grid", gap: SP.lg }}>
@@ -2746,7 +2966,7 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
             }}
           >
             <div style={{ position: "sticky", top: 0, zIndex: 2, background: sobreCol === faseIdx ? T.primary50 : T.n50, display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "10px 10px 8px", borderRadius: "12px 12px 0 0" }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: T.n800 }}>{faseIdx + 1} · {faseNombre}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: T.n800 }}>{faseNombre}</span>
               <span style={{ fontSize: 11.5, color: T.n400, fontWeight: 700 }}>{items.length}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 0, flex: 1, overflowY: "auto", padding: "0 10px 10px" }}>
@@ -2766,49 +2986,51 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
                     onClick={() => onAbrir(cli.code)}
                     onKeyDown={(e) => { if (e.target === e.currentTarget) alTeclear(() => onAbrir(cli.code))(e); }}
                     style={{
-                      background: "#fff", flexShrink: 0,
-                      border: "1px solid " + (colorSeg(cli.estadoSeguimiento) || T.n200),
-                      borderRadius: 10, padding: 10, cursor: "grab", overflow: "hidden",
+                      background: "#fff", flexShrink: 0, position: "relative",
+                      border: "1px solid " + T.n200, borderRadius: 10, padding: "10px 10px 10px 16px", cursor: "grab", overflow: "hidden",
                       opacity: arrastrando === cli.code ? 0.4 : 1, boxShadow: "0 1px 2px rgba(13,17,32,0.04)",
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                      <div style={{ width: 22, height: 22, borderRadius: 5, flexShrink: 0, background: T.n50, border: "1px solid " + T.n200, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: T.n400 }}>
-                        {cli.logo ? <img src={cli.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : cli.name.slice(0, 1).toUpperCase()}
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: T.n900, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cli.name}</div>
-                    </div>
-                    <div style={{ height: 4, borderRadius: 100, background: T.n100, overflow: "hidden", marginBottom: 7 }}>
-                      <div style={{ width: pct + "%", height: "100%", background: pct === 100 ? "#22c55e" : T.primary, borderRadius: 100 }} />
-                    </div>
-                    <div style={{ fontSize: 10.5, color: T.n400, marginBottom: 6 }}>
-                      {cli.implementadorNombre || "Sin implementador/a"}{cli.desarrolladorNombre ? " · " + cli.desarrolladorNombre + " (dev)" : ""}
-                    </div>
-                    {(cli.fechaIngreso || cli.createdAt) && (
-                      <div style={{ fontSize: 10.5, color: T.n400, marginBottom: 6 }}>
-                        Ingreso: {cli.fechaIngreso ? fmtDateSolo(cli.fechaIngreso) : fmtDate(cli.createdAt)}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                      {(() => { const sg = semaforoGoLive(cli.goLiveEstimado); return sg ? <Badge tone={sg.tone}>🎯 {sg.txt}</Badge> : null; })()}
-                      {(() => { const ci = contratoInfo(cli.estadoContrato); return <Badge tone={ci.tone}>📄 {ci.chip}</Badge>; })()}
-                      {cli.autoimplementacion && <span style={{ fontSize: 11, fontWeight: 700, background: "#efe7ff", color: "#6d28d9", border: "1px solid #ddd0fb", borderRadius: 100, padding: "2px 9px", whiteSpace: "nowrap" }}>🚀 Autoimpl.</span>}
-                      {!cli.implementadorId && <Badge tone="amber">Sin asignar</Badge>}
-                      {cli.estadoPago === "con_deuda" && <Badge tone="red">💰 Deuda {diasDesde(cli.deudaDesde)}d</Badge>}
-                      {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
-                      {cli.notasCount > 0 && <Badge tone="gray">📝 {cli.notasCount}</Badge>}
-                    </div>
-                    {/* Semáforo de seguimiento: clic para ciclar gris → verde → amarillo → rojo. */}
-                    <div
+                    {/* Semáforo de seguimiento: borde izquierdo, clic para ciclar gris → verde → amarillo → rojo. */}
+                    <button type="button"
                       onClick={(e) => { e.stopPropagation(); onCambiarColor && onCambiarColor(cli.code); }}
                       onDragStart={(e) => e.preventDefault()}
-                      title="Estado de seguimiento — clic para cambiar (gris → verde → amarillo → rojo)"
-                      style={{
-                        marginTop: 10, marginLeft: -10, marginRight: -10, marginBottom: -10,
-                        height: 10, background: colorSeg(cli.estadoSeguimiento) || T.n200,
-                        cursor: "pointer",
-                      }}
+                      aria-label="Cambiar estado de seguimiento"
+                      title="Estado de seguimiento: clic para cambiar (gris, verde, amarillo, rojo)"
+                      className="nub-semaforo"
+                      style={{ background: colorSeg(cli.estadoSeguimiento) || T.n200 }}
                     />
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 7 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: T.n900, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cli.name}</div>
+                      <span style={{ fontSize: 11.5, flexShrink: 0 }}><SinActividad iso={cli.ultimaActividad} corto /></span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                      <div style={{ height: 4, borderRadius: 100, background: T.n100, overflow: "hidden", flex: 1 }}>
+                        <div style={{ width: pct + "%", height: "100%", background: pct === 100 ? "#22c55e" : T.primary, borderRadius: 100 }} />
+                      </div>
+                      <span style={{ fontSize: 11, color: T.n600 }}>{cli.completados}/{cli.totalPasos}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 6 }}>
+                      <span style={{ display: "inline-flex" }}>
+                        {cli.implementadorNombre ? <Avatar nombre={cli.implementadorNombre} size={22} /> : <Badge tone="amber">Sin asignar</Badge>}
+                        {cli.desarrolladorNombre && <Avatar nombre={cli.desarrolladorNombre} size={22} tono="gris" style={{ marginLeft: -6 }} />}
+                      </span>
+                      {(() => {
+                        const sg = semaforoGoLive(cli.goLiveEstimado);
+                        if (!sg) return <span style={{ fontSize: 11.5, color: T.n400 }}>Sin go-live</span>;
+                        const col = sg.tone === "red" ? "#ef4444" : sg.tone === "amber" ? "#f59e0b" : "#22c55e";
+                        return <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, color: T.n600, whiteSpace: "nowrap" }}><span style={{ width: 7, height: 7, borderRadius: "50%", background: col }} />{fmtCorta(cli.goLiveEstimado)}</span>;
+                      })()}
+                    </div>
+                    {(cli.estadoPago === "con_deuda" || alertas.length > 0 || cli.estadoContrato === "sin_firmar" || cli.autoimplementacion || cli.notasCount > 0) && (
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+                        {cli.estadoPago === "con_deuda" && <Badge tone="red">Deuda {diasDesde(cli.deudaDesde)} d</Badge>}
+                        {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
+                        {cli.estadoContrato === "sin_firmar" && <Badge tone="amber">Sin contrato</Badge>}
+                        {cli.autoimplementacion && <span className="nub-info"><Icon n="rocket" size={12} /> Autoimpl.</span>}
+                        {cli.notasCount > 0 && <span className="nub-info"><Icon n="file" size={12} /> {cli.notasCount}</span>}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -2817,7 +3039,11 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
                   Soltá acá para mover a {faseNombre}
                 </div>
               )}
-              {items.length === 0 && !esDestino && <div style={{ fontSize: 11.5, color: T.n400, textAlign: "center", padding: "10px 0" }}>Sin clientes</div>}
+              {items.length === 0 && !esDestino && (
+                <EstadoVacio compacto titulo="Nadie en esta fase">
+                  Arrastrá una tarjeta acá cuando un cliente llegue a {faseNombre.toLowerCase()}.
+                </EstadoVacio>
+              )}
             </div>
           </div>
         );
@@ -2868,36 +3094,55 @@ function SelectorVendedores({ vendedores, seleccion, onChange }) {
   );
 }
 
-const NAV_ITEMS = [
-  ["clientes", "folder", "Clientes"],
-  ["tablero", "kanban", "Tablero"],
-  ["notificaciones", "bell", "Notificaciones"],
-  ["equipo", "users", "Equipo"],
-  ["autoimp", "rocket", "Autoimplementador"],
-  ["config", "sliders", "Configuración"],
-  ["perfil", "user", "Mi perfil"],
+const NAV_GRUPOS = [
+  ["Seguimiento", [["clientes", "folder", "Clientes"], ["tablero", "kanban", "Tablero"], ["notificaciones", "bell", "Notificaciones"]]],
+  ["Herramientas", [["autoimp", "rocket", "Autoimplementador"]]],
+  ["Administración", [["equipo", "users", "Equipo"], ["config", "sliders", "Configuración"]]],
 ];
-function Sidebar({ activo, onCambiar, noLeidas = 0, abierto, onCerrar }) {
+function Sidebar({ activo, onCambiar, noLeidas = 0, abierto, onCerrar, mini, onAlternarMini, who }) {
   useCerrarConEscape(abierto, onCerrar);
   const ir = (id) => { onCambiar(id); onCerrar && onCerrar(); };
+  const Item = ({ id, icon, lbl }) => (
+    <div role="button" tabIndex={0} aria-current={activo === id ? "page" : undefined} className="nub-nav-item" title={mini ? lbl : undefined}
+      onClick={() => ir(id)} onKeyDown={alTeclear(() => ir(id))} style={{
+        display: "flex", alignItems: "center", gap: 10, padding: "9px 11px", borderRadius: 8, cursor: "pointer",
+        fontSize: 13.5, fontWeight: activo === id ? 700 : 500, position: "relative",
+        background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
+      }}>
+      <Icon n={icon} size={17} /><span className="nub-nav-lbl">{lbl}</span>
+      {id === "notificaciones" && noLeidas > 0 && (
+        <span className="nub-nav-badge" aria-label={noLeidas + " sin leer"} style={{ marginLeft: "auto", background: T.primary, color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: 100, padding: "1px 7px", minWidth: 18, textAlign: "center" }}>{noLeidas > 99 ? "99+" : noLeidas}</span>
+      )}
+    </div>
+  );
   return (
     <>
     {abierto && <div className="nub-backdrop" onClick={onCerrar} />}
-    <nav aria-label="Secciones del panel" className={"nub-sidebar nub-nav--light" + (abierto ? " is-open" : "")} style={{ width: 200, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "20px 12px", minHeight: "calc(100vh - 61px)" }}>
-      <div style={{ display: "grid", gap: 3 }}>
-        {onCerrar && <SidebarCerrar onCerrar={onCerrar} />}
-        {NAV_ITEMS.map(([id, icon, lbl]) => (
-          <div key={id} role="button" tabIndex={0} aria-current={activo === id ? "page" : undefined} className="nub-nav-item" onClick={() => ir(id)} onKeyDown={alTeclear(() => ir(id))} style={{
-            display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, cursor: "pointer",
-            fontSize: 13.5, fontWeight: activo === id ? 700 : 500,
-            background: activo === id ? T.primary50 : "transparent", color: activo === id ? T.primary800 : T.n600,
-          }}>
-            <Icon n={icon} size={17} />{lbl}
-            {id === "notificaciones" && noLeidas > 0 && (
-              <span aria-label={noLeidas + " sin leer"} style={{ marginLeft: "auto", background: T.primary, color: "#fff", fontSize: 11, fontWeight: 700, borderRadius: 100, padding: "1px 7px", minWidth: 18, textAlign: "center" }}>{noLeidas > 99 ? "99+" : noLeidas}</span>
-            )}
+    <nav aria-label="Secciones del panel" className={"nub-sidebar nub-nav--light" + (abierto ? " is-open" : "") + (mini ? " is-mini" : "")} style={{ width: mini ? 64 : 212, flexShrink: 0, borderRight: "1px solid " + T.n200, background: "#fff", padding: "18px 10px 14px", minHeight: "calc(100vh - 61px)", display: "flex", flexDirection: "column", transition: "width .2s ease" }}>
+      {onCerrar && <SidebarCerrar onCerrar={onCerrar} />}
+      <div style={{ display: "grid", gap: 2 }}>
+        {NAV_GRUPOS.map(([grupo, items]) => (
+          <div key={grupo} style={{ display: "grid", gap: 2, marginBottom: 10 }}>
+            <div className="nub-nav-grupo">{grupo}</div>
+            {items.map(([id, icon, lbl]) => <Item key={id} id={id} icon={icon} lbl={lbl} />)}
           </div>
         ))}
+      </div>
+      <div style={{ marginTop: "auto", paddingTop: 12, borderTop: "1px solid " + T.n200, display: "grid", gap: 6 }}>
+        <div role="button" tabIndex={0} aria-current={activo === "perfil" ? "page" : undefined} className="nub-nav-item nub-nav-yo" title="Mi perfil"
+          onClick={() => ir("perfil")} onKeyDown={alTeclear(() => ir("perfil"))}
+          style={{ display: "flex", alignItems: "center", gap: 10, padding: "7px 8px", borderRadius: 8, cursor: "pointer", background: activo === "perfil" ? T.primary50 : "transparent" }}>
+          <Avatar nombre={who} size={30} />
+          <div className="nub-nav-lbl" style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 650, color: T.n900, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{who}</div>
+            <div style={{ fontSize: 11.5, color: T.n400 }}>Mi perfil</div>
+          </div>
+        </div>
+        {onAlternarMini && (
+          <button type="button" className="nub-mini-btn" onClick={onAlternarMini} aria-label={mini ? "Expandir menú" : "Contraer menú"} title={mini ? "Expandir menú" : "Contraer menú"}>
+            <Icon n="panel" size={16} /><span className="nub-nav-lbl">{mini ? "Expandir" : "Contraer menú"}</span>
+          </button>
+        )}
       </div>
     </nav>
     </>
@@ -3061,7 +3306,45 @@ function EquipoLista({ miembros, esSuperuser, onEliminar, onSetTipoUsuario, miCo
   );
 }
 
+// ─── Columna fija de la ficha: los datos que se consultan todo el tiempo ───
+function FichaResumen({ meta, selData, nombreVendedor }) {
+  const rv = selData.relevamiento || {};
+  const via = { api: "API", csv: "CSV", ambos: "API y CSV", indef: "A definir" }[rv.d1] || "A definir";
+  const ahora = Date.now();
+  const proxima = (selData.eventos || []).filter((e) => e.estado === "agendado" && new Date(e.fecha).getTime() >= ahora).sort((a, b) => new Date(a.fecha) - new Date(b.fecha))[0];
+  const sg = semaforoGoLive(meta.goLiveEstimado);
+  const ultimo = (selData.history || [])[0];
+  const fila = (k, v, extra) => (
+    <div className="nub-kv__f"><dt>{k}</dt><dd>{v}{extra}</dd></div>
+  );
+  return (
+    <aside className="nub-ficha-aside" aria-label="Datos clave del cliente">
+      <dl className="nub-kv">
+        {fila("Go-live acordado", meta.goLiveEstimado ? fmtDateSolo(meta.goLiveEstimado) : "Sin fecha", sg && sg.tone === "red" ? <Badge tone="red">{diasHasta(meta.goLiveEstimado) < 0 ? "Vencido" : "Cerca"}</Badge> : null)}
+        {fila("Contrato", contratoInfo(meta.estadoContrato).lbl)}
+        {fila("Ambiente de pruebas", meta.usaSandbox === false ? "Sin sandbox, directo en productivo" : "Con sandbox")}
+        {fila("Tenant productivo", meta.tenant || "Sin cargar")}
+        {fila("Conexión de ventas", via)}
+        {fila("Implementación", meta.implementadorNombre || "Sin asignar")}
+        {fila("Desarrollo", meta.desarrolladorNombre || "Sin asignar")}
+        {(meta.comerciales || []).length > 0 && fila("Comercial", (meta.comerciales || []).map(nombreVendedor).join(", "))}
+        {fila("Próxima reunión", proxima ? (EVENTO_NOMBRES[proxima.tipo] || proxima.tipo) + ", " + fmtDate(proxima.fecha) : "Ninguna agendada")}
+        {meta.fechaIngreso && fila("Ingreso", fmtDateSolo(meta.fechaIngreso))}
+        {ultimo && fila("Último movimiento", <SinActividad iso={ultimo.ts} />)}
+      </dl>
+    </aside>
+  );
+}
+
+const FICHA_TABS = [["resumen", "Resumen"], ["relevamiento", "Relevamiento"], ["integracion", "Integración"], ["tickets", "Tickets"], ["reuniones", "Reuniones"], ["mails", "Mails"], ["historial", "Historial"]];
+
 function AdminPortal({ session, onLogout }) {
+  const [fTab, setFTab] = useState("resumen");
+  const [ordenClientes, setOrdenClientes] = useState("actividad"); // actividad | golive | nombre
+  const [filtroRapido, setFiltroRapido] = useState(""); // "" | trabados | golive | mios
+  const [menuMini, setMenuMini] = useState(false);
+  useEffect(() => { try { setMenuMini(localStorage.getItem("nubceo_menu_mini") === "1"); } catch (e) {} }, []);
+  const alternarMenuMini = () => setMenuMini((v) => { try { localStorage.setItem("nubceo_menu_mini", v ? "0" : "1"); } catch (e) {} return !v; });
   const [menuAbierto, setMenuAbierto] = useState(false);
   const cerrarMenu = useCallback(() => setMenuAbierto(false), []);
   const [filtroNotif, setFiltroNotif] = useState("todas"); // todas | sin_leer
@@ -3135,6 +3418,9 @@ function AdminPortal({ session, onLogout }) {
   const [newComerciales, setNewComerciales] = useState([]);
   const [editComerciales, setEditComerciales] = useState([]);
   const [newAutoimp, setNewAutoimp] = useState(false);
+  const [newUsaSandbox, setNewUsaSandbox] = useState(true);
+  const [altaAbierta, setAltaAbierta] = useState(false);
+  const [editUsaSandbox, setEditUsaSandbox] = useState(true);
   const [editAutoimp, setEditAutoimp] = useState(false);
   const implementadoresTeam = team.filter((m) => m.rol === "implementador");
   const devsTeam = team.filter((m) => m.rol === "desarrollador");
@@ -3419,11 +3705,11 @@ function AdminPortal({ session, onLogout }) {
     try {
       await api("createClient", {
         sessionCode: sc, nombre: newName, codigo: newCode, tenant: newTenant, razonSocial: newRazonSocial, cuits: newCuits, logo: newLogo,
-        comerciales: newComerciales, autoimplementacion: newAutoimp, goLiveEstimado: newGoLive, fechaIngreso: newFechaIngreso || null, erpPdv: newErpPdv, contactos: newContactos.filter((c) => c.nombre.trim()),
+        comerciales: newComerciales, autoimplementacion: newAutoimp, usaSandbox: newUsaSandbox, goLiveEstimado: newGoLive, fechaIngreso: newFechaIngreso || null, erpPdv: newErpPdv, contactos: newContactos.filter((c) => c.nombre.trim()),
       });
       flash("Cliente creado. Compartile el código " + newCode.trim().toUpperCase() + ". Al primer login se dispara el alta en Redmine y sus credenciales de API.", 5000);
-      setNewName(""); setNewCode(""); setNewTenant(""); setNewRazonSocial(""); setNewCuits([]); setNewCuitInput(""); setNewLogo(null);
-      setNewComerciales([]); setNewAutoimp(false); setNewGoLive(""); setNewFechaIngreso(""); setNewErpPdv([]); setNewErpPdvInput(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
+      setAltaAbierta(false); setNewName(""); setNewCode(""); setNewTenant(""); setNewRazonSocial(""); setNewCuits([]); setNewCuitInput(""); setNewLogo(null);
+      setNewComerciales([]); setNewAutoimp(false); setNewUsaSandbox(true); setNewGoLive(""); setNewFechaIngreso(""); setNewErpPdv([]); setNewErpPdvInput(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
       cargarListado();
     } catch (e) { flash(e.message); }
   };
@@ -3645,11 +3931,13 @@ function AdminPortal({ session, onLogout }) {
       <div>
         <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin extra={<AyudaMemoria codigo={sc} />} />
         <ChatBot codigo={sc} />
-        <div style={{ maxWidth: 940, margin: "0 auto", padding: "0 20px 60px" }}>
+        <div style={{ maxWidth: 1240, margin: "0 auto", padding: "0 20px 60px" }}>
           <div style={{ position: "sticky", top: 61, zIndex: 5, background: T.bg, marginBottom: 14, padding: "14px 0 8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Btn variant="ghost" size="sm" onClick={cerrarDetalle}>← Volver al listado</Btn>
             {session.tipoUsuario === "superuser" && <Btn variant="ghost" size="sm" onClick={() => archivarCliente(sel, meta.name)} style={{ color: T.n600 }}>📥 Archivar cliente</Btn>}
           </div>
+          <div className="nub-ficha">
+          <div style={{ minWidth: 0 }}>
           <Card style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
               <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
@@ -3754,7 +4042,7 @@ function AdminPortal({ session, onLogout }) {
             <div style={{ marginTop: 18 }}><Stepper fase={meta.phase} /></div>
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid " + T.n100 }}>
               {!editandoInfo ? (
-                soloLectura ? null : (<span onClick={() => { setEditNombre(meta.name || ""); setEditCodigo(meta.codigo || ""); setEditTenant(meta.tenant || ""); setEditComerciales(meta.comerciales || []); setEditAutoimp(!!meta.autoimplementacion); setEditFechaIngreso(meta.fechaIngreso || ""); setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditErpPdv(meta.erpPdv || []); setEditErpPdvInput(""); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
+                soloLectura ? null : (<span onClick={() => { setEditNombre(meta.name || ""); setEditCodigo(meta.codigo || ""); setEditTenant(meta.tenant || ""); setEditComerciales(meta.comerciales || []); setEditAutoimp(!!meta.autoimplementacion); setEditUsaSandbox(meta.usaSandbox !== false); setEditFechaIngreso(meta.fechaIngreso || ""); setEditRazonSocial(meta.razonSocial || ""); setEditCuits(meta.cuits || []); setEditErpPdv(meta.erpPdv || []); setEditErpPdvInput(""); setEditLogo(meta.logo || null); setEditGoLive(meta.goLiveEstimado || ""); setEditandoInfo(true); }} style={{ fontSize: 12.5, fontWeight: 600, color: T.primary, cursor: "pointer" }}>
                   ✎ Editar datos del cliente
                 </span>)
               ) : (
@@ -3773,7 +4061,11 @@ function AdminPortal({ session, onLogout }) {
                     <div><Label>Tipo de onboarding</Label>
                       <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13.5, color: T.n800 }}>
                         <input type="checkbox" checked={editAutoimp} onChange={(e) => setEditAutoimp(e.target.checked)} style={{ width: 16, height: 16, accentColor: "#6d28d9" }} />
-                        {editAutoimp ? "🚀 Autoimplementación" : "Implementación estándar"}
+                        {editAutoimp ? "Autoimplementación" : "Implementación estándar"}
+                      </label>
+                      <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13.5, color: T.n800, marginTop: 8 }}>
+                        <input type="checkbox" checked={editUsaSandbox} onChange={(e) => setEditUsaSandbox(e.target.checked)} style={{ width: 16, height: 16, accentColor: T.primary }} />
+                        Usa ambiente de pruebas (sandbox)
                       </label>
                     </div>
                     <div><Label>Fecha de ingreso (trato ganado)</Label><Input type="date" value={editFechaIngreso} onChange={(e) => setEditFechaIngreso(e.target.value)} /></div>
@@ -3826,7 +4118,7 @@ function AdminPortal({ session, onLogout }) {
                     <ImageUpload value={editLogo} onChange={setEditLogo} label="logo" />
                     <div style={{ display: "flex", gap: 8 }}>
                       <Btn variant="ghost" size="sm" onClick={() => setEditandoInfo(false)}>Cancelar</Btn>
-                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, nombre: editNombre, codigo: editCodigo, tenant: editTenant, comerciales: editComerciales, autoimplementacion: editAutoimp, fechaIngreso: editFechaIngreso || null, razonSocial: editRazonSocial, cuits: editCuits, erpPdv: editErpPdv, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); if (r.meta && r.meta.codigoNuevo) setSel(r.meta.codigoNuevo); setEditandoInfo(false); cargarListado(); flash("Datos actualizados ✓", 2000); } catch (e) { flash(e.message); } }}>Guardar</Btn>
+                      <Btn size="sm" onClick={async () => { try { const r = await api("setClientInfo", { sessionCode: sc, code: sel, nombre: editNombre, codigo: editCodigo, tenant: editTenant, comerciales: editComerciales, autoimplementacion: editAutoimp, usaSandbox: editUsaSandbox, fechaIngreso: editFechaIngreso || null, razonSocial: editRazonSocial, cuits: editCuits, erpPdv: editErpPdv, logo: editLogo, goLiveEstimado: editGoLive || null, who: session.who }); setSelMeta(r.meta); setSelData(r.data); if (r.meta && r.meta.codigoNuevo) setSel(r.meta.codigoNuevo); setEditandoInfo(false); cargarListado(); flash("Datos actualizados ✓", 2000); } catch (e) { flash(e.message); } }}>Guardar</Btn>
                     </div>
                   </div>
                 </div>
@@ -3834,6 +4126,45 @@ function AdminPortal({ session, onLogout }) {
             </div>
           </Card>
 
+          <div role="tablist" aria-label="Secciones de la ficha" className="nub-tabs">
+            {FICHA_TABS.map(([id, lbl]) => (
+              <button key={id} type="button" role="tab" aria-selected={fTab === id} className="nub-tab" onClick={() => setFTab(id)}>
+                {lbl}
+                {id === "relevamiento" && alertas.length > 0 && <span className="nub-tab__n nub-tab__n--alerta">{alertas.length}</span>}
+                {id === "reuniones" && (selData.eventos || []).length > 0 && <span className="nub-tab__n">{(selData.eventos || []).length}</span>}
+              </button>
+            ))}
+          </div>
+
+          <div className="nub-fade" key={fTab}>
+          {fTab === "resumen" && (<>
+          <Card style={{ marginTop: 16 }}>
+            <SectionHeader
+              title="Plazos y recordatorios"
+              subtitle="Ponele fecha límite a los pasos que dependen del cliente. Un día antes del vencimiento se le manda un recordatorio por mail a los involucrados que cargó; si el plazo vence y el paso sigue sin completar, se manda un aviso de incumplimiento. Ambos se disparan solos con el cron diario — acá también podés forzar el envío al toque."
+            />
+            {avisoMsg && <Alert tone={avisoMsg === "Aviso enviado ✓" ? "success" : "error"} style={{ marginBottom: 12 }}>{avisoMsg}</Alert>}
+            <div style={{ display: "grid", gap: 8 }}>
+              {(selData.hitos || []).map((h) => (
+                <FilaPlazo
+                  key={h.id}
+                  paso={h}
+                  completo={!!selData.hitosCompletos?.[h.id]}
+                  plazo={selData.plazos?.[h.id]}
+                  onGuardar={(fecha) => guardarPlazo(h.id, fecha)}
+                  onQuitar={() => quitarPlazo(h.id)}
+                  onEnviarAhora={() => enviarAvisoAhora(h.id)}
+                  onToggleManual={h.id === "fin_desarrollo_api" ? marcarApiCompleta : null}
+                  onCumplimiento={(valor) => cambiarCumplimiento(h.id, valor)}
+                />
+              ))}
+            </div>
+          </Card>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, marginTop: 16 }}>
+            <AdminPrueba etapa="sandbox" titulo={meta.usaSandbox !== false ? "Pruebas en sandbox (Fase 5)" : "Pruebas de conciliación (Fase 5)"} prueba={selData.pruebas?.sandbox} onSave={cambiarPrueba} />
+            <AdminPrueba etapa="golive" titulo="Pruebas de go-live (Fase 7)" prueba={selData.pruebas?.golive} onSave={cambiarPrueba} />
+          </div>
+          <div style={{ marginTop: 16 }}>
           <Card style={{ marginBottom: 16 }}>
             <SectionHeader
               title="💰 Información financiera"
@@ -3846,15 +4177,15 @@ function AdminPortal({ session, onLogout }) {
               <>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginBottom: 12 }}>
                   <div>
-                    <div style={{ fontSize: 11.5, color: T.n400, textTransform: "uppercase", letterSpacing: "0.04em" }}>Fee</div>
+                    <div style={{ fontSize: 11.5, color: T.n400, textTransform: "none" }}>Fee</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: T.n800 }}>{meta.finanzas?.fee != null ? fmtMoneda(meta.finanzas.fee, meta.finanzas.moneda) : "—"}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11.5, color: T.n400, textTransform: "uppercase", letterSpacing: "0.04em" }}>Costo de implementación</div>
+                    <div style={{ fontSize: 11.5, color: T.n400, textTransform: "none" }}>Costo de implementación</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: T.n800 }}>{meta.finanzas?.costoImplementacion != null ? fmtMoneda(meta.finanzas.costoImplementacion, meta.finanzas.moneda) : "—"}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11.5, color: T.n400, textTransform: "uppercase", letterSpacing: "0.04em" }}>Estado de pago</div>
+                    <div style={{ fontSize: 11.5, color: T.n400, textTransform: "none" }}>Estado de pago</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: meta.finanzas?.estadoPago === "con_deuda" ? T.errTx : T.okTx }}>
                       {meta.finanzas?.estadoPago === "con_deuda" ? "Con deuda" : "Al día"}
                       {meta.finanzas?.estadoPago === "con_deuda" && meta.finanzas.deudaDesde && <span style={{ fontSize: 12, fontWeight: 500, color: T.n400, display: "block" }}>desde {fmtDate(meta.finanzas.deudaDesde)} ({diasDesde(meta.finanzas.deudaDesde)} días)</span>}
@@ -3904,7 +4235,22 @@ function AdminPortal({ session, onLogout }) {
               </div>
             )}
           </Card>
+          </div>
+              <Card>
+                <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 8px" }}>Notas internas del equipo</h3>
+                {(selData.notas || []).map((n, i) => (
+                  <div key={i} style={{ fontSize: 13, color: T.n800, padding: "6px 0", borderBottom: "1px solid " + T.n100 }}>
+                    {n.txt}<div style={{ fontSize: 11.5, color: T.n400 }}>{n.who} · {fmtDate(n.ts)}</div>
+                  </div>
+                ))}
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <Input placeholder="Nota (el cliente no la ve)" value={nota} onChange={(e) => setNota(e.target.value)} onKeyDown={(e) => e.key === "Enter" && agregarNota()} style={{ height: 36 }} />
+                  <Btn size="sm" variant="secondary" onClick={agregarNota}>Guardar</Btn>
+                </div>
+              </Card>
+          </>)}
 
+          {fTab === "relevamiento" && (<>
           {alertas.length > 0 && (
             <Card style={{ marginBottom: 16, borderColor: "#fca5a5" }}>
               <h3 style={{ fontSize: 15, fontWeight: 700, color: T.errTx, margin: "0 0 10px" }}>⚠ Casos borde detectados en el relevamiento</h3>
@@ -3918,7 +4264,49 @@ function AdminPortal({ session, onLogout }) {
               </div>
             </Card>
           )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 16, alignItems: "start" }}>
+            <Card>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 4px" }}>Relevamiento</h3>
+              {selData.relevamientoEnviado
+                ? <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      <Badge tone="green">Enviado {fmtDate(selData.relevamientoEnviado)}</Badge>
+                      <span onClick={reabrirRelevamiento} style={{ fontSize: 12, fontWeight: 600, color: T.primary, cursor: "pointer" }}>🔓 Reabrir para que lo edite el cliente</span>
+                    </div>
+                    <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                      {RV_PREGUNTAS.filter((q) => q.id && fmtRespuesta(q, selData.relevamiento)).map((q) => (
+                        <div key={q.id} style={{ fontSize: 13, lineHeight: 1.45 }}>
+                          <span style={{ color: T.n400 }}>{q.lbl}</span><br />
+                          <b style={{ color: T.n800 }}>{fmtRespuesta(q, selData.relevamiento)}</b>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                : <Badge tone="amber">Pendiente del cliente</Badge>}
+            </Card>
+              <Card>
+                <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 8px" }}>Involucrados de la implementación</h3>
+                {(selData.involucrados || []).length === 0 && <Badge tone="amber">Se completan en el relevamiento</Badge>}
+                {(selData.involucrados || []).map((p) => (
+                  <div key={p.id} style={{ fontSize: 13, color: T.n800, padding: "6px 0", borderBottom: "1px solid " + T.n100 }}>
+                    <b>{p.nombre}</b>{p.cargo ? " · " + p.cargo : ""}{" "}
+                    {p.rol === "sponsor" && <Badge tone="blue">Sponsor</Badge>}
+                    {p.rol === "key_user" && <Badge tone="green">Key user</Badge>}
+                    <div style={{ fontSize: 12, color: T.n400 }}>{p.email}{p.telefono ? " · " + p.telefono : ""}</div>
+                  </div>
+                ))}
+              </Card>
+          </div>
+          {selData.diagrama && (
+            <Card style={{ marginTop: 16 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 4px" }}>Diagrama del proceso del cliente</h3>
+              <p style={{ fontSize: 12.5, color: T.n400, margin: "0 0 10px" }}>Generado automáticamente al enviar el relevamiento — insumo para el workshop de Fase 3.</p>
+              <MermaidView code={selData.diagrama} />
+            </Card>
+          )}
+          </>)}
 
+          {fTab === "integracion" && (<>
           <Card style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
               <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: 0 }}>Alta en Redmine y credenciales de API</h3>
@@ -3972,37 +4360,14 @@ function AdminPortal({ session, onLogout }) {
             {selData.apiCreds && (
               <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid " + T.n100 }}>
                 <div style={{ fontSize: 13, color: T.n600, marginBottom: 8 }}>
-                  API Key sandbox: <b style={{ fontFamily: "ui-monospace, Menlo, monospace", color: T.n800 }}>{selData.apiCreds.key}</b>
+                  API Key{meta.usaSandbox !== false ? " (sandbox)" : ""}: <b style={{ fontFamily: "ui-monospace, Menlo, monospace", color: T.n800 }}>{selData.apiCreds.key}</b>
                   <span style={{ color: T.n400 }}> · generada {fmtDate(selData.apiCreds.createdAt)}</span>
                 </div>
                 <Btn variant="ghost" size="sm" onClick={regenerarCreds}>Regenerar credenciales</Btn>
               </div>
             )}
           </Card>
-
-          <TicketsRedmineCard sel={sel} sc={sc} session={session} tieneFeature={!!selData.redmine?.featureIssueId} />
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16 }}>
-            <Card>
-              <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 4px" }}>Relevamiento</h3>
-              {selData.relevamientoEnviado
-                ? <>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      <Badge tone="green">Enviado {fmtDate(selData.relevamientoEnviado)}</Badge>
-                      <span onClick={reabrirRelevamiento} style={{ fontSize: 12, fontWeight: 600, color: T.primary, cursor: "pointer" }}>🔓 Reabrir para que lo edite el cliente</span>
-                    </div>
-                    <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-                      {RV_PREGUNTAS.filter((q) => q.id && fmtRespuesta(q, selData.relevamiento)).map((q) => (
-                        <div key={q.id} style={{ fontSize: 13, lineHeight: 1.45 }}>
-                          <span style={{ color: T.n400 }}>{q.lbl}</span><br />
-                          <b style={{ color: T.n800 }}>{fmtRespuesta(q, selData.relevamiento)}</b>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                : <Badge tone="amber">Pendiente del cliente</Badge>}
-            </Card>
-            <div style={{ display: "grid", gap: 16, alignContent: "start" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginTop: 16, alignItems: "start" }}>
               <Card>
                 <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 8px" }}>Sucursales ({(selData.sucursales || []).length})</h3>
                 {selData.sucursalesArchivo && (
@@ -4061,41 +4426,14 @@ function AdminPortal({ session, onLogout }) {
                   </div>
                 ))}
               </Card>
-              <Card>
-                <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 8px" }}>Involucrados de la implementación</h3>
-                {(selData.involucrados || []).length === 0 && <Badge tone="amber">Se completan en el relevamiento</Badge>}
-                {(selData.involucrados || []).map((p) => (
-                  <div key={p.id} style={{ fontSize: 13, color: T.n800, padding: "6px 0", borderBottom: "1px solid " + T.n100 }}>
-                    <b>{p.nombre}</b>{p.cargo ? " · " + p.cargo : ""}{" "}
-                    {p.rol === "sponsor" && <Badge tone="blue">Sponsor</Badge>}
-                    {p.rol === "key_user" && <Badge tone="green">Key user</Badge>}
-                    <div style={{ fontSize: 12, color: T.n400 }}>{p.email}{p.telefono ? " · " + p.telefono : ""}</div>
-                  </div>
-                ))}
-              </Card>
-              <Card>
-                <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 8px" }}>Notas internas del equipo</h3>
-                {(selData.notas || []).map((n, i) => (
-                  <div key={i} style={{ fontSize: 13, color: T.n800, padding: "6px 0", borderBottom: "1px solid " + T.n100 }}>
-                    {n.txt}<div style={{ fontSize: 11.5, color: T.n400 }}>{n.who} · {fmtDate(n.ts)}</div>
-                  </div>
-                ))}
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <Input placeholder="Nota (el cliente no la ve)" value={nota} onChange={(e) => setNota(e.target.value)} onKeyDown={(e) => e.key === "Enter" && agregarNota()} style={{ height: 36 }} />
-                  <Btn size="sm" variant="secondary" onClick={agregarNota}>Guardar</Btn>
-                </div>
-              </Card>
-            </div>
           </div>
+          </>)}
 
-          {selData.diagrama && (
-            <Card style={{ marginTop: 16 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 4px" }}>Diagrama del proceso del cliente</h3>
-              <p style={{ fontSize: 12.5, color: T.n400, margin: "0 0 10px" }}>Generado automáticamente al enviar el relevamiento — insumo para el workshop de Fase 3.</p>
-              <MermaidView code={selData.diagrama} />
-            </Card>
-          )}
+          {fTab === "tickets" && (<>
+          <TicketsRedmineCard sel={sel} sc={sc} session={session} tieneFeature={!!selData.redmine?.featureIssueId} />
+          </>)}
 
+          {fTab === "reuniones" && (<>
           <Card style={{ marginTop: 16 }}>
             <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 10px" }}>Reuniones y eventos</h3>
             {(selData.eventos || []).length === 0 && <div style={{ fontSize: 13.5, color: T.n400 }}>Todavía no hay reuniones agendadas. El cliente agenda workshop, reunión técnica y capacitaciones desde su portal.</div>}
@@ -4103,35 +4441,9 @@ function AdminPortal({ session, onLogout }) {
               {(selData.eventos || []).map((e) => <AdminEvento key={e.id} e={e} onMinuta={guardarMinuta} />)}
             </div>
           </Card>
+          </>)}
 
-          <Card style={{ marginTop: 16 }}>
-            <SectionHeader
-              title="Plazos y recordatorios"
-              subtitle="Ponele fecha límite a los pasos que dependen del cliente. Un día antes del vencimiento se le manda un recordatorio por mail a los involucrados que cargó; si el plazo vence y el paso sigue sin completar, se manda un aviso de incumplimiento. Ambos se disparan solos con el cron diario — acá también podés forzar el envío al toque."
-            />
-            {avisoMsg && <Alert tone={avisoMsg === "Aviso enviado ✓" ? "success" : "error"} style={{ marginBottom: 12 }}>{avisoMsg}</Alert>}
-            <div style={{ display: "grid", gap: 8 }}>
-              {(selData.hitos || []).map((h) => (
-                <FilaPlazo
-                  key={h.id}
-                  paso={h}
-                  completo={!!selData.hitosCompletos?.[h.id]}
-                  plazo={selData.plazos?.[h.id]}
-                  onGuardar={(fecha) => guardarPlazo(h.id, fecha)}
-                  onQuitar={() => quitarPlazo(h.id)}
-                  onEnviarAhora={() => enviarAvisoAhora(h.id)}
-                  onToggleManual={h.id === "fin_desarrollo_api" ? marcarApiCompleta : null}
-                  onCumplimiento={(valor) => cambiarCumplimiento(h.id, valor)}
-                />
-              ))}
-            </div>
-          </Card>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, marginTop: 16 }}>
-            <AdminPrueba etapa="sandbox" titulo="Pruebas en sandbox (Fase 5)" prueba={selData.pruebas?.sandbox} onSave={cambiarPrueba} />
-            <AdminPrueba etapa="golive" titulo="Pruebas de go-live (Fase 7)" prueba={selData.pruebas?.golive} onSave={cambiarPrueba} />
-          </div>
-
+          {fTab === "mails" && (<>
           <Card style={{ marginTop: 16 }}>
             <MailsCard
               sessionCode={sc}
@@ -4144,22 +4456,41 @@ function AdminPortal({ session, onLogout }) {
               esAutoimp={!!selMeta.autoimplementacion}
             />
           </Card>
+          </>)}
 
+          {fTab === "historial" && (<>
           <Card style={{ marginTop: 16 }}>
             <TabHistorial history={selData.history} />
           </Card>
+          </>)}
+          </div>
+          </div>
+
+          <FichaResumen meta={meta} selData={selData} nombreVendedor={nombreVendedor} />
+          </div>
         </div>
       </div>
     );
   }
 
-  const clientesVisibles = (clients || [])
+  const clientesVisiblesBase = (clients || [])
     .filter((c) => !filtroImpl || c.implementadorId === filtroImpl)
     .filter((c) => !filtroDev || c.desarrolladorId === filtroDev)
     .filter((c) => !filtroVendedor || (c.comerciales || []).includes(filtroVendedor))
     .filter((c) => !filtroAutoimp || (filtroAutoimp === "si" ? c.autoimplementacion : !c.autoimplementacion))
     .filter((c) => !filtroMarca || (filtroMarca === "sin" ? !marcas[c.code] : marcas[c.code] === filtroMarca))
     .filter((c) => !busqueda.trim() || c.name.toLowerCase().includes(busqueda.trim().toLowerCase()) || c.code.toLowerCase().includes(busqueda.trim().toLowerCase()));
+  const diasSin = (c) => c.ultimaActividad ? (Date.now() - new Date(c.ultimaActividad).getTime()) / 86400000 : 9999;
+  const esTrabado = (c) => diasSin(c) >= 7;
+  const goLiveProximo = (c) => { if (!c.goLiveEstimado) return false; const d = diasHasta(c.goLiveEstimado); return d >= 0 && d <= 30; };
+  const esMio = (c) => !!session.teamId && (c.implementadorId === session.teamId || c.desarrolladorId === session.teamId);
+  const clientesVisibles = clientesVisiblesBase;
+  const clientesTabla = clientesVisiblesBase
+    .filter((c) => filtroRapido === "trabados" ? esTrabado(c) : filtroRapido === "golive" ? goLiveProximo(c) : filtroRapido === "mios" ? esMio(c) : true)
+    .slice()
+    .sort((a, b) => ordenClientes === "nombre" ? a.name.localeCompare(b.name, "es")
+      : ordenClientes === "golive" ? ((a.goLiveEstimado || "9999") < (b.goLiveEstimado || "9999") ? -1 : 1)
+      : diasSin(b) - diasSin(a));
   const finanzasTeam = team.filter((m) => m.rol === "finanzas");
 
   return (
@@ -4167,7 +4498,7 @@ function AdminPortal({ session, onLogout }) {
       <Nav name="Panel del equipo" who={session.who} onLogout={onLogout} admin onMenu={() => setMenuAbierto(true)} extra={<AyudaMemoria codigo={sc} />} />
       <ChatBot codigo={sc} />
       <div style={{ display: "flex" }}>
-        <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); }} noLeidas={notifNoLeidas} abierto={menuAbierto} onCerrar={cerrarMenu} />
+        <Sidebar activo={modulo} onCambiar={(m) => { setModulo(m); setPanelCliente(null); }} noLeidas={notifNoLeidas} abierto={menuAbierto} onCerrar={cerrarMenu} mini={menuMini} onAlternarMini={alternarMenuMini} who={session.who} />
         <div className="nub-main" style={{ flex: 1, minWidth: 0, padding: "26px 24px 60px", maxWidth: 1180, margin: "0 auto" }}>
           {msg && <Alert tone="success" style={{ marginBottom: 16 }}>{msg}</Alert>}
           {modulo === "autoimp" && <PanelAutoimp codigo={sc} />}
@@ -4175,9 +4506,12 @@ function AdminPortal({ session, onLogout }) {
           {/* ══════════ MÓDULO: CLIENTES ══════════ */}
           {modulo === "clientes" && (
             <>
-              {!soloLectura && (
-              <Card style={{ marginBottom: 16 }}>
-                <SectionHeader title="Dar de alta un cliente" />
+              <PageHeader crumb="Panel del equipo" title="Clientes"
+                desc={clients ? clientesVisibles.length + " clientes activos, " + clientesVisibles.filter(esTrabado).length + " sin actividad hace más de una semana." : "Cargando clientes…"}
+                actions={!soloLectura && !altaAbierta ? <Btn size="sm" onClick={() => setAltaAbierta(true)}>Nuevo cliente</Btn> : null} />
+              {!soloLectura && altaAbierta && (
+              <Card style={{ marginBottom: 16 }} >
+                <SectionHeader title="Dar de alta un cliente" badge={<Btn variant="ghost" size="sm" onClick={() => setAltaAbierta(false)}>Cancelar</Btn>} />
                 <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1.2fr", gap: 10, marginBottom: 10 }}>
                   <div><Label>Nombre del cliente <span style={{ color: "#dc2626" }}>*</span></Label><Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ej: Freddo" /></div>
                   <div><Label>Código de acceso <span style={{ color: "#dc2626" }}>*</span></Label><Input value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="Ej: FREDDO26" /></div>
@@ -4210,8 +4544,20 @@ function AdminPortal({ session, onLogout }) {
                     <Label>Tipo de onboarding</Label>
                     <div style={{ display: "flex", gap: 8 }}>
                       <Btn variant={!newAutoimp ? "primary" : "secondary"} size="sm" onClick={() => setNewAutoimp(false)} style={{ flex: 1 }}>Estándar</Btn>
-                      <Btn variant={newAutoimp ? "primary" : "secondary"} size="sm" onClick={() => setNewAutoimp(true)} style={{ flex: 1 }}>🚀 Autoimplementación</Btn>
+                      <Btn variant={newAutoimp ? "primary" : "secondary"} size="sm" onClick={() => setNewAutoimp(true)} style={{ flex: 1 }}>Autoimplementación</Btn>
                     </div>
+                  </div>
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <Label>¿Usa ambiente de pruebas (sandbox)?</Label>
+                  <div style={{ display: "flex", gap: 8, maxWidth: 420 }}>
+                    <Btn variant={newUsaSandbox ? "primary" : "secondary"} size="sm" onClick={() => setNewUsaSandbox(true)} style={{ flex: 1 }}>Sí, con sandbox</Btn>
+                    <Btn variant={!newUsaSandbox ? "primary" : "secondary"} size="sm" onClick={() => setNewUsaSandbox(false)} style={{ flex: 1 }}>No, directo en productivo</Btn>
+                  </div>
+                  <div style={{ fontSize: 12.5, color: T.n600, marginTop: 6, lineHeight: 1.5 }}>
+                    {newUsaSandbox
+                      ? "Se pide el tenant sandbox en Redmine y el cliente ve el paso de pruebas con sus datos."
+                      : "No se pide tenant sandbox y el cliente no ve el paso de pruebas: pasa de la capacitación al go-live."}
                   </div>
                 </div>
 
@@ -4276,9 +4622,7 @@ function AdminPortal({ session, onLogout }) {
               )}
 
               <Card>
-                <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: "0 0 14px" }}>
-                  Clientes en implementación{clients ? " (" + clientesVisibles.length + " de " + clients.length + ")" : ""}
-                </h2>
+                <SectionHeader title={"Clientes en implementación" + (clients ? " (" + clientesVisibles.length + " de " + clients.length + ")" : "")} />
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
                   <Input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre o código…" style={{ maxWidth: 240 }} />
                   <select value={filtroImpl} onChange={(e) => setFiltroImpl(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
@@ -4337,74 +4681,114 @@ function AdminPortal({ session, onLogout }) {
                     ))}
                   </div>
                 )}
-                {clients && clientesVisibles.length === 0 && <div style={{ color: T.n400, fontSize: 14 }}>Ningún cliente coincide con la búsqueda/filtro.</div>}
-                <div style={{ display: "grid", gap: 10 }}>
-                  {clientesVisibles.map((cli) => {
+                {clients && clients.length > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+                    <div className="nub-chips" role="group" aria-label="Filtros rápidos">
+                      {[["", "Todos", clientesVisibles.length], ["trabados", "Sin actividad hace +7 días", clientesVisibles.filter(esTrabado).length], ["golive", "Go-live en 30 días", clientesVisibles.filter(goLiveProximo).length]].concat(session.teamId ? [["mios", "Mis clientes", clientesVisibles.filter(esMio).length]] : []).map(([id, lbl, n]) => (
+                        <button key={id || "todos"} type="button" aria-pressed={filtroRapido === id} className={"nub-chip" + (id === "trabados" ? " nub-chip--alerta" : "")} onClick={() => setFiltroRapido(id)}>
+                          {lbl} <span className="nub-chip__n">{n}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.n600 }}>
+                      Ordenar por
+                      <select value={ordenClientes} onChange={(e) => setOrdenClientes(e.target.value)} style={{ height: 34, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 13, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
+                        <option value="actividad">Días sin actividad</option>
+                        <option value="golive">Go-live más cercano</option>
+                        <option value="nombre">Nombre</option>
+                      </select>
+                    </label>
+                  </div>
+                )}
+                {clients && clientesTabla.length === 0 && (
+                  <EstadoVacio titulo={clientesVisibles.length === 0 ? "Ningún cliente coincide con la búsqueda" : "No hay clientes con este filtro"}
+                    accion={<Btn variant="ghost" size="sm" onClick={() => { setFiltroRapido(""); setBusqueda(""); setFiltroImpl(""); setFiltroDev(""); setFiltroVendedor(""); setFiltroMarca(""); setFiltroAutoimp(""); }}>Ver todos los clientes</Btn>}>
+                    {filtroRapido === "trabados" ? "Todos tus clientes tuvieron movimiento en la última semana." : "Probá con otro nombre o sacá los filtros."}
+                  </EstadoVacio>
+                )}
+                {clients && clientesTabla.length > 0 && (
+                <div className="nub-tabla-wrap">
+                  <table className="nub-tabla">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 22 }}><span className="nub-sr">Marca</span></th>
+                        <th>Cliente</th>
+                        <th>Fase</th>
+                        <th>Avance</th>
+                        <th>Go-live</th>
+                        <th aria-sort={ordenClientes === "actividad" ? "descending" : "none"}>
+                          <button type="button" className="nub-th-btn" onClick={() => setOrdenClientes("actividad")}>Sin actividad <Icon n="sort" size={12} /></button>
+                        </th>
+                        <th>Responsables</th>
+                        <th>Estado</th>
+                        <th><span className="nub-sr">Acciones</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                  {clientesTabla.map((cli) => {
                     const alertas = detectarAlertas(cli.relevamiento);
                     const pendRv = !cli.relevamientoEnviado;
                     const pct = Math.round((cli.completados / cli.totalPasos) * 100);
+                    const sg = semaforoGoLive(cli.goLiveEstimado);
+                    const dotGl = !sg ? T.n200 : sg.tone === "red" ? "#ef4444" : sg.tone === "amber" ? "#f59e0b" : "#22c55e";
                     return (
-                      <div key={cli.code} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderRadius: 12, border: "1px solid " + T.n200, background: "#fff" }}>
-                        {/* La marca la pone solo quien tiene asignado ese cliente. */}
-                        {session.teamId && cli.implementadorId === session.teamId
-                          ? <MarcaPunto color={marcas[cli.code]} onClick={() => ciclar(cli.code)} />
-                          : <span style={{ width: 13, flexShrink: 0 }} />}
-                        <div onClick={() => abrir(cli.code)} style={{ width: 38, height: 38, borderRadius: 8, flexShrink: 0, cursor: "pointer", background: T.n50, border: "1px solid " + T.n200, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: T.n400 }}>
-                          {cli.logo ? <img src={cli.logo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : cli.name.slice(0, 1).toUpperCase()}
-                        </div>
-                        <div onClick={() => abrir(cli.code)} style={{ flex: 1, minWidth: 0, cursor: "pointer" }}>
-                          <div style={{ fontSize: 15.5, fontWeight: 600, color: T.n900 }}>
-                            {cli.name} <span style={{ fontSize: 12, fontWeight: 500, color: T.n400 }}>· código {cli.code}</span>
-                          </div>
-                          <div style={{ fontSize: 12.5, color: T.n400, marginTop: 2 }}>Última actividad: {cli.ultimaActividad ? fmtDate(cli.ultimaActividad) : "sin actividad"}</div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
-                            <div style={{ flex: 1, maxWidth: 380, height: 6, borderRadius: 100, background: T.n100, overflow: "hidden" }}>
-                              <div style={{ width: pct + "%", height: "100%", background: pct === 100 ? "#22c55e" : T.primary, borderRadius: 100 }} />
+                      <tr key={cli.code} onClick={() => abrir(cli.code)} className="nub-tabla__fila">
+                        <td onClick={(e) => e.stopPropagation()}>
+                          {session.teamId && cli.implementadorId === session.teamId
+                            ? <MarcaPunto color={marcas[cli.code]} onClick={() => ciclar(cli.code)} />
+                            : <span style={{ width: 13, display: "inline-block" }} />}
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                            <span className="nub-logo">{cli.logo ? <img src={cli.logo} alt="" /> : cli.name.slice(0, 1).toUpperCase()}</span>
+                            <div style={{ minWidth: 0 }}>
+                              <button type="button" className="nub-link-fila" style={{ whiteSpace: "nowrap" }} onClick={(e) => { e.stopPropagation(); abrir(cli.code); }}>{cli.name}</button>
+                              <div style={{ fontSize: 11.5, color: T.n400 }}>{cli.code}</div>
                             </div>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: T.n600 }}>{cli.completados}/{cli.totalPasos} pasos</span>
                           </div>
-                        </div>
-                        <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", flexDirection: "column", gap: 4, width: 158, flexShrink: 0 }}>
-                          <select value={cli.implementadorId || ""} onChange={(e) => asignar(cli.code, e.target.value || null, "implementador")}
-                            style={{ fontSize: 12, borderRadius: 6, border: "1px solid " + T.n200, padding: "4px 6px", color: cli.implementadorId ? T.n800 : T.n400, background: "#fff", maxWidth: 150 }}>
-                            <option value="">Sin implementador/a</option>
-                            {implementadoresTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-                          </select>
-                          <select value={cli.desarrolladorId || ""} onChange={(e) => asignar(cli.code, e.target.value || null, "desarrollador")}
-                            style={{ fontSize: 12, borderRadius: 6, border: "1px solid " + T.n200, padding: "4px 6px", color: cli.desarrolladorId ? T.n800 : T.n400, background: "#fff", maxWidth: 150 }}>
-                            <option value="">Sin desarrollador/a</option>
-                            {devsTeam.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-                          </select>
-                          {vendedoresTeam.length > 0 && (
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center", maxWidth: 150 }}>
-                              {(cli.comerciales || []).map((id) => (
-                                <span key={id} onClick={() => setVendedoresCliente(cli.code, (cli.comerciales || []).filter((x) => x !== id))}
-                                  title="Quitar vendedor" style={{ cursor: "pointer", fontSize: 10.5, background: T.primary50, color: T.primary800, border: "1px solid " + T.primary100, borderRadius: 100, padding: "1px 7px" }}>
-                                  {nombreVendedor(id)} ✕
-                                </span>
-                              ))}
-                              <select value="" onChange={(e) => { if (e.target.value) setVendedoresCliente(cli.code, [...(cli.comerciales || []), e.target.value]); }}
-                                style={{ fontSize: 11, borderRadius: 6, border: "1px dashed " + T.n200, padding: "3px 6px", color: T.n400, background: "#fff" }}>
-                                <option value="">+ vendedor</option>
-                                {vendedoresTeam.filter((m) => !(cli.comerciales || []).includes(m.id)).map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
-                              </select>
-                            </div>
-                          )}
-                        </div>
-                        <div onClick={() => abrir(cli.code)} style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end", cursor: "pointer", width: 200, flexShrink: 0 }}>
-                          <span style={{ background: T.primary50, color: T.primary800, fontSize: 11.5, fontWeight: 600, padding: "3px 9px", borderRadius: 8, whiteSpace: "normal", lineHeight: 1.25, textAlign: "right" }}>Fase {cli.phase + 1} · {FASES[cli.phase]}</span>
-                          {!cli.implementadorId && <Badge tone="amber">Sin asignar</Badge>}
-                          {pendRv && <Badge tone="amber">Relevamiento pendiente</Badge>}
-                          {cli.omitioSucursales && <Badge tone="amber">Sucursales pendiente</Badge>}
-                          {cli.estadoPago === "con_deuda" && <Badge tone="red">💰 Con deuda</Badge>}
-                          {cli.autoimplementacion && <span style={{ fontSize: 11, fontWeight: 700, background: "#efe7ff", color: "#6d28d9", border: "1px solid #ddd0fb", borderRadius: 100, padding: "2px 9px", whiteSpace: "nowrap" }}>🚀 Autoimpl.</span>}
-                          {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
-                        </div>
-                        {session.tipoUsuario === "superuser" && <span onClick={(e) => { e.stopPropagation(); archivarCliente(cli.code, cli.name); }} title="Archivar cliente (se puede restaurar)" style={{ cursor: "pointer", color: T.n400, fontSize: 14, padding: 4 }}>📥</span>}
-                      </div>
+                        </td>
+                        <td>
+                          <div className="nub-ph9" aria-hidden="true">{FASES.map((_, i) => <i key={i} className={i < cli.phase ? "d" : i === cli.phase ? "c" : ""} />)}</div>
+                          <div style={{ fontSize: 12, color: T.n600, whiteSpace: "nowrap" }}>{FASES[cli.phase]}</div>
+                        </td>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 70, height: 5, borderRadius: 100, background: T.n100, overflow: "hidden" }}><div style={{ width: pct + "%", height: "100%", background: pct === 100 ? "#22c55e" : T.primary }} /></div>
+                            <span style={{ fontSize: 12, color: T.n600 }}>{cli.completados}/{cli.totalPasos}</span>
+                          </div>
+                        </td>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.n800 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotGl }} />
+                            {cli.goLiveEstimado ? fmtCorta(cli.goLiveEstimado) : "Sin fecha"}
+                          </span>
+                        </td>
+                        <td style={{ whiteSpace: "nowrap" }}><SinActividad iso={cli.ultimaActividad} /></td>
+                        <td>
+                          <span style={{ display: "inline-flex" }}>
+                            {cli.implementadorNombre ? <Avatar nombre={cli.implementadorNombre} /> : <Badge tone="amber">Sin asignar</Badge>}
+                            {cli.desarrolladorNombre && <Avatar nombre={cli.desarrolladorNombre} tono="gris" style={{ marginLeft: -6 }} />}
+                          </span>
+                        </td>
+                        <td>
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", maxWidth: 220 }}>
+                            {cli.estadoPago === "con_deuda" && <Badge tone="red">Deuda</Badge>}
+                            {alertas.length > 0 && <Badge tone="red">{alertas.length} alerta{alertas.length > 1 ? "s" : ""}</Badge>}
+                            {pendRv && <Badge tone="amber">Relevamiento pendiente</Badge>}
+                            {cli.omitioSucursales && <Badge tone="amber">Sucursales pendiente</Badge>}
+                            {cli.autoimplementacion && <span className="nub-info"><Icon n="rocket" size={12} /> Autoimpl.</span>}
+                          </div>
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()} style={{ whiteSpace: "nowrap", textAlign: "right" }}>
+                          {session.tipoUsuario === "superuser" && <button type="button" className="nub-fila-accion" onClick={() => archivarCliente(cli.code, cli.name)} title="Archivar cliente (se puede restaurar)">Archivar</button>}
+                        </td>
+                      </tr>
                     );
                   })}
+                    </tbody>
+                  </table>
                 </div>
+                )}
               </Card>
             </>
           )}
@@ -4412,13 +4796,9 @@ function AdminPortal({ session, onLogout }) {
           {/* ══════════ MÓDULO: TABLERO ══════════ */}
           {modulo === "tablero" && (
             <div ref={tableroRef} style={{ background: tableroFull ? "#fff" : "transparent", padding: tableroFull ? 20 : 0, height: tableroFull ? "100vh" : "auto", overflowY: tableroFull ? "auto" : "visible" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-                <div>
-                  <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: 0 }}>Tablero de implementación{clients ? " (" + clientesVisibles.length + " de " + clients.length + ")" : ""}</h2>
-                  <p style={{ fontSize: 12.5, color: T.n400, margin: "4px 0 0" }}>La fase avanza sola a medida que se completan los pasos — arrastrá una tarjeta para pisarlo a mano.</p>
-                </div>
-                <Btn variant="secondary" size="sm" onClick={toggleFullscreen}>{tableroFull ? "✕ Salir de pantalla completa" : "⛶ Pantalla completa (para reuniones)"}</Btn>
-              </div>
+              <PageHeader crumb={tableroFull ? null : "Panel del equipo"} title="Tablero"
+                desc={(clients ? clientesVisibles.length + " de " + clients.length + " clientes. " : "") + "La fase avanza sola con los pasos; arrastrá una tarjeta para cambiarla a mano."}
+                actions={<Btn variant="ghost" size="sm" onClick={toggleFullscreen}>{tableroFull ? "Salir de pantalla completa" : "Pantalla completa"}</Btn>} />
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
                 <Input value={busqueda} onChange={(e) => setBusqueda(e.target.value)} placeholder="Buscar por nombre o código…" style={{ maxWidth: 240 }} />
                 <select value={filtroImpl} onChange={(e) => setFiltroImpl(e.target.value)} style={{ height: 40, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 10px", fontSize: 13.5, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
@@ -4439,8 +4819,8 @@ function AdminPortal({ session, onLogout }) {
               <KanbanBoard clientes={clientesVisibles} onAbrir={abrirPanelKanban} onMoverFase={(code, fase) => cambiarFase(code, fase)} onCambiarColor={cambiarColor} onEnviarAvisos={enviarAvisosPendientes} enviandoAvisosDe={enviandoAvisosDe} />
         {/* Panel lateral rápido del tablero: se abre al hacer clic en una tarjeta */}
         {panelCliente && (
-          <div onClick={() => setPanelCliente(null)} style={{ position: "fixed", inset: 0, background: "rgba(13,17,32,0.4)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
-            <div onClick={(e) => e.stopPropagation()} style={{ width: 380, maxWidth: "92vw", height: "100%", background: "#fff", padding: 24, overflowY: "auto", boxShadow: "-8px 0 24px rgba(13,17,32,0.18)" }}>
+          <div className="nub-overlay" onClick={() => setPanelCliente(null)} style={{ position: "fixed", inset: 0, background: "rgba(13,17,32,0.4)", zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
+            <div className="nub-panel-in" role="dialog" aria-label="Resumen del cliente" onClick={(e) => e.stopPropagation()} style={{ width: 380, maxWidth: "92vw", height: "100%", background: "#fff", padding: 24, overflowY: "auto", boxShadow: "-8px 0 24px rgba(13,17,32,0.18)" }}>
               {!panelData ? (
                 <div role="status" aria-label="Cargando cliente">
                   <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 22 }}>
@@ -4472,7 +4852,7 @@ function AdminPortal({ session, onLogout }) {
                       ["Desarrollador/a", panelData.meta.desarrolladorNombre || "Sin asignar"],
                     ].map(([lbl, val]) => (
                       <div key={lbl}>
-                        <div style={{ fontSize: 11, color: T.n400, textTransform: "uppercase", letterSpacing: "0.04em" }}>{lbl}</div>
+                        <div style={{ fontSize: 11, color: T.n400, textTransform: "none" }}>{lbl}</div>
                         <div style={{ fontSize: 14, fontWeight: 600, color: T.n800 }}>{val}</div>
                       </div>
                     ))}
@@ -4482,11 +4862,11 @@ function AdminPortal({ session, onLogout }) {
                     <div style={{ fontSize: 12.5, fontWeight: 700, color: T.n600, marginBottom: 8 }}>💰 Facturación</div>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                       <div>
-                        <div style={{ fontSize: 11, color: T.n400, textTransform: "uppercase" }}>Fee</div>
+                        <div style={{ fontSize: 11, color: T.n400, textTransform: "none" }}>Fee</div>
                         <div style={{ fontSize: 15, fontWeight: 700, color: T.n800 }}>{panelData.meta.finanzas?.fee != null ? fmtMoneda(panelData.meta.finanzas.fee, panelData.meta.finanzas.moneda) : "—"}</div>
                       </div>
                       <div>
-                        <div style={{ fontSize: 11, color: T.n400, textTransform: "uppercase" }}>Estado</div>
+                        <div style={{ fontSize: 11, color: T.n400, textTransform: "none" }}>Estado</div>
                         <div style={{ fontSize: 15, fontWeight: 700, color: panelData.meta.finanzas?.estadoPago === "con_deuda" ? T.errTx : T.okTx }}>
                           {panelData.meta.finanzas?.estadoPago === "con_deuda" ? "Con deuda" : "Al día"}
                         </div>
@@ -4506,16 +4886,9 @@ function AdminPortal({ session, onLogout }) {
           {/* ══════════ MÓDULO: NOTIFICACIONES ══════════ */}
           {modulo === "notificaciones" && (
             <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
-                <div>
-                  <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: 0 }}>Notificaciones{notifNoLeidas > 0 ? " (" + notifNoLeidas + " sin leer)" : ""}</h2>
-                  <p style={{ fontSize: 12.5, color: T.n400, margin: "4px 0 0" }}>Te avisamos cuando un cliente completa un paso de la implementación.</p>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <Btn variant="ghost" size="sm" onClick={cargarNotificaciones}>Actualizar</Btn>
-                  {notifNoLeidas > 0 && <Btn variant="secondary" size="sm" onClick={marcarTodasNotifLeidas}>Marcar todas como leídas</Btn>}
-                </div>
-              </div>
+              <PageHeader crumb="Panel del equipo" title="Notificaciones"
+                desc={notifNoLeidas > 0 ? "Tenés " + notifNoLeidas + " sin leer. Te avisamos cuando un cliente completa un paso." : "Te avisamos acá cuando un cliente completa un paso de la implementación."}
+                actions={<><Btn variant="ghost" size="sm" onClick={cargarNotificaciones}>Actualizar</Btn>{notifNoLeidas > 0 && <Btn size="sm" onClick={marcarTodasNotifLeidas}>Marcar todas como leídas</Btn>}</>} />
               <div role="tablist" aria-label="Filtrar notificaciones" style={{ display: "inline-flex", gap: 4, padding: 4, background: T.n100, borderRadius: 10, marginBottom: 16 }}>
                 {[["todas", "Todas", notifs.length], ["sin_leer", "Sin leer", notifNoLeidas]].map(([id, lbl, cant]) => (
                   <button key={id} type="button" role="tab" aria-selected={filtroNotif === id} onClick={() => setFiltroNotif(id)} style={{
@@ -4584,6 +4957,7 @@ function AdminPortal({ session, onLogout }) {
           {/* ══════════ MÓDULO: EQUIPO ══════════ */}
           {modulo === "equipo" && (
             <>
+              <PageHeader crumb="Panel del equipo" title="Equipo" desc="Quién está en cada área y qué puede hacer en el portal." />
               <Card style={{ marginBottom: 16 }}>
                 <SectionHeader title="Equipo de Implementación" />
                 <EquipoLista miembros={implementadoresTeam} esSuperuser={session.tipoUsuario === "superuser"} onEliminar={eliminarMiembro} onSetTipoUsuario={setTipoUsuario} miCodigo={sc} />
@@ -4669,6 +5043,7 @@ function AdminPortal({ session, onLogout }) {
           )}
 
           {/* ══════════ MÓDULO: CONFIGURACIÓN ══════════ */}
+          {modulo === "config" && <PageHeader crumb="Panel del equipo" title="Configuración" desc="Integraciones, avisos automáticos y datos compartidos por todo el equipo." />}
           {modulo === "config" && (
             <>
               <Card style={{ marginBottom: 16 }}>
@@ -4716,6 +5091,7 @@ function AdminPortal({ session, onLogout }) {
           )}
 
           {/* ══════════ MÓDULO: MI PERFIL ══════════ */}
+          {modulo === "perfil" && <PageHeader crumb="Panel del equipo" title="Mi perfil" desc="Tus datos, tu disponibilidad para reuniones y tus credenciales personales." />}
           {modulo === "perfil" && (
             !session.teamId ? (
               <Card>

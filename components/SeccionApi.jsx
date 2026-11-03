@@ -368,7 +368,7 @@ function SeccionApi({ data, session, setAll, titulo }) {
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
             <h2 style={{ fontSize: 17, fontWeight: 600, color: T.n900, margin: 0 }}>
-              Tus credenciales de API — entorno sandbox
+              Tus credenciales de API
             </h2>
             {c && (
               <Badge tone={c.origen === "usuario" ? "info" : "green"}>
