@@ -42,7 +42,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.39.0";
+const APP_VERSION = "1.39.1";
 const APP_VERSION_FECHA = "2026-11-03";
 
 const FASES = [
@@ -250,15 +250,6 @@ const iniciales = (nombre) => (nombre || "").trim().split(/\s+/).filter(Boolean)
 const Avatar = ({ nombre, size = 24, tono = "azul", style }) => (
   <span className={"nub-av nub-av--" + tono} title={nombre} style={{ width: size, height: size, fontSize: Math.round(size * 0.42), ...style }}>{iniciales(nombre)}</span>
 );
-
-// ─── Días sin actividad: el dato que más importa para el seguimiento ───
-const SinActividad = ({ iso, corto }) => {
-  if (!iso) return <span className="nub-stale nub-stale--hi">{corto ? "sin actividad" : "Sin actividad"}</span>;
-  const d = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000));
-  const cls = d >= 10 ? "hi" : d >= 7 ? "md" : "lo";
-  const txt = d === 0 ? "hoy" : corto ? d + " d sin actividad" : d + (d === 1 ? " día" : " días");
-  return <span className={"nub-stale nub-stale--" + cls} title={"Última actividad: " + fmtDate(iso)}>{txt}</span>;
-};
 
 // ─── Número que se cuenta al aparecer (se apaga con "reducir movimiento") ───
 function useCuentaRegresiva(objetivo, dur = 900) {
@@ -3000,9 +2991,9 @@ function KanbanBoard({ clientes, onAbrir, onMoverFase, onCambiarColor, onEnviarA
                       className="nub-semaforo"
                       style={{ background: colorSeg(cli.estadoSeguimiento) || T.n200 }}
                     />
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginBottom: 7 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 9 }}>
+                      <span className="nub-logo nub-logo--kanban">{cli.logo ? <img src={cli.logo} alt="" draggable={false} /> : cli.name.slice(0, 1).toUpperCase()}</span>
                       <div style={{ fontSize: 13.5, fontWeight: 700, color: T.n900, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cli.name}</div>
-                      <span style={{ fontSize: 11.5, flexShrink: 0 }}><SinActividad iso={cli.ultimaActividad} corto /></span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                       <div style={{ height: 4, borderRadius: 100, background: T.n100, overflow: "hidden", flex: 1 }}>
@@ -3313,7 +3304,6 @@ function FichaResumen({ meta, selData, nombreVendedor }) {
   const ahora = Date.now();
   const proxima = (selData.eventos || []).filter((e) => e.estado === "agendado" && new Date(e.fecha).getTime() >= ahora).sort((a, b) => new Date(a.fecha) - new Date(b.fecha))[0];
   const sg = semaforoGoLive(meta.goLiveEstimado);
-  const ultimo = (selData.history || [])[0];
   const fila = (k, v, extra) => (
     <div className="nub-kv__f"><dt>{k}</dt><dd>{v}{extra}</dd></div>
   );
@@ -3330,7 +3320,6 @@ function FichaResumen({ meta, selData, nombreVendedor }) {
         {(meta.comerciales || []).length > 0 && fila("Comercial", (meta.comerciales || []).map(nombreVendedor).join(", "))}
         {fila("Próxima reunión", proxima ? (EVENTO_NOMBRES[proxima.tipo] || proxima.tipo) + ", " + fmtDate(proxima.fecha) : "Ninguna agendada")}
         {meta.fechaIngreso && fila("Ingreso", fmtDateSolo(meta.fechaIngreso))}
-        {ultimo && fila("Último movimiento", <SinActividad iso={ultimo.ts} />)}
       </dl>
     </aside>
   );
@@ -3340,8 +3329,8 @@ const FICHA_TABS = [["resumen", "Resumen"], ["relevamiento", "Relevamiento"], ["
 
 function AdminPortal({ session, onLogout }) {
   const [fTab, setFTab] = useState("resumen");
-  const [ordenClientes, setOrdenClientes] = useState("actividad"); // actividad | golive | nombre
-  const [filtroRapido, setFiltroRapido] = useState(""); // "" | trabados | golive | mios
+  const [ordenClientes, setOrdenClientes] = useState("golive"); // golive | fase | nombre
+  const [filtroRapido, setFiltroRapido] = useState(""); // "" | golive | sin_asignar | mios
   const [menuMini, setMenuMini] = useState(false);
   useEffect(() => { try { setMenuMini(localStorage.getItem("nubceo_menu_mini") === "1"); } catch (e) {} }, []);
   const alternarMenuMini = () => setMenuMini((v) => { try { localStorage.setItem("nubceo_menu_mini", v ? "0" : "1"); } catch (e) {} return !v; });
@@ -4480,17 +4469,16 @@ function AdminPortal({ session, onLogout }) {
     .filter((c) => !filtroAutoimp || (filtroAutoimp === "si" ? c.autoimplementacion : !c.autoimplementacion))
     .filter((c) => !filtroMarca || (filtroMarca === "sin" ? !marcas[c.code] : marcas[c.code] === filtroMarca))
     .filter((c) => !busqueda.trim() || c.name.toLowerCase().includes(busqueda.trim().toLowerCase()) || c.code.toLowerCase().includes(busqueda.trim().toLowerCase()));
-  const diasSin = (c) => c.ultimaActividad ? (Date.now() - new Date(c.ultimaActividad).getTime()) / 86400000 : 9999;
-  const esTrabado = (c) => diasSin(c) >= 7;
+  const sinAsignar = (c) => !c.implementadorId;
   const goLiveProximo = (c) => { if (!c.goLiveEstimado) return false; const d = diasHasta(c.goLiveEstimado); return d >= 0 && d <= 30; };
   const esMio = (c) => !!session.teamId && (c.implementadorId === session.teamId || c.desarrolladorId === session.teamId);
   const clientesVisibles = clientesVisiblesBase;
   const clientesTabla = clientesVisiblesBase
-    .filter((c) => filtroRapido === "trabados" ? esTrabado(c) : filtroRapido === "golive" ? goLiveProximo(c) : filtroRapido === "mios" ? esMio(c) : true)
+    .filter((c) => filtroRapido === "sin_asignar" ? sinAsignar(c) : filtroRapido === "golive" ? goLiveProximo(c) : filtroRapido === "mios" ? esMio(c) : true)
     .slice()
     .sort((a, b) => ordenClientes === "nombre" ? a.name.localeCompare(b.name, "es")
-      : ordenClientes === "golive" ? ((a.goLiveEstimado || "9999") < (b.goLiveEstimado || "9999") ? -1 : 1)
-      : diasSin(b) - diasSin(a));
+      : ordenClientes === "fase" ? (b.phase - a.phase) || a.name.localeCompare(b.name, "es")
+      : ((a.goLiveEstimado || "9999") < (b.goLiveEstimado || "9999") ? -1 : (a.goLiveEstimado || "9999") > (b.goLiveEstimado || "9999") ? 1 : a.name.localeCompare(b.name, "es")));
   const finanzasTeam = team.filter((m) => m.rol === "finanzas");
 
   return (
@@ -4507,7 +4495,7 @@ function AdminPortal({ session, onLogout }) {
           {modulo === "clientes" && (
             <>
               <PageHeader crumb="Panel del equipo" title="Clientes"
-                desc={clients ? clientesVisibles.length + " clientes activos, " + clientesVisibles.filter(esTrabado).length + " sin actividad hace más de una semana." : "Cargando clientes…"}
+                desc={clients ? clientesVisibles.length + " clientes activos, " + clientesVisibles.filter(goLiveProximo).length + " con go-live en los próximos 30 días." : "Cargando clientes…"}
                 actions={!soloLectura && !altaAbierta ? <Btn size="sm" onClick={() => setAltaAbierta(true)}>Nuevo cliente</Btn> : null} />
               {!soloLectura && altaAbierta && (
               <Card style={{ marginBottom: 16 }} >
@@ -4684,8 +4672,8 @@ function AdminPortal({ session, onLogout }) {
                 {clients && clients.length > 0 && (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
                     <div className="nub-chips" role="group" aria-label="Filtros rápidos">
-                      {[["", "Todos", clientesVisibles.length], ["trabados", "Sin actividad hace +7 días", clientesVisibles.filter(esTrabado).length], ["golive", "Go-live en 30 días", clientesVisibles.filter(goLiveProximo).length]].concat(session.teamId ? [["mios", "Mis clientes", clientesVisibles.filter(esMio).length]] : []).map(([id, lbl, n]) => (
-                        <button key={id || "todos"} type="button" aria-pressed={filtroRapido === id} className={"nub-chip" + (id === "trabados" ? " nub-chip--alerta" : "")} onClick={() => setFiltroRapido(id)}>
+                      {[["", "Todos", clientesVisibles.length], ["golive", "Go-live en 30 días", clientesVisibles.filter(goLiveProximo).length], ["sin_asignar", "Sin asignar", clientesVisibles.filter(sinAsignar).length]].concat(session.teamId ? [["mios", "Mis clientes", clientesVisibles.filter(esMio).length]] : []).map(([id, lbl, n]) => (
+                        <button key={id || "todos"} type="button" aria-pressed={filtroRapido === id} className={"nub-chip" + (id === "sin_asignar" ? " nub-chip--alerta" : "")} onClick={() => setFiltroRapido(id)}>
                           {lbl} <span className="nub-chip__n">{n}</span>
                         </button>
                       ))}
@@ -4693,8 +4681,8 @@ function AdminPortal({ session, onLogout }) {
                     <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: T.n600 }}>
                       Ordenar por
                       <select value={ordenClientes} onChange={(e) => setOrdenClientes(e.target.value)} style={{ height: 34, borderRadius: 6, border: "1px solid " + T.n200, padding: "0 8px", fontSize: 13, fontFamily: "inherit", color: T.n800, background: "#fff" }}>
-                        <option value="actividad">Días sin actividad</option>
                         <option value="golive">Go-live más cercano</option>
+                        <option value="fase">Fase más avanzada</option>
                         <option value="nombre">Nombre</option>
                       </select>
                     </label>
@@ -4703,7 +4691,7 @@ function AdminPortal({ session, onLogout }) {
                 {clients && clientesTabla.length === 0 && (
                   <EstadoVacio titulo={clientesVisibles.length === 0 ? "Ningún cliente coincide con la búsqueda" : "No hay clientes con este filtro"}
                     accion={<Btn variant="ghost" size="sm" onClick={() => { setFiltroRapido(""); setBusqueda(""); setFiltroImpl(""); setFiltroDev(""); setFiltroVendedor(""); setFiltroMarca(""); setFiltroAutoimp(""); }}>Ver todos los clientes</Btn>}>
-                    {filtroRapido === "trabados" ? "Todos tus clientes tuvieron movimiento en la última semana." : "Probá con otro nombre o sacá los filtros."}
+                    {filtroRapido === "sin_asignar" ? "Todos los clientes tienen implementador/a asignado." : "Probá con otro nombre o sacá los filtros."}
                   </EstadoVacio>
                 )}
                 {clients && clientesTabla.length > 0 && (
@@ -4715,9 +4703,8 @@ function AdminPortal({ session, onLogout }) {
                         <th>Cliente</th>
                         <th>Fase</th>
                         <th>Avance</th>
-                        <th>Go-live</th>
-                        <th aria-sort={ordenClientes === "actividad" ? "descending" : "none"}>
-                          <button type="button" className="nub-th-btn" onClick={() => setOrdenClientes("actividad")}>Sin actividad <Icon n="sort" size={12} /></button>
+                        <th aria-sort={ordenClientes === "golive" ? "ascending" : "none"}>
+                          <button type="button" className="nub-th-btn" onClick={() => setOrdenClientes("golive")}>Go-live <Icon n="sort" size={12} /></button>
                         </th>
                         <th>Responsables</th>
                         <th>Estado</th>
@@ -4763,7 +4750,6 @@ function AdminPortal({ session, onLogout }) {
                             {cli.goLiveEstimado ? fmtCorta(cli.goLiveEstimado) : "Sin fecha"}
                           </span>
                         </td>
-                        <td style={{ whiteSpace: "nowrap" }}><SinActividad iso={cli.ultimaActividad} /></td>
                         <td>
                           <span style={{ display: "inline-flex" }}>
                             {cli.implementadorNombre ? <Avatar nombre={cli.implementadorNombre} /> : <Badge tone="amber">Sin asignar</Badge>}
