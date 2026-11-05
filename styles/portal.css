@@ -634,3 +634,10 @@ body:has(.nub-app) {
 .nub-app .nub-forma__t { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 15px; font-weight: 750; color: #0f172a; }
 .nub-app .nub-forma__d { font-size: 13px; color: #475569; }
 .nub-app .nub-forma__rec { font-size: 11px; font-weight: 700; color: #166534; background: #dcfce7; border-radius: 100px; padding: 2px 8px; }
+
+/* ═══ v1.48 — Asignar implementador/a y desarrollador/a ═══ */
+.nub-app .nub-selm { height: 40px; width: 100%; min-width: 170px; border: 1px solid #e2e8f0; border-radius: 6px; padding: 0 8px; font: inherit; font-size: 14px; color: #0f172a; background: #fff; cursor: pointer; }
+.nub-app .nub-selm--compacto { height: 32px; min-width: 150px; font-size: 12.5px; }
+.nub-app .nub-selm--vacio { color: #92400e; background: #fffbeb; border-color: #fde68a; }
+.nub-app .nub-selm:focus-visible { outline: 2px solid #0a6bf4; outline-offset: 1px; }
+.nub-app .nub-tabla { min-width: 1020px; }
