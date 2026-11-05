@@ -621,3 +621,7 @@ body:has(.nub-app) {
 .nub-app .nub-meet { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 700; color: #fff; background: #0a6bf4; border-radius: 8px; padding: 8px 14px; text-decoration: none; }
 .nub-app .nub-meet:hover { filter: brightness(0.94); }
 .nub-app .nub-meet--chico { font-size: 12.5px; padding: 6px 11px; }
+
+/* ═══ v1.46 — Acceso a la guía de vinculación desde cada procesadora ═══ */
+.nub-app .nub-vinc__link { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font: inherit; font-size: 13px; font-weight: 650; color: #0550c0; background: #e8f1fe; border: 0; border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+.nub-app .nub-vinc__link:hover { background: #d6e6fd; }
