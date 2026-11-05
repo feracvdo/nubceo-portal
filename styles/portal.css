@@ -625,3 +625,12 @@ body:has(.nub-app) {
 /* ═══ v1.46 — Acceso a la guía de vinculación desde cada procesadora ═══ */
 .nub-app .nub-vinc__link { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font: inherit; font-size: 13px; font-weight: 650; color: #0550c0; background: #e8f1fe; border: 0; border-radius: 7px; padding: 5px 10px; cursor: pointer; }
 .nub-app .nub-vinc__link:hover { background: #d6e6fd; }
+
+/* ═══ v1.47 — Elegir cómo cargar las sucursales ═══ */
+.nub-app .nub-forma { display: grid; gap: 8px; margin-top: 6px; }
+.nub-app .nub-forma__op { display: grid; gap: 3px; text-align: left; font: inherit; border: 2px solid #e2e8f0; border-radius: 12px; padding: 12px 14px; background: #fff; cursor: pointer; transition: border-color 0.15s ease, background 0.15s ease; }
+.nub-app .nub-forma__op:hover { border-color: #b9d2fb; }
+.nub-app .nub-forma__op[aria-checked="true"] { border-color: #0a6bf4; background: #f6f9ff; box-shadow: 0 0 0 3px rgba(10, 107, 244, 0.12); }
+.nub-app .nub-forma__t { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 15px; font-weight: 750; color: #0f172a; }
+.nub-app .nub-forma__d { font-size: 13px; color: #475569; }
+.nub-app .nub-forma__rec { font-size: 11px; font-weight: 700; color: #166534; background: #dcfce7; border-radius: 100px; padding: 2px 8px; }
