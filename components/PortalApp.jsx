@@ -43,7 +43,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.44.1";
+const APP_VERSION = "1.45.0";
 const APP_VERSION_FECHA = "2026-11-03";
 
 const FASES = [
@@ -111,11 +111,19 @@ const grupoDia = (iso) => {
   return d.toLocaleDateString("es-AR", { month: "long", year: "numeric" }).replace(/^./, (c) => c.toUpperCase());
 };
 
+const TZ_AR = "America/Argentina/Buenos_Aires";
+// Botón para entrar a la videollamada de una reunión.
+const BotonMeet = ({ e, chico }) => e && e.meet_link ? (
+  <a href={e.meet_link} target="_blank" rel="noopener noreferrer" className={"nub-meet" + (chico ? " nub-meet--chico" : "")}>
+    <Icon n="video" size={chico ? 13 : 15} /> Entrar a la reunión de Meet
+  </a>
+) : null;
+
 const fmtDate = (iso) => {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit" }) +
-    " " + d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit", timeZone: TZ_AR }) +
+    " " + d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: TZ_AR });
 };
 
 const fmtMoneda = (n, moneda) => {
@@ -221,6 +229,7 @@ const ICON_PATHS = {
   success: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "m9 12 2 2 4-4"],
   pending: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 8v4", "M12 16h.01"],
   left: ["m15 18-6-6 6-6"],
+  video: ["m22 8-6 4 6 4V8z", "M4 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"],
   mail: ["M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z", "m22 6-10 7L2 6"],
   clock: ["M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z", "M12 6v6l4 2"],
   history: ["M3 12a9 9 0 1 0 3-6.7L3 8", "M3 3v5h5", "M12 7v5l4 2"],
@@ -842,8 +851,8 @@ function Agendador({ session, tipo, nota, invitadosDefault = [], onDone }) {
     return (
       <div>
         <div style={{ fontSize: 13.5, color: T.n800, marginBottom: 4 }}>
-          <b>{new Date(elegido.fecha).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long" })}</b>
-          {" a las "}<b>{new Date(elegido.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} hs</b> con {elegido.responsable}
+          <b>{new Date(elegido.fecha).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", timeZone: TZ_AR })}</b>
+          {" a las "}<b>{new Date(elegido.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: TZ_AR })} hs</b> (hora de Argentina) con {elegido.responsable}
         </div>
         {elegido.calendarioReal && (
           <Alert tone="success" style={{ margin: "10px 0" }}>Este horario ya se chequeó contra el calendario real de {elegido.responsable} — al confirmar se manda la invitación de Google Calendar a cada invitado.</Alert>
@@ -876,10 +885,11 @@ function Agendador({ session, tipo, nota, invitadosDefault = [], onDone }) {
   }
 
   const porDia = {};
-  slots.forEach((s) => { const d = new Date(s.fecha).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "short" }); (porDia[d] = porDia[d] || []).push(s); });
+  slots.forEach((s) => { const d = new Date(s.fecha).toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "short", timeZone: TZ_AR }); (porDia[d] = porDia[d] || []).push(s); });
   return (
     <div>
       {nota && <div style={{ fontSize: 13, color: T.n600, marginBottom: 10, lineHeight: 1.5 }}>{nota}</div>}
+      <div style={{ fontSize: 12.5, color: T.n600, marginBottom: 10 }}>Horarios en hora de Argentina, de lunes a viernes de 9 a 18. Cada reunión se crea con su link de Google Meet.</div>
       <div style={{ display: "grid", gap: 10 }}>
         {Object.entries(porDia).map(([dia, ss]) => (
           <div key={dia}>
@@ -890,7 +900,7 @@ function Agendador({ session, tipo, nota, invitadosDefault = [], onDone }) {
                   padding: "8px 14px", borderRadius: 8, fontSize: 13.5, cursor: "pointer",
                   border: "1.5px solid " + T.primary, color: T.primary800, background: T.primary50,
                 }}>
-                  {new Date(s.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} hs · {s.responsable}{s.calendarioReal ? " 📅" : ""}
+                  {new Date(s.fecha).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", timeZone: TZ_AR })} hs · {s.responsable}
                 </div>
               ))}
             </div>
@@ -908,10 +918,11 @@ const EventoLinea = ({ e }) => (
       <div style={{ fontSize: 12.5, color: T.n600, marginTop: 2 }}>
         {fmtDate(e.fecha)} · con {e.responsable} · {(e.invitados || []).length ? "invitados: " + e.invitados.map((p) => p.nombre).join(", ") : "sin invitados cargados"}
       </div>
-      {e.google_event_link && (
-        <a href={e.google_event_link} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 600, color: T.primary, marginTop: 4, display: "inline-block" }}>
-          📅 Ver en Google Calendar →
-        </a>
+      {(e.meet_link || e.google_event_link) && e.estado !== "realizado" && (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+          <BotonMeet e={e} chico />
+          {e.google_event_link && <a href={e.google_event_link} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 600, color: T.primary }}>Ver en Google Calendar</a>}
+        </div>
       )}
     </div>
     <Badge tone={e.estado === "realizado" ? "green" : "blue"}>{e.estado === "realizado" ? "Realizada" : "Agendada"}</Badge>
@@ -4279,7 +4290,7 @@ function FichaResumen({ meta, selData, nombreVendedor }) {
         {fila("Implementación", meta.implementadorNombre || "Sin asignar")}
         {fila("Desarrollo", meta.desarrolladorNombre || "Sin asignar")}
         {(meta.comerciales || []).length > 0 && fila("Comercial", (meta.comerciales || []).map(nombreVendedor).join(", "))}
-        {fila("Próxima reunión", proxima ? (EVENTO_NOMBRES[proxima.tipo] || proxima.tipo) + ", " + fmtDate(proxima.fecha) : "Ninguna agendada")}
+        {fila("Próxima reunión", proxima ? (EVENTO_NOMBRES[proxima.tipo] || proxima.tipo) + ", " + fmtDate(proxima.fecha) : "Ninguna agendada", proxima && proxima.meet_link ? <BotonMeet e={proxima} chico /> : null)}
         {meta.fechaIngreso && fila("Ingreso", fmtDateSolo(meta.fechaIngreso))}
       </dl>
     </aside>
@@ -4806,6 +4817,13 @@ function AdminPortal({ session, onLogout }) {
     } catch (e) { flash(e.message, 0, "error"); }
   };
 
+  const agregarMeetEvento = async (eventoId) => {
+    try {
+      const r = await api("agregarMeet", { sessionCode: sc, eventoId });
+      setSelData(r.data);
+      flash("Link de Meet agregado. Google les avisa a los invitados.");
+    } catch (e) { flash(e.message, 0, "error"); }
+  };
   const guardarMinuta = async (eventoId, minuta) => {
     if (!sel || !minuta.trim()) return;
     try {
@@ -5402,7 +5420,7 @@ function AdminPortal({ session, onLogout }) {
             <h3 style={{ fontSize: 15, fontWeight: 600, color: T.n900, margin: "0 0 10px" }}>Reuniones y eventos</h3>
             {(selData.eventos || []).length === 0 && <div style={{ fontSize: 13.5, color: T.n400 }}>Todavía no hay reuniones agendadas. El cliente agenda workshop, reunión técnica y capacitaciones desde su portal.</div>}
             <div style={{ display: "grid", gap: 12 }}>
-              {(selData.eventos || []).map((e) => <AdminEvento key={e.id} e={e} onMinuta={guardarMinuta} />)}
+              {(selData.eventos || []).map((e) => <AdminEvento key={e.id} e={e} onMinuta={guardarMinuta} onMeet={agregarMeetEvento} />)}
             </div>
           </Card>
           </>)}
@@ -6204,7 +6222,8 @@ function FilaPlazo({ paso, completo, plazo, onGuardar, onQuitar, onEnviarAhora, 
 }
 
 // ── Componentes del panel del equipo: evento con minuta y status de pruebas ──
-function AdminEvento({ e, onMinuta }) {
+function AdminEvento({ e, onMinuta, onMeet }) {
+  const [generando, setGenerando] = useState(false);
   const [minuta, setMinuta] = useState(e.minuta || "");
   const [editando, setEditando] = useState(false);
   const realizado = e.estado === "realizado";
@@ -6213,15 +6232,22 @@ function AdminEvento({ e, onMinuta }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <div>
           <span style={{ fontSize: 14, fontWeight: 600, color: realizado ? T.okTx : T.n900 }}>{EVENTO_NOMBRES[e.tipo] || e.tipo}</span>
-          <span style={{ fontSize: 12.5, color: T.n400 }}> · {new Date(e.fecha).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })} · {e.responsable}</span>
+          <span style={{ fontSize: 12.5, color: T.n400 }}> · {new Date(e.fecha).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short", timeZone: TZ_AR })} · {e.responsable}</span>
         </div>
         <Badge tone={realizado ? "green" : "blue"}>{realizado ? "Realizada, con minuta" : "Agendada"}</Badge>
       </div>
       {(e.invitados || []).length > 0 && (
         <div style={{ fontSize: 12, color: T.n400, marginTop: 4 }}>Invitados: {(e.invitados || []).map((p) => p.nombre).join(", ")}</div>
       )}
-      {e.google_event_link && (
-        <a href={e.google_event_link} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 600, color: T.primary, marginTop: 4, display: "inline-block" }}>📅 Ver en Google Calendar →</a>
+      {!realizado && (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+          <BotonMeet e={e} chico />
+          {!e.meet_link && e.google_event_link && onMeet && (
+            <Btn variant="secondary" size="sm" disabled={generando} onClick={async () => { setGenerando(true); try { await onMeet(e.id); } finally { setGenerando(false); } }}>{generando ? "Generando…" : "Agregar link de Meet"}</Btn>
+          )}
+          {!e.meet_link && !e.google_event_link && <span style={{ fontSize: 12, color: "#92400e" }}>Sin link de Meet: el calendario de {e.responsable} no estaba conectado al agendarla.</span>}
+          {e.google_event_link && <a href={e.google_event_link} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 600, color: T.primary }}>Ver en Google Calendar</a>}
+        </div>
       )}
       {realizado && e.minuta && !editando && (
         <div style={{ marginTop: 8, fontSize: 13, color: T.n800, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{e.minuta}</div>
