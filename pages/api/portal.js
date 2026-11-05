@@ -1047,6 +1047,8 @@ export default async function handler(req, res) {
         razon_social: (req.body.razonSocial || "").trim() || null, cuits, erp_pdv: Array.isArray(req.body.erpPdv) ? req.body.erpPdv.map((x) => String(x).trim()).filter(Boolean) : [], logo: req.body.logo || null,
         comercial: (req.body.comercial || "").trim() || null,
         comerciales: Array.isArray(req.body.comerciales) ? req.body.comerciales : [],
+        implementador_id: req.body.implementadorId || null,
+        desarrollador_id: req.body.desarrolladorId || null,
         autoimplementacion: !!req.body.autoimplementacion,
         usa_sandbox: req.body.usaSandbox !== false,
         go_live_estimado: req.body.goLiveEstimado || null,
