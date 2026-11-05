@@ -10,6 +10,7 @@ import {
 } from "../../lib/redmine";
 import { buildDiagrama } from "../../lib/diagrama";
 import * as gcal from "../../lib/googleCalendar";
+import { diasNoLaborables, esHorarioLaboral, enArgentina, instanteAR, HORA_INICIO, HORA_FIN } from "../../lib/feriados";
 import { generarPlantilla } from "../../lib/plantillasMail";
 import { calcularPasos, computarPasos, faseSugerida, NOMBRE_PASO, ORDEN_PASOS } from "../../lib/pasos";
 import { hitosPara, hitosAutoimpPara, calcularHitos, NOMBRE_HITO_GENERICO } from "../../lib/hitos";
@@ -197,7 +198,7 @@ async function assemble(cliente) {
       diagrama: rv.data?.diagrama || null,
       procesadoras: (procs.data || []).map((p) => ({ id: p.id, codigo: p.codigo, nombre: p.nombre, pais: p.pais, estado: p.estado })),
       involucrados: (inv.data || []).map((p) => ({ id: p.id, nombre: p.nombre, cargo: p.cargo || "", email: p.email, telefono: p.telefono || "", rol: p.rol })),
-      eventos: (evs.data || []).map((e) => ({ id: e.id, tipo: e.tipo, fecha: e.fecha, responsable: e.responsable, estado: e.estado, invitados: e.invitados, minuta: e.minuta, google_event_link: e.google_event_link || null })),
+      eventos: (evs.data || []).map((e) => ({ id: e.id, tipo: e.tipo, fecha: e.fecha, responsable: e.responsable, estado: e.estado, invitados: e.invitados, minuta: e.minuta, google_event_link: e.google_event_link, meet_link: e.meet_link || null || null })),
       pruebas: Object.fromEntries((prue.data || []).map((p) => [p.etapa, { status: p.status, notas: p.notas, ts: p.actualizado_at }])),
       sucursales: (suc.data || []).map((s) => ({ nombre: s.nombre, direccion: s.direccion || "", localidad: s.localidad || "", comercio: s.nro_comercio || "" })),
       sucursalesArchivo: fArch("sucursales"),
@@ -646,11 +647,11 @@ export default async function handler(req, res) {
       let { data: dispRows } = await db.from("disponibilidad_equipo").select("dia_semana, hora").eq("equipo_id", persona.id);
       if (!dispRows || !dispRows.length) {
         if (conn) {
-          // Con el calendario conectado no hace falta cargar nada a mano: se ofrece un
-          // horario comercial estándar (lun a vie, 09 a 18) y se descarta automáticamente
+          // Con el calendario conectado no hace falta cargar nada a mano: se ofrece el horario
+          // laboral de Argentina (lunes a viernes, de 9 a 18) y se descarta automáticamente
           // todo lo que el calendario real ya tenga ocupado.
           dispRows = [];
-          for (let dia = 1; dia <= 5; dia++) for (let hh = 9; hh <= 17; hh++) dispRows.push({ dia_semana: dia, hora: String(hh).padStart(2, "0") + ":00" });
+          for (let dia = 1; dia <= 5; dia++) for (let hh = HORA_INICIO; hh < HORA_FIN; hh++) dispRows.push({ dia_semana: dia, hora: String(hh).padStart(2, "0") + ":00" });
         } else {
           return res.status(400).json({ error: persona.nombre + " todavía no conectó su Google Calendar — puede hacerlo desde Mi perfil para que el portal ofrezca sus horarios libres automáticamente." });
         }
@@ -665,14 +666,19 @@ export default async function handler(req, res) {
         return busy.some((b) => new Date(b.start) < finReunion && new Date(b.end) > f);
       };
 
+      // Todo se calcula en hora de Argentina (el servidor corre en UTC): de 9 a 18, de lunes
+      // a viernes, sin feriados ni días no laborables.
+      const anios = [...new Set([enArgentina(minDate).ymd.slice(0, 4), enArgentina(new Date(ventanaMax)).ymd.slice(0, 4)])];
+      const noLaborables = await diasNoLaborables(anios);
       const slots = [];
       for (let d = 0; d < 21 && slots.length < 40; d++) {
-        const dia = new Date(minDate.getTime() + d * 24 * 3600 * 1000);
-        const dow = dia.getDay(); // 0=domingo
+        const ar = enArgentina(new Date(minDate.getTime() + d * 24 * 3600 * 1000));
+        if (ar.dow === 0 || ar.dow === 6 || noLaborables.has(ar.ymd)) continue;
         for (const { dia_semana, hora } of dispRows) {
-          if (dia_semana !== dow) continue;
+          if (dia_semana !== ar.dow) continue;
           const [hh, mm] = hora.split(":").map(Number);
-          const f = new Date(dia); f.setHours(hh, mm, 0, 0);
+          const f = instanteAR(ar.ymd, hh, mm || 0);
+          if (!esHorarioLaboral(f, noLaborables)) continue;
           if (f < minDate) continue;
           if (ocupadosSet.has(f.toISOString())) continue;
           if (ocupaCalendarioReal(f)) continue;
@@ -687,6 +693,11 @@ export default async function handler(req, res) {
       const cli = await getCliente(cc);
       const { tipo, fecha, responsable } = req.body;
       if (!tipo || !fecha || !responsable) return res.status(400).json({ error: "Faltan datos del evento" });
+      {
+        const f = new Date(fecha);
+        const noLab = await diasNoLaborables([enArgentina(f).ymd.slice(0, 4)]);
+        if (!esHorarioLaboral(f, noLab)) return res.status(400).json({ error: "Ese horario ya no está disponible: agendamos de lunes a viernes de 9 a 18 (hora de Argentina), sin feriados. Elegí otro." });
+      }
       // Invitados: si el cliente editó la lista en el paso de confirmación, se usa esa;
       // si no, cae a los involucrados cargados en el relevamiento (comportamiento anterior).
       let invitados = Array.isArray(req.body.invitados) ? req.body.invitados.filter((p) => p && p.email) : null;
@@ -709,12 +720,14 @@ export default async function handler(req, res) {
           const fin = new Date(inicio.getTime() + 60 * 60 * 1000);
           const ev = await gcal.createEvent(conn.access_token, conn.calendarId, {
             summary: (NOMBRES_EVENTO_SRV[tipo] || tipo) + " — " + cli.nombre,
-            description: "Agendado automáticamente desde el Portal de Implementaciones de Nubceo.",
+            description: "Agendado desde el Portal de Implementaciones de Nubceo. El link de la videollamada de Google Meet está en este evento.",
             startISO: inicio.toISOString(),
             endISO: fin.toISOString(),
             attendees: invitados,
           });
           await db.from("eventos").update({ google_event_id: ev.id, google_event_link: ev.htmlLink || null }).eq("id", nuevoEvento.id);
+          const meet = gcal.meetDe(ev);
+          if (meet) { const { error: eMeet } = await db.from("eventos").update({ meet_link: meet }).eq("id", nuevoEvento.id); if (eMeet) console.error("meet_link:", eMeet.message); }
           notaCalendario = " · invitaciones reales enviadas por Google Calendar a " + invitados.length + " persona(s)";
         }
       } catch (e) {
@@ -725,6 +738,23 @@ export default async function handler(req, res) {
         new Date(fecha).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }) + " · invitados: " +
         (invitados.map((p) => p.nombre || p.email).join(", ") || "sin invitados") + notaCalendario);
       return res.json(await assemble(cli));
+    }
+
+    // ── Reuniones agendadas antes de que el portal generara Meet: se les agrega el link ──
+    if (action === "agregarMeet") {
+      if (!team) return res.status(403).json({ error: "Solo para el equipo de implementaciones" });
+      const { data: ev } = await db.from("eventos").select("*").eq("id", req.body.eventoId).maybeSingle();
+      if (!ev) return res.status(404).json({ error: "No encontramos la reunión" });
+      if (!ev.google_event_id) return res.status(400).json({ error: "Esta reunión no está en Google Calendar: hay que conectar el calendario de " + ev.responsable + " y volver a agendarla." });
+      const conn = await getCalendarConnection(ev.responsable);
+      if (!conn) return res.status(400).json({ error: ev.responsable + " no tiene el Google Calendar conectado." });
+      const act = await gcal.agregarMeet(conn.access_token, conn.calendarId, ev.google_event_id);
+      const meet = gcal.meetDe(act);
+      if (!meet) return res.status(500).json({ error: "Google no devolvió el link de Meet. Probá de nuevo en un minuto." });
+      const { error: eMeet } = await db.from("eventos").update({ meet_link: meet }).eq("id", ev.id);
+      if (eMeet) return res.status(500).json({ error: "Falta correr la migración v12 en Supabase: " + eMeet.message });
+      const { data: cliEv } = await db.from("clientes").select("*").eq("id", ev.cliente_id).maybeSingle();
+      return res.json(await assemble(cliEv));
     }
 
     // ── Calendario: URL de conexión (cualquier miembro del equipo puede iniciarla) ──
