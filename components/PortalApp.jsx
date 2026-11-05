@@ -43,7 +43,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.45.0";
+const APP_VERSION = "1.46.0";
 const APP_VERSION_FECHA = "2026-11-03";
 
 const FASES = [
@@ -1033,17 +1033,66 @@ const codPais = (nombre) => (PAISES.find(([, n]) => n === nombre) || [])[0] || n
 
 // ─── Cómo vincular cada procesadora que el cliente confirmó ───
 const ESTADO_TXT = { conectado: ["Conectada", "conectado"], en_espera: ["En espera", "en_espera"], no_conectado: ["Sin conectar", "no_conectado"] };
+
+// Panel con los pasos, el video y el manual de una procesadora. Se abre desde cualquier
+// pantalla del paso de Procesadoras.
+function PanelVinculacion({ proc, onClose }) {
+  const g = VINCULACION[proc.codigo];
+  useEffect(() => {
+    const fn = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+  return (
+        <div className="nub-overlay nub-modal" role="dialog" aria-modal="true" aria-labelledby="vincT" onClick={() => onClose()}>
+          <div className="nub-modal__box nub-vinc__panel" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+              <div>
+                <div className="nub-tut__k">Vincular procesadora</div>
+                <h2 id="vincT" className="nub-tut__h" style={{ marginBottom: 6 }}>{(proc.nombre || "").replace(/^Otra:\s*/, "")}</h2>
+              </div>
+              <button type="button" className="nub-lnk" onClick={() => onClose()} aria-label="Cerrar"><Icon n="x" size={18} /></button>
+            </div>
+            {g ? (
+              <>
+                <div className="nub-vinc__datos">
+                  <div><small>Cómo se conecta</small><b>{g.metodo}</b></div>
+                  <div><small>Quién lo hace</small><b>{g.quien}</b></div>
+                  {g.demora && <div><small>Demora estimada</small><b>{g.demora}</b></div>}
+                </div>
+                {g.video && (
+                  <div className="nub-vinc__video">
+                    <iframe src={"https://www.youtube-nocookie.com/embed/" + g.video + "?rel=0"} title={"Tutorial de vinculación de " + proc.nombre} allow="accelerometer; encrypted-media; picture-in-picture; fullscreen" allowFullScreen loading="lazy" />
+                  </div>
+                )}
+                <h3 className="nub-vinc__h">Antes de empezar</h3>
+                <ul className="nub-vinc__pre">
+                  {[...g.pre, ...REQUISITOS_GENERALES].map((x, k) => <li key={k}>{x}</li>)}
+                </ul>
+                <h3 className="nub-vinc__h">Paso a paso</h3>
+                <ol className="nub-vinc__pasos">
+                  {g.pasos.map(([t, d], k) => <li key={k}><b>{t}</b><span>{d}</span></li>)}
+                </ol>
+                {g.demora && g.demora !== "En el momento" && (
+                  <Alert tone="warning" style={{ marginTop: 12 }}>Esta alta demora {g.demora.toLowerCase()}: conviene pedirla hoy para no frenar la implementación.</Alert>
+                )}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
+                  <a className="nub-vinc__dl" href={manualDe(proc.codigo)} download target="_blank" rel="noopener noreferrer"><Icon n="file" size={15} /> Descargar el manual (PDF)</a>
+                  <a className="nub-vinc__dl nub-vinc__dl--sec" href="mailto:team.cx@nubceo.com">Escribir al equipo de Nubceo</a>
+                </div>
+              </>
+            ) : (
+              <p className="nub-tut__p">Para esta procesadora te pasamos los pasos de vinculación por mail. Si tenés dudas, escribinos a <a href="mailto:team.cx@nubceo.com">team.cx@nubceo.com</a>.</p>
+            )}
+          </div>
+        </div>
+        );
+}
+
 function GuiaVinculacion({ procesadoras }) {
   const [abierta, setAbierta] = useState(null);
   const lista = (procesadoras || []).filter((p) => p.estado !== "conectado").concat((procesadoras || []).filter((p) => p.estado === "conectado"));
-  useEffect(() => {
-    if (!abierta) return;
-    const fn = (e) => { if (e.key === "Escape") setAbierta(null); };
-    window.addEventListener("keydown", fn);
-    return () => window.removeEventListener("keydown", fn);
-  }, [abierta]);
   if (!lista.length) return null;
-  const g = abierta ? VINCULACION[abierta.codigo] : null;
   const pendientes = lista.filter((p) => p.estado !== "conectado").length;
   return (
     <div className="nub-vinc">
@@ -1064,50 +1113,7 @@ function GuiaVinculacion({ procesadoras }) {
         })}
       </div>
 
-      {abierta && (
-        <div className="nub-overlay nub-modal" role="dialog" aria-modal="true" aria-labelledby="vincT" onClick={() => setAbierta(null)}>
-          <div className="nub-modal__box nub-vinc__panel" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-              <div>
-                <div className="nub-tut__k">Vincular procesadora</div>
-                <h2 id="vincT" className="nub-tut__h" style={{ marginBottom: 6 }}>{(abierta.nombre || "").replace(/^Otra:\s*/, "")}</h2>
-              </div>
-              <button type="button" className="nub-lnk" onClick={() => setAbierta(null)} aria-label="Cerrar"><Icon n="x" size={18} /></button>
-            </div>
-            {g ? (
-              <>
-                <div className="nub-vinc__datos">
-                  <div><small>Cómo se conecta</small><b>{g.metodo}</b></div>
-                  <div><small>Quién lo hace</small><b>{g.quien}</b></div>
-                  {g.demora && <div><small>Demora estimada</small><b>{g.demora}</b></div>}
-                </div>
-                {g.video && (
-                  <div className="nub-vinc__video">
-                    <iframe src={"https://www.youtube-nocookie.com/embed/" + g.video + "?rel=0"} title={"Tutorial de vinculación de " + abierta.nombre} allow="accelerometer; encrypted-media; picture-in-picture; fullscreen" allowFullScreen loading="lazy" />
-                  </div>
-                )}
-                <h3 className="nub-vinc__h">Antes de empezar</h3>
-                <ul className="nub-vinc__pre">
-                  {[...g.pre, ...REQUISITOS_GENERALES].map((x, k) => <li key={k}>{x}</li>)}
-                </ul>
-                <h3 className="nub-vinc__h">Paso a paso</h3>
-                <ol className="nub-vinc__pasos">
-                  {g.pasos.map(([t, d], k) => <li key={k}><b>{t}</b><span>{d}</span></li>)}
-                </ol>
-                {g.demora && g.demora !== "En el momento" && (
-                  <Alert tone="warning" style={{ marginTop: 12 }}>Esta alta demora {g.demora.toLowerCase()}: conviene pedirla hoy para no frenar la implementación.</Alert>
-                )}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
-                  <a className="nub-vinc__dl" href={manualDe(abierta.codigo)} download target="_blank" rel="noopener noreferrer"><Icon n="file" size={15} /> Descargar el manual (PDF)</a>
-                  <a className="nub-vinc__dl nub-vinc__dl--sec" href="mailto:team.cx@nubceo.com">Escribir al equipo de Nubceo</a>
-                </div>
-              </>
-            ) : (
-              <p className="nub-tut__p">Para esta procesadora te pasamos los pasos de vinculación por mail. Si tenés dudas, escribinos a <a href="mailto:team.cx@nubceo.com">team.cx@nubceo.com</a>.</p>
-            )}
-          </div>
-        </div>
-      )}
+      {abierta && <PanelVinculacion proc={abierta} onClose={() => setAbierta(null)} />}
     </div>
   );
 }
@@ -1188,6 +1194,7 @@ function TabProcesadorasTut({ data, act, saving, onSeguir, avisar }) {
   const [sel, setSel] = useState(() => Object.fromEntries(previas.filter((p) => !(p.codigo || "").startsWith(PREFIJO_OTRA)).map((p) => [p.codigo, p.estado])));
   const [otras, setOtras] = useState(() => previas.filter((p) => (p.codigo || "").startsWith(PREFIJO_OTRA)).map((p) => ({ nombre: (p.nombre || "").replace(/^Otra:\s*/i, ""), estado: p.estado })));
   const [otraTxt, setOtraTxt] = useState("");
+  const [guiaDe, setGuiaDe] = useState(null);
   const conns = (pais && CONECTORES[pais]) || [];
   const elegidas = conns.filter((c) => sel[c.code] !== undefined);
   const cant = elegidas.length + otras.length;
@@ -1198,7 +1205,7 @@ function TabProcesadorasTut({ data, act, saving, onSeguir, avisar }) {
     if (v && !otras.some((o) => o.nombre.toLowerCase() === v.toLowerCase())) { setOtras([...otras, { nombre: v, estado: "" }]); avisar && avisar({ titulo: "Agregaste " + v, detalle: "Se guarda al completar el paso." }); }
     setOtraTxt("");
   };
-  const filas = [...elegidas.map((c) => ({ key: c.code, nombre: c.nombre, estado: sel[c.code], set: (e) => setSel({ ...sel, [c.code]: e }) })),
+  const filas = [...elegidas.map((c) => ({ key: c.code, codigo: c.code, nombre: c.nombre, estado: sel[c.code], set: (e) => setSel({ ...sel, [c.code]: e }) })),
     ...otras.map((o, k) => ({ key: "otra" + k, nombre: o.nombre, estado: o.estado, set: (e) => setOtras(otras.map((x, j) => j === k ? { ...x, estado: e } : x)) }))];
   const cuenta = (e) => filas.filter((f) => (f.estado || "no_conectado") === e).length;
   const completar = async () => {
@@ -1261,6 +1268,11 @@ function TabProcesadorasTut({ data, act, saving, onSeguir, avisar }) {
                 </div>
               </div>
               {f.estado && <div className="nub-est__d">{AYUDA_ESTADO[f.estado]}</div>}
+              {f.codigo && VINCULACION[f.codigo] && f.estado !== "conectado" && (
+                <button type="button" className="nub-vinc__link" onClick={() => setGuiaDe({ codigo: f.codigo, nombre: f.nombre })}>
+                  <Icon n={VINCULACION[f.codigo].video ? "video" : "file"} size={14} /> Cómo vincularla{VINCULACION[f.codigo].video ? ": video y manual" : ": pasos y manual"}
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -1273,14 +1285,22 @@ function TabProcesadorasTut({ data, act, saving, onSeguir, avisar }) {
           <div className="nub-sum__r"><span>País</span><b>{pais}</b></div>
           {filas.map((f) => {
             const e = f.estado || "no_conectado";
-            return <div key={f.key} className="nub-sum__r"><span>{f.nombre}</span><span className={"nub-pill nub-pill--" + e}>{ESTADOS_TUT.find(([x]) => x === e)[1]}</span></div>;
+            return (
+              <div key={f.key} className="nub-sum__r">
+                <span>{f.nombre}{f.codigo && VINCULACION[f.codigo] && e !== "conectado" && <button type="button" className="nub-vinc__link" style={{ marginLeft: 10 }} onClick={() => setGuiaDe({ codigo: f.codigo, nombre: f.nombre })}>Cómo vincularla</button>}</span>
+                <span className={"nub-pill nub-pill--" + e}>{ESTADOS_TUT.find(([x]) => x === e)[1]}</span>
+              </div>
+            );
           })}
         </div>
       ) },
   ];
   return (
-    <Tutorial titulo="Procesadoras" partes={partes} onCompletar={completar} guardando={saving} completo={!!rv.procesadorasConfirmadas}
-      final={<><h2 className="nub-tut__h">Procesadoras cargadas</h2><p className="nub-tut__p">Tu implementador/a ya recibió el aviso{(previas.some((x) => x.estado !== "conectado")) ? " y coordina con vos las que faltan" : ""}.</p><Btn onClick={onSeguir}>Seguir con Datos de tu empresa</Btn><GuiaVinculacion procesadoras={previas} /></>} />
+    <>
+    {guiaDe && <PanelVinculacion proc={guiaDe} onClose={() => setGuiaDe(null)} />}
+    <Tutorial titulo="Procesadoras" partes={partes} onCompletar={completar} guardando={saving} completo={!!rv.procesadorasConfirmadas || (previas.length > 0 && previas.some((x) => x.estado === "conectado"))}
+      final={<><h2 className="nub-tut__h">Procesadoras cargadas</h2><p className="nub-tut__p">Tu implementador/a ya recibió el aviso{(previas.some((x) => x.estado !== "conectado")) ? " y coordina con vos las que faltan" : ""}.</p><GuiaVinculacion procesadoras={previas} /><div style={{ marginTop: 22 }}><Btn onClick={onSeguir}>Seguir con Datos de tu empresa</Btn></div></>} />
+    </>
   );
 }
 
