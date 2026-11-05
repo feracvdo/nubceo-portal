@@ -43,7 +43,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.46.0";
+const APP_VERSION = "1.47.0";
 const APP_VERSION_FECHA = "2026-11-03";
 
 const FASES = [
@@ -1131,6 +1131,7 @@ function Tutorial({ titulo, partes: armarPartes, onCompletar, completo, final, g
   const ok = faltan.length === 0;
   const irA = (n) => { setMarcar(false); setI(n); };
   const siguiente = async () => {
+    if (p.alSiguiente && p.alSiguiente()) return;
     if (!ok) { setMarcar(true); return; }
     if (ultima) { const r = await onCompletar(); if (r !== false) irA(total); }
     else irA(i + 1);
@@ -1166,11 +1167,11 @@ function Tutorial({ titulo, partes: armarPartes, onCompletar, completo, final, g
         )}
         {!enFinal && (
           <div className="nub-tut__bar">
-            <Btn variant="ghost" onClick={() => irA(i - 1)} style={{ visibility: i === 0 ? "hidden" : "visible" }}>Anterior</Btn>
+            <Btn variant="ghost" onClick={() => { if (p.alAnterior && p.alAnterior()) return; irA(i - 1); }} style={{ visibility: i === 0 ? "hidden" : "visible" }}>{p.textoAnterior || "Anterior"}</Btn>
             <span className={"nub-tut__hint" + (marcar && !ok ? " nub-tut__hint--error" : "")} role={marcar && !ok ? "alert" : undefined}>
               {marcar && !ok ? "Falta completar: " + faltan.join(", ") + "." : (p.hint || "Lo que hacés se guarda al completar el paso.")}
             </span>
-            <Btn onClick={siguiente} disabled={guardando}>{ultima ? (guardando ? "Guardando…" : "Completar paso") : "Siguiente"}</Btn>
+            <Btn onClick={siguiente} disabled={guardando}>{ultima ? (guardando ? "Guardando…" : "Completar paso") : (p.textoSiguiente || "Siguiente")}</Btn>
           </div>
         )}
       </div>
@@ -1926,16 +1927,23 @@ function TabSucursalesTut({ data, meta, act, saving, avisar, onSeguir }) {
           </div>
         ) },
       { k: "Hacelo en Nubceo", h: guia[g][0], texto: guia[g][1],
+        // Siguiente y Anterior recorren la guía; al terminarla, Siguiente pasa al cierre del paso.
+        alSiguiente: () => { if (g < guia.length - 1) { setG(g + 1); return true; } return false; },
+        alAnterior: () => { if (g > 0) { setG(g - 1); return true; } return false; },
+        textoSiguiente: g < guia.length - 1 ? "Siguiente paso de la guía" : "Terminé la guía",
+        textoAnterior: g > 0 ? "Paso anterior de la guía" : "Anterior",
+        hint: "Paso " + (g + 1) + " de " + guia.length + " de la guía",
         nota: <>
-          <div className="nub-flujos" role="group" aria-label="Forma de carga">
-            {[["masiva", "Carga masiva con planilla"], ["una", "Una por una"]].map(([f, l]) => <button key={f} type="button" aria-pressed={flujoAct === f} onClick={() => { setFlujo(f); setG(0); }}>{l}</button>)}
+          <div className="nub-tut__k" style={{ marginTop: 4 }}>¿Cómo vas a cargarlas?</div>
+          <div className="nub-forma" role="radiogroup" aria-label="Forma de carga">
+            {[["masiva", "Carga masiva", "Todas juntas con la planilla de sucursales huérfanas.", validas.length > 5], ["una", "Una por una", "Creás cada sucursal desde un formulario.", validas.length <= 5]].map(([f, t, d, rec]) => (
+              <button key={f} type="button" role="radio" aria-checked={flujoAct === f} className="nub-forma__op" onClick={() => { setFlujo(f); setG(0); }}>
+                <span className="nub-forma__t">{t}{rec && <span className="nub-forma__rec">Recomendada</span>}</span>
+                <span className="nub-forma__d">{d}</span>
+              </button>
+            ))}
           </div>
-          <div style={{ fontSize: 12.5, color: "#166534", fontWeight: 600, marginTop: 6 }}>{validas.length > 5 ? "Con " + validas.length + " sucursales te conviene la carga masiva." : "Con " + validas.length + " sucursal" + (validas.length === 1 ? "" : "es") + " podés cargarlas una por una."}</div>
-          <div className="nub-tut__barras" style={{ marginTop: 12, maxWidth: "none" }}>{guia.map((_, k) => <i key={k} className={k < g ? "d" : k === g ? "c" : ""} />)}</div>
-          <div style={{ display: "flex", gap: 14, marginTop: 8 }}>
-            {g > 0 && <button type="button" className="nub-lnk" onClick={() => setG(g - 1)}>Paso anterior de la guía</button>}
-            {g < guia.length - 1 && <button type="button" className="nub-lnk" onClick={() => setG(g + 1)}>Paso siguiente de la guía</button>}
-          </div>
+          <div className="nub-tut__barras" style={{ marginTop: 14, maxWidth: "none" }}>{guia.map((_, k) => <i key={k} className={k < g ? "d" : k === g ? "c" : ""} />)}</div>
         </>,
         contenido: <div key={flujoAct + g} className="nub-fade"><PantallaNubceo scr={guia[g][2]} sucs={validas} /><div className="nub-guia"><b>{g + 1}</b><span>Paso {g + 1} de {guia.length} de la guía: {guia[g][0]}</span></div></div> },
       { k: "Cerrá el paso", h: "¿Ya cargaste tus sucursales en Nubceo?",
@@ -2226,7 +2234,7 @@ function ClientPortal({ session, onLogout }) {
                   {idxTab > 0
                     ? <Btn variant="ghost" onClick={() => setTab(pasosCli[idxTab - 1].id)}>Volver a {pasosCli[idxTab - 1].n}</Btn>
                     : <span />}
-                  {idxTab < pasosCli.length - 1 && (
+                  {idxTab < pasosCli.length - 1 && !["procesadoras", "empresa", "relevamiento", "sucursales"].includes(tab) && (
                     avanzable[tab]
                       ? <Btn onClick={() => setTab(pasosCli[idxTab + 1].id)}>Seguir con {pasosCli[idxTab + 1].n}</Btn>
                       : <span style={{ fontSize: 13, color: T.n400 }}>Completá este paso para pasar al siguiente</span>
