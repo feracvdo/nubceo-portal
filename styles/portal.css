@@ -616,3 +616,8 @@ body:has(.nub-app) {
 .nub-app .nub-vinc__dl:hover { filter: brightness(0.94); }
 .nub-app .nub-vinc__dl--sec { background: #fff; color: #475569; border: 1px solid #e2e8f0; }
 .nub-app .nub-tut__final:has(.nub-vinc) { max-width: 900px; }
+
+/* ═══ v1.45 — Link de Meet en cada reunión ═══ */
+.nub-app .nub-meet { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 700; color: #fff; background: #0a6bf4; border-radius: 8px; padding: 8px 14px; text-decoration: none; }
+.nub-app .nub-meet:hover { filter: brightness(0.94); }
+.nub-app .nub-meet--chico { font-size: 12.5px; padding: 6px 11px; }
