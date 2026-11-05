@@ -43,7 +43,7 @@ const DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Vier
 
 // Se actualiza a mano en cada deploy visible, para saber de un vistazo si el portal
 // que se está mirando es la última versión.
-const APP_VERSION = "1.47.0";
+const APP_VERSION = "1.48.0";
 const APP_VERSION_FECHA = "2026-11-03";
 
 const FASES = [
@@ -268,6 +268,15 @@ const EstadoVacio = ({ icon = "inbox", titulo, children, accion, compacto }) => 
     {children && <div className="nub-empty__d">{children}</div>}
     {accion && <div style={{ marginTop: 10 }}>{accion}</div>}
   </div>
+);
+
+// ─── Selector de implementador/a o desarrollador/a (lista, alta y edición del cliente) ───
+const SelectorMiembro = ({ valor, opciones, onChange, vacio = "Sin asignar", compacto, disabled, etiqueta }) => (
+  <select value={valor || ""} disabled={disabled} aria-label={etiqueta} onClick={(e) => e.stopPropagation()} onChange={(e) => onChange(e.target.value || null)}
+    className={"nub-selm" + (compacto ? " nub-selm--compacto" : "") + (!valor ? " nub-selm--vacio" : "")}>
+    <option value="">{vacio}</option>
+    {opciones.map((m) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+  </select>
 );
 
 // ─── Iniciales para avatares (Lucía Martín → LM) ───
@@ -4422,6 +4431,8 @@ function AdminPortal({ session, onLogout }) {
   const [newAutoimp, setNewAutoimp] = useState(false);
   const [newUsaSandbox, setNewUsaSandbox] = useState(true);
   const [altaAbierta, setAltaAbierta] = useState(false);
+  const [newImpl, setNewImpl] = useState(null);
+  const [newDev, setNewDev] = useState(null);
   const [editUsaSandbox, setEditUsaSandbox] = useState(true);
   const [editAutoimp, setEditAutoimp] = useState(false);
   const implementadoresTeam = team.filter((m) => m.rol === "implementador");
@@ -4707,10 +4718,10 @@ function AdminPortal({ session, onLogout }) {
     try {
       await api("createClient", {
         sessionCode: sc, nombre: newName, codigo: newCode, tenant: newTenant, razonSocial: newRazonSocial, cuits: newCuits, logo: newLogo,
-        comerciales: newComerciales, autoimplementacion: newAutoimp, usaSandbox: newUsaSandbox, goLiveEstimado: newGoLive, fechaIngreso: newFechaIngreso || null, erpPdv: newErpPdv, contactos: newContactos.filter((c) => c.nombre.trim()),
+        comerciales: newComerciales, implementadorId: newImpl, desarrolladorId: newDev, autoimplementacion: newAutoimp, usaSandbox: newUsaSandbox, goLiveEstimado: newGoLive, fechaIngreso: newFechaIngreso || null, erpPdv: newErpPdv, contactos: newContactos.filter((c) => c.nombre.trim()),
       });
       flash("Cliente creado. Compartile el código " + newCode.trim().toUpperCase() + ". Al primer login se dispara el alta en Redmine y sus credenciales de API.", 5000);
-      setAltaAbierta(false); setNewName(""); setNewCode(""); setNewTenant(""); setNewRazonSocial(""); setNewCuits([]); setNewCuitInput(""); setNewLogo(null);
+      setAltaAbierta(false); setNewImpl(null); setNewDev(null); setNewName(""); setNewCode(""); setNewTenant(""); setNewRazonSocial(""); setNewCuits([]); setNewCuitInput(""); setNewLogo(null);
       setNewComerciales([]); setNewAutoimp(false); setNewUsaSandbox(true); setNewGoLive(""); setNewFechaIngreso(""); setNewErpPdv([]); setNewErpPdvInput(""); setNewContactos([{ nombre: "", cargo: "", email: "", telefono: "", rol: "sponsor" }]);
       cargarListado();
     } catch (e) { flash(e.message, 0, "error"); }
@@ -5068,6 +5079,8 @@ function AdminPortal({ session, onLogout }) {
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                     <div><Label>Tenant productivo</Label><Input value={editTenant} onChange={(e) => setEditTenant(e.target.value)} /></div>
                     <div><Label>Vendedor/es</Label><SelectorVendedores vendedores={vendedoresTeam} seleccion={editComerciales} onChange={setEditComerciales} /></div>
+                    <div><Label>Implementador/a</Label><SelectorMiembro valor={meta.implementadorId} opciones={implementadoresTeam} onChange={(v) => asignar(sel, v, "implementador")} etiqueta="Implementador/a" /></div>
+                    <div><Label>Desarrollador/a</Label><SelectorMiembro valor={meta.desarrolladorId} opciones={devsTeam} onChange={(v) => asignar(sel, v, "desarrollador")} etiqueta="Desarrollador/a" /></div>
                     <div><Label>Tipo de onboarding</Label>
                       <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13.5, color: T.n800 }}>
                         <input type="checkbox" checked={editAutoimp} onChange={(e) => setEditAutoimp(e.target.checked)} style={{ width: 16, height: 16, accentColor: "#6d28d9" }} />
@@ -5517,7 +5530,7 @@ function AdminPortal({ session, onLogout }) {
             <>
               <PageHeader crumb="Panel del equipo" title="Clientes"
                 desc={clients ? clientesVisibles.length + " clientes activos, " + clientesVisibles.filter(goLiveProximo).length + " con go-live en los próximos 30 días." : "Cargando clientes…"}
-                actions={!soloLectura && !altaAbierta ? <Btn size="sm" onClick={() => setAltaAbierta(true)}>Nuevo cliente</Btn> : null} />
+                actions={!soloLectura && !altaAbierta ? <Btn size="sm" onClick={() => { setAltaAbierta(true); if (!newImpl && implementadoresTeam.some((m) => m.id === session.teamId)) setNewImpl(session.teamId); }}>Nuevo cliente</Btn> : null} />
               {!soloLectura && altaAbierta && (
               <Card style={{ marginBottom: 16 }} >
                 <SectionHeader title="Dar de alta un cliente" badge={<Btn variant="ghost" size="sm" onClick={() => setAltaAbierta(false)}>Cancelar</Btn>} />
@@ -5549,6 +5562,8 @@ function AdminPortal({ session, onLogout }) {
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14, alignItems: "start" }}>
                   <div><Label>Vendedor/es</Label><SelectorVendedores vendedores={vendedoresTeam} seleccion={newComerciales} onChange={setNewComerciales} /></div>
+                  <div><Label>Implementador/a</Label><SelectorMiembro valor={newImpl} opciones={implementadoresTeam} onChange={setNewImpl} etiqueta="Implementador/a" /></div>
+                  <div><Label>Desarrollador/a</Label><SelectorMiembro valor={newDev} opciones={devsTeam} onChange={setNewDev} etiqueta="Desarrollador/a" /></div>
                   <div>
                     <Label>Tipo de onboarding</Label>
                     <div style={{ display: "flex", gap: 8 }}>
@@ -5727,7 +5742,8 @@ function AdminPortal({ session, onLogout }) {
                         <th aria-sort={ordenClientes === "golive" ? "ascending" : "none"}>
                           <button type="button" className="nub-th-btn" onClick={() => setOrdenClientes("golive")}>Go-live <Icon n="sort" size={12} /></button>
                         </th>
-                        <th>Responsables</th>
+                        <th>Implementador/a</th>
+                        <th>Desarrollador/a</th>
                         <th>Estado</th>
                         <th><span className="nub-sr">Acciones</span></th>
                       </tr>
@@ -5771,11 +5787,15 @@ function AdminPortal({ session, onLogout }) {
                             {cli.goLiveEstimado ? fmtCorta(cli.goLiveEstimado) : "Sin fecha"}
                           </span>
                         </td>
-                        <td>
-                          <span style={{ display: "inline-flex" }}>
-                            {cli.implementadorNombre ? <Avatar nombre={cli.implementadorNombre} /> : <Badge tone="amber">Sin asignar</Badge>}
-                            {cli.desarrolladorNombre && <Avatar nombre={cli.desarrolladorNombre} tono="gris" style={{ marginLeft: -6 }} />}
-                          </span>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          {soloLectura
+                            ? (cli.implementadorNombre || <Badge tone="amber">Sin asignar</Badge>)
+                            : <SelectorMiembro compacto valor={cli.implementadorId} opciones={implementadoresTeam} onChange={(v) => asignar(cli.code, v, "implementador")} etiqueta={"Implementador/a de " + cli.name} />}
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          {soloLectura
+                            ? (cli.desarrolladorNombre || <span style={{ color: T.n400 }}>Sin asignar</span>)
+                            : <SelectorMiembro compacto valor={cli.desarrolladorId} opciones={devsTeam} onChange={(v) => asignar(cli.code, v, "desarrollador")} etiqueta={"Desarrollador/a de " + cli.name} />}
                         </td>
                         <td>
                           <div style={{ display: "flex", gap: 4, flexWrap: "wrap", maxWidth: 220 }}>
